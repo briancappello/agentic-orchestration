@@ -13,8 +13,8 @@ All work is in `acp-broker/`, starting from the spike. Every task ends with `go 
 
 ## 3. Sortie integration
 
-- [ ] 3.1 Implement `sortieclient` with hold, release, and escalate. Read the token from `-sortie-token-file`. Use desired-state reconciliation with capped backoff. Verify against an `httptest` server: retries, the final release on exit, and that the loop never blocks while the server hangs.
-- [ ] 3.2 Read `SORTIE_API_URL`, `SORTIE_ISSUE_IDENTIFIER`, and `SORTIE_SESSION_PURPOSE`, and skip all Sortie calls when they are absent. Verify with tests for a broker under Sortie and a standalone broker.
+- [ ] 3.1 Implement `sortieclient` with hold, release, and escalate, authenticated with `SORTIE_SESSION_TOKEN`. Use desired-state reconciliation with capped backoff. Verify against an `httptest` server: the bearer header, retries, the final release on exit, and that the loop never blocks while the server hangs.
+- [ ] 3.2 Read `SORTIE_API_URL`, `SORTIE_ISSUE_IDENTIFIER`, `SORTIE_SESSION_PURPOSE`, and `SORTIE_SESSION_TOKEN`, and skip all Sortie calls when any is absent. Remove `SORTIE_SESSION_TOKEN` from the agent's launch environment. Verify with tests for a broker under Sortie, a standalone broker, and an agent environment without the token but with the other variables.
 - [ ] 3.3 Set the desired hold on takeover, fallback steering, and waiting permission requests; clear it on handback and on resolution. Verify with loop tests that assert the desired-state sequence.
 
 ## 4. Permissions and questions
@@ -26,8 +26,9 @@ All work is in `acp-broker/`, starting from the spike. Every task ends with `go 
 ## 5. Viewer transport
 
 - [ ] 5.1 Create the socket with mode `0600` in a directory with mode `0700`, and serve the command set with validated errors. Verify with tests for permissions and for each rejected command.
-- [ ] 5.2 Add the HTTP listener: `GET /events` (Server-Sent Events, heartbeat, `Last-Event-ID`), `POST /commands`, `GET /state`, bearer or query token, and refusal to start without a token. Verify with `httptest` tests for auth, resume from `Last-Event-ID`, the dropped-events marker, and a slow client being disconnected while the relay keeps its speed.
-- [ ] 5.3 Update `attach` to use the replay (print history, then live events) and add `-http` to `ls` output. Verify by hand with a fake agent and record the output in the change notes.
+- [ ] 5.2 Add the HTTP listener: `GET /events` (Server-Sent Events, heartbeat, `Last-Event-ID`), `POST /commands`, `GET /state`, bearer auth, and refusal to start without a viewer token. Verify with `httptest` tests for auth (including rejection of a token in the URL), resume from `Last-Event-ID`, the dropped-events marker, and a slow client being disconnected while the relay keeps its speed.
+- [ ] 5.3 Add `POST /login` and `POST /logout` with an in-memory session cookie (`HttpOnly`, `SameSite=Strict`, `Secure` under an HTTPS public URL, 12-hour default lifetime). Verify with tests: login then `EventSource`-style access with the cookie only, a wrong token setting no cookie, logout, expiry, and a cookie from another broker process getting `401`.
+- [ ] 5.4 Update `attach` to use the replay (print history, then live events) and add `-http` to `ls` output. Verify by hand with a fake agent and record the output in the change notes.
 
 ## 6. Session registry
 

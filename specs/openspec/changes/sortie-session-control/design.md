@@ -57,6 +57,24 @@ Alternatives:
 - A Unix socket for control. Rejected: web and phone clients need HTTP.
 - Mutual TLS. Rejected: too much operational weight for one operator team.
 
+### D5a. Per-session scoped tokens for the broker
+
+**Problem.** The ACP broker has to call hold, release, and escalate. Sortie launches the broker as the agent command, so anything Sortie gives the broker also reaches the agent. In local mode the agent runs as the same user and can read whatever the broker can: files, `/proc`, its environment. No secret can be hidden from a local agent that runs tools freely. The goal is to limit what a leaked credential can do.
+
+**Decision.** When the worker starts a work session, it mints a token from `crypto/rand` (32 bytes, base64url). It records the token on the running entry together with the issue ID, and adds it to `SessionEnv` as `SORTIE_SESSION_TOKEN`. The auth wrapper then works like this:
+1. The control token is accepted everywhere.
+2. Otherwise it looks up the token among the running entries. A token that matches no running entry gets `401`.
+3. A token that matches a running entry gets `403` unless the route is hold, release, or escalate and the issue in the path is the entry's own.
+
+The token is removed with the running entry, so it ends with the run. Each token is registered with the masking registry when it is minted and removed when the run ends.
+
+**Why not the alternatives:**
+- An operator token file named by a broker flag: it needs per-workflow operator setup; a leaked token can act on any issue; and it protects nothing in local mode anyway.
+- The operator token in the environment, stripped by the broker: Sortie cannot tell whether `agent.command` is a broker, so every agent without a broker would receive a full-power token.
+- The broker inside the Sortie process: no token would be needed, but it would restructure Sortie's agent layer far away from upstream.
+
+**Accepted abuse.** An agent that finds its own token can hold its own run, which pauses the stall watchdog, and can escalate about itself. Limits that still apply: the turn timeout, extended only by real held time; tracker reconciliation; the token ceiling; the 60-second escalation rate limit; and the visible held state. The stall watchdog exists to catch hung agents, not hostile ones. Hostile agents are the sandbox's job (change `execution-environment`).
+
 ### D6. Commit and documentation discipline
 
 There is one commit per capability, plus one for its docs. Each commit updates the fork's docs in the same change: the architecture sections on the HTTP server, observability, and notifications; `docs/workflow-reference.md`; and `CHANGELOG.md`. ADRs stay untouched; any ADR that becomes stale is reported instead.
@@ -65,7 +83,8 @@ There is one commit per capability, plus one for its docs. Each commit updates t
 
 - [A hold that nobody releases keeps a run and its agent slot forever] → The broker releases the hold when the last viewer disconnects or hands back (change `acp-broker`). The held-runs gauge and the hold start time in `/api/v1/state` allow an alert. A hard time limit can be added later as a separate requirement.
 - [Held runs consume agent slots and reduce throughput] → This is accepted for now. Held time per rule is recorded, so the cost is visible before we decide on a separate limit for held runs.
-- [Session variables expose identifiers to the agent] → They hold identifiers and a local URL, not secrets. The control token is never put in the agent environment. The broker receives the token through its own configuration.
+- [The agent can read its session token] → By design (see D5a). The token is scoped to its own run, so the worst case is self-hold or self-escalation, both bounded and visible. The operator control token never enters the agent environment.
+- [A session token appears in agent output] → Tokens are registered for masking when minted, so logs, status statements, and notifications show them masked.
 - [Turn clock races between the worker and the event loop] → The clock has its own mutex and is read only by the deadline helper. Unit tests cover holds that begin before, during, and right at the deadline.
 - [Upstream changes the worker or server code these patches touch] → The patches stay small and in separate commits. Any rebase conflict lands in at most four files: the worker, reconcile, the server router, and the launch target.
 

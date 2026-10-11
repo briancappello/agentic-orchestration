@@ -56,11 +56,27 @@ An invalid command, or one not allowed in the current state, SHALL return an `er
 - **THEN** the viewer receives an `error` event and the floor does not change
 
 ### Requirement: HTTP access requires a token
-The HTTP listener SHALL require `Authorization: Bearer <token>`, or the same token in an `access_token` query parameter for `GET /events` in browsers. When no token is configured, the broker SHALL refuse to start the listener. The local socket SHALL be created with mode `0600` in a directory with mode `0700`.
+Every HTTP endpoint other than `POST /login` SHALL require either `Authorization: Bearer <viewer token>` or a valid session cookie. A missing or invalid credential SHALL receive `401`. The broker SHALL NOT accept the viewer token in a URL. When no viewer token is configured, the broker SHALL refuse to start the listener. The local socket SHALL be created with mode `0600` in a directory with mode `0700`.
 
 #### Scenario: Missing token
-- **WHEN** a client calls `GET /events` without a token
+- **WHEN** a client calls `GET /events` without a token or cookie
 - **THEN** the broker answers `401`
+
+#### Scenario: Token in the URL
+- **WHEN** a client calls `GET /events?access_token=<viewer token>` without a header or cookie
+- **THEN** the broker answers `401`
+
+### Requirement: Browser login sets a session cookie
+`POST /login` with `Authorization: Bearer <viewer token>` SHALL answer `204` and set a cookie that is `HttpOnly`, `SameSite=Strict`, and `Path=/`, and expires after 12 hours by default. The cookie SHALL also be `Secure` when the configured public URL uses HTTPS. A wrong token SHALL receive `401` and set no cookie. `POST /logout` SHALL clear the cookie. Restarting the broker SHALL invalidate all cookies it issued.
+
+#### Scenario: Phone logs in once
+- **WHEN** a browser posts the viewer token to `/login`
+- **AND** then opens an `EventSource` on `/events` with no header
+- **THEN** the stream is served using the cookie
+
+#### Scenario: Cookie from an old broker
+- **WHEN** a browser presents a cookie issued by a broker process that has since exited
+- **THEN** a new broker answers `401`
 
 #### Scenario: Listener without a token
 - **WHEN** an HTTP listen address is configured but no token

@@ -11,7 +11,9 @@ All work is in the Sortie fork (`~/dev/sortie`) on a branch off the current spik
 
 - [ ] 2.1 Add `server.control_token` with `$VAR` resolution and secret masking, and a startup check that rejects a non-loopback `server.host` without a token. Verify with config tests for a set token, an unset token on loopback, and the error that names the setting.
 - [ ] 2.2 Add the auth wrapper and apply it to `POST /api/v1/refresh`. Verify with handler tests: `401` without a token, `401` with a wrong token, `202` with the right token, and no refresh signal on a rejected request.
-- [ ] 2.3 Document the setting, the binding rule, and the breaking change for non-loopback deployments. Verify that the docs and `CHANGELOG.md` mention the migration step.
+- [ ] 2.3 Mint a session token per work session in the worker, store it on the running entry, register it for masking, and add it to `SessionEnv`; credential-check launches get none. Verify with worker tests: two dispatches get different tokens, a credential check gets none, and the token is masked in a logged status statement.
+- [ ] 2.4 Teach the auth wrapper session tokens: `401` for an unknown or expired token; `403` for the wrong issue or a route other than hold, release, or escalate; and acceptance on the run's own hold, release, and escalate. Verify with handler tests for each case, including a token used after its run ended. Test against stub routes; tasks 3.2 and 4.3 then reuse these tests on the real routes.
+- [ ] 2.5 Document the setting, session tokens, the binding rule, and the breaking change for non-loopback deployments. Verify that the docs and `CHANGELOG.md` mention the migration step and `SORTIE_SESSION_TOKEN`.
 
 ## 3. Held runs
 

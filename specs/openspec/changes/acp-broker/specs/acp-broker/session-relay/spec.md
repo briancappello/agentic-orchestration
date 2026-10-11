@@ -62,7 +62,11 @@ When the driver cancels its own turn, the broker SHALL forward the cancel to the
 - **THEN** the driver receives the agent's answer to prompt 7
 
 ### Requirement: Sortie is told about holds
-When the broker runs under Sortie, which it recognizes from `SORTIE_API_URL` and `SORTIE_ISSUE_IDENTIFIER`, it SHALL call Sortie's hold endpoint when humans take the floor, and the release endpoint when the floor returns to the driver or the broker exits. A failed call SHALL be logged and retried with backoff. It SHALL NOT block the relay.
+When the broker runs under Sortie, which it recognizes from `SORTIE_API_URL`, `SORTIE_ISSUE_IDENTIFIER`, and `SORTIE_SESSION_TOKEN`, it SHALL call Sortie's hold endpoint when humans take the floor, and the release endpoint when the floor returns to the driver or the broker exits. These calls SHALL authenticate with `SORTIE_SESSION_TOKEN`. A failed call SHALL be logged and retried with backoff. It SHALL NOT block the relay.
+
+#### Scenario: Calls use the session token
+- **WHEN** the broker holds the run for `LIVE-1`
+- **THEN** its request carries `Authorization: Bearer` with the value of `SORTIE_SESSION_TOKEN`
 
 #### Scenario: Takeover under Sortie
 - **WHEN** the broker runs for issue `LIVE-1` under Sortie
@@ -73,6 +77,14 @@ When the broker runs under Sortie, which it recognizes from `SORTIE_API_URL` and
 - **WHEN** the hold call fails
 - **THEN** the takeover still happens
 - **AND** the broker retries the hold until it succeeds or the floor returns to the driver
+
+### Requirement: The agent does not inherit the session token
+The broker SHALL remove `SORTIE_SESSION_TOKEN` from the environment of the agent command it launches. It SHALL pass every other variable through unchanged.
+
+#### Scenario: Agent environment
+- **WHEN** the broker launches its agent command under Sortie
+- **THEN** the agent process has `SORTIE_ISSUE_IDENTIFIER`
+- **AND** has no `SORTIE_SESSION_TOKEN`
 
 ### Requirement: Floor returns to the driver when humans leave
 When the last viewer disconnects while humans hold the floor and no human prompt is running, the broker SHALL hand back after a grace period, 60 seconds by default and configurable.

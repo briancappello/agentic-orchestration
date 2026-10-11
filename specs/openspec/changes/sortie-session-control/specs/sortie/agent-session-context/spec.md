@@ -15,13 +15,18 @@ When Sortie launches an agent process for a work session, the process environmen
 - `SORTIE_CHAIN_ID`, the stage chain identifier, or empty when the run belongs to no chain
 - `SORTIE_WORKSPACE`, the workspace path
 - `SORTIE_API_URL`, the base URL of Sortie's HTTP server, or empty when the server is disabled
+- `SORTIE_SESSION_TOKEN`, the run's scoped session token, for work sessions only. Its rules are in capability `sortie/control-api-auth`.
 
-Each value SHALL be the one Sortie records for the same run in its run history.
+Each value other than the token SHALL be the one Sortie records for the same run in its run history. The operator control token SHALL never be placed in the agent environment.
 
 #### Scenario: Local launch carries the identity
 - **WHEN** Sortie starts a local agent process for issue `LIVE-1` on rule `implement` in chain `c-42`
 - **THEN** the process environment has `SORTIE_ISSUE_IDENTIFIER=LIVE-1`, `SORTIE_RULE=implement`, and `SORTIE_CHAIN_ID=c-42`
 - **AND** the run history row for that run has the same rule name and chain ID
+
+#### Scenario: Operator token stays out
+- **WHEN** `server.control_token` is set
+- **THEN** no agent process environment contains its value
 
 #### Scenario: Server disabled
 - **WHEN** `server.port` is `0`

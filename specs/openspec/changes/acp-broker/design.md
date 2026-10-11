@@ -44,13 +44,30 @@ The loop gives each outgoing viewer event a sequence number and keeps it in a ri
 
 ### D3. HTTP with Server-Sent Events and `POST`, standard library only
 
-Endpoints: `GET /events` (Server-Sent Events, with a heartbeat comment every 15 seconds), `POST /commands`, and `GET /state`. The token is compared in constant time. Browsers cannot set headers on an `EventSource`, so `GET /events` also accepts an `access_token` query parameter.
+Endpoints: `GET /events` (Server-Sent Events, with a heartbeat comment every 15 seconds), `POST /commands`, `GET /state`, `POST /login`, and `POST /logout`. Non-browser clients send the viewer token as a bearer header. Browsers cannot set headers on an `EventSource`, so they call `POST /login` once with the token. The broker answers with an `HttpOnly`, `SameSite=Strict` cookie whose value is a random session ID, kept only in the broker's memory. `SameSite=Strict` also covers cross-site request forgery on `POST /commands`. Tokens and session IDs are compared in constant time.
 
-Alternative: WebSocket. Rejected because it adds a dependency or a hand-written implementation. The stream only flows one way, and commands are rare.
+Why Server-Sent Events:
+- `EventSource` reconnects by itself and sends `Last-Event-ID`, which maps directly onto the replay buffer (D2). That matters most on phones, where connections drop often.
+- Debugging needs only `curl`.
+- It needs no dependency.
 
-### D4. Sortie integration through the session environment and a token file
+Alternative: WebSocket. Rejected:
+- It needs a dependency or a hand-written implementation, and its own resume handshake.
+- It has the same browser header limit, so it would not avoid the cookie.
+- It only pays off for full-duplex terminal streaming, which the viewers do not do.
 
-The broker reads `SORTIE_API_URL`, `SORTIE_ISSUE_IDENTIFIER`, and `SORTIE_SESSION_PURPOSE` from the environment Sortie gives it (change `sortie-session-control`). Change `sortie-session-control` keeps Sortie's control token out of the agent environment, and Sortie launches the broker as the agent command. So the broker reads the token from a file named by `-sortie-token-file`, readable only by the operator user. The broker always runs on the host, so this works with sandboxed agents too.
+Transports sit behind the viewer interface (D1), so adding WebSocket later stays additive. Browsers allow about six HTTP/1.1 connections per host, which limits how many sessions one tab can watch. A TLS front end with HTTP/2, such as Tailscale serve, removes that limit.
+
+### D4. Sortie integration through the session environment and a scoped session token
+
+The broker reads `SORTIE_API_URL`, `SORTIE_ISSUE_IDENTIFIER`, `SORTIE_SESSION_PURPOSE`, and `SORTIE_SESSION_TOKEN` from the environment Sortie gives it (change `sortie-session-control`). The session token only authorizes hold, release, and escalate for this run's issue, and it expires with the run. So the broker needs no operator setup, and the worst a leaked token can do is affect its own run. The broker removes the token from the agent's environment before launching the agent.
+
+In local mode this does not hide the token: the agent runs as the same user and can read the broker's environment through `/proc`. The scoping is what limits the harm. Once the agent runs in a sandbox VM and the broker stays on the host (change `execution-environment`), removing the token from the agent's environment becomes a real boundary.
+
+Alternative: an operator token file named by a broker flag. Rejected:
+- it needs per-workflow setup
+- it gives power over every issue
+- it is just as readable in local mode
 
 ### D5. Hold state is reconciled, not fired and forgotten
 
@@ -70,7 +87,8 @@ When `SORTIE_SESSION_PURPOSE=credential-check`, the broker relays but does not r
 
 ## Risks / Trade-offs
 
-- [The token in the `access_token` query parameter can end up in proxy or browser logs] → Accept it only on `GET /events`. Recommend Tailscale serve or another TLS front end. A later change can add short-lived tokens issued by `POST /session-token`.
+- [The viewer token is long-lived and shared] → It never travels in URLs. Browsers trade it once for a cookie that expires and dies with the broker. Recommend a TLS front end (Tailscale serve) so the cookie can be `Secure`. Per-user tokens are a later change.
+- [A local agent reads `SORTIE_SESSION_TOKEN` from the broker's environment] → Accepted. The token is scoped to its own run (see D4), and the sandbox closes the gap.
 - [A forgotten takeover holds a run and its slot] → Automatic handback after the viewer grace period (D1 timers). Sortie's held-runs gauge allows an alert.
 - [The default 10-minute permission wait can stall a run that nobody watches] → It is configurable per broker, and 0 means no limit. Escalation shows the wait in Sortie's held state and metrics.
 - [Agents change their ACP behavior: new steering methods, permission shapes, usage fields] → The broker notes record what each agent does. The behavior is pinned by tests with a fake agent, plus one live check per supported agent before each upgrade.

@@ -7,6 +7,7 @@ Humans must be able to watch, steer, and take over a session that Sortie drives,
 - The agent process receives the session's identity in its environment: issue ID and identifier, dispatch ID, rule (stage), chain ID, attempt, and the address of Sortie's control API. Today only the MCP sidecar gets part of this, through `.sortie/mcp.json`.
 - New authenticated endpoints let a caller mark a running issue as held and release it. While a run is held, Sortie suspends its stall and turn timeouts for that run. The held state appears in `/api/v1/state`, in the per-issue detail, on the dashboard, and in metrics. Sortie records held time per run.
 - A new authenticated endpoint lets a caller escalate a running issue to people, with a message. Sortie delivers it as a new notification event through its existing routing (Slack, webhook, tracker comment).
+- Sortie mints a random session token for each work run and passes it to the agent process as `SORTIE_SESSION_TOKEN`. It only authorizes hold, release, and escalate for that run's own issue, and it stops working when the run ends. This lets the ACP broker call Sortie with no operator setup. A leaked token can only affect its own run.
 - Every endpoint that changes state requires a bearer token once a token is configured. Sortie refuses to bind to a non-loopback address without a token. `POST /api/v1/refresh` also falls under this rule. **BREAKING** for a deployment that binds to a non-loopback address today: it must configure a token.
 - Read-only endpoints and the metrics endpoint keep their current access.
 
@@ -16,7 +17,7 @@ Humans must be able to watch, steer, and take over a session that Sortie drives,
 - `sortie/agent-session-context`: the session identity Sortie passes to the agent process, locally and over SSH.
 - `sortie/held-runs`: how a run is held and released, what holding suspends, and how a held run is shown and recorded.
 - `sortie/operator-escalation`: how a caller escalates a running issue to people through Sortie's notification routing.
-- `sortie/control-api-auth`: authentication for Sortie's state-changing HTTP endpoints, and the binding rule.
+- `sortie/control-api-auth`: authentication for Sortie's state-changing HTTP endpoints: the operator token, per-session scoped tokens, and the binding rule.
 
 ### Modified Capabilities
 
