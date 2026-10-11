@@ -10,7 +10,7 @@ Sortie already starts only unblocked tickets, so a correct dependency graph in t
 
 - Add a **breakdown** artifact to OpenSpec changes. It records the change's deliverables, each with an id, a title, acceptance criteria, the spec sections it covers, and `depends_on`. `depends_on` may name deliverables in other changes. An agent drafts it from the change's proposal, specs, and design, and a person reviews it before anything reaches a tracker. We add it through a custom schema forked from `spec-driven`, not by changing OpenSpec.
 - Add a **plan of plans** file to the spec store. It lists the store's changes and the dependencies between them. OpenSpec has no dependencies between changes: upstream PR #1923 proposed them and was closed without merging. This file is the epic-level graph.
-- Add a **plan workbench**: one web app with two panes.
+- Add a **plan workbench**: a standalone web app, outside both Sortie and the tracker, with two panes. It has a FastAPI backend and a Vite-built frontend. The UI library is open.
   - **Graph pane (60% of the width).** It draws the plan as a left-to-right DAG: epics at the project level, and one epic's stories after a drill-down. Border colour shows status, a hatch shows a deliverable without a spec, and badges show live agent activity from Sortie. The prototype in `~/dev/huly-dag-prototype` is the starting point.
   - **Chat pane (40% of the width).** It holds an interactive planning session with an agent. In that session you write the OpenSpec change, its breakdown, and the plan of plans.
   - **Two sources for one graph.** Before a sync, the graph pane draws the draft plan from the files in the spec store, and it redraws whenever the agent changes them. After a sync, it draws the tracker's issues and Sortie's live state. A deliverable keeps its identity across that boundary, so drafted, synced, and in-flight work all appear in one picture.
@@ -63,11 +63,13 @@ None.
   - the tracker-contract section;
   - the workflow reference for the new subcommand;
   - the Huly adapter notes.
-- Workbench: a new web app grown from `~/dev/huly-dag-prototype`.
-  - It reads the spec store, the tracker through Sortie, and Sortie's `/api/v1/state`.
-  - It talks to the planning agent through `acp-broker`.
+- Workbench: a new standalone app in its own repository, grown from `~/dev/huly-dag-prototype`. A FastAPI backend serves the Vite-built frontend and is the frontend's only server.
+  - The backend reads the spec store and watches it for changes.
+  - It reads Sortie's `/api/v1/state`, and reads the synced plan from the tracker through Sortie.
+  - It runs the sync through Sortie.
+  - It relays the planning session to and from `acp-broker`.
   - It never calls a tracker directly, so it works with any tracker Sortie supports.
-  - Where it runs (served by Sortie, by the broker, or on its own) and its stack are decided in design.
+- Sortie needs a way for the workbench to read the synced plan graph (issues, parents, dependencies) and to start a sync. Today its HTTP API exposes only the orchestrator's runtime state. Design decides between a new read and sync endpoint on Sortie's API and the backend calling the `sortie plan` subcommand.
 - Depends on change `acp-broker`, for the HTTP viewer transport and the session registry.
 - Out of scope:
   - write capabilities for adapters other than Huly;
