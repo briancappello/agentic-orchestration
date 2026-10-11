@@ -31,7 +31,7 @@ None. The `acp-broker` change is not archived yet, so `openspec/specs/` has no b
 
 - **Code (`acp-broker`):** a new telemetry package under `acp-broker/internal`, hooks in the broker loop at turn start and end and on `session/update`, new flags in `acp-broker/cmd/acp-broker`, and `SORTIE_DISPATCH_ID` in `acp-broker/internal/sortieclient`. The masking uses `acp-broker/internal/secrets`.
 - **Dependencies: a decision to take first.** The broker plan said "standard library only". The design compares the OpenTelemetry Go SDK with OTLP/HTTP written on the standard library. No dependency is added until the user chooses.
-- **Decision records:** Sortie's ADR-0008 deferred OpenTelemetry for Sortie itself. This change keeps Sortie's process as it is; the tracing is in the broker, a separate program.
+- **Dependencies:** the broker is a module that uses the standard library only. Any dependency it adds is one more module to vet and keep current.
 - **Operations:** a Collector and a self-hosted Langfuse (v3.22.0 or later, for its OTLP endpoint) are needed to use the feature. Without them the broker behaves as it does today.
 - **Docs (`acp-broker`):** `acp-broker/docs/guide.md` (flags, pipeline, masking), `acp-broker/docs/notes.md` (usage and model per agent), and an example Collector configuration.
 - **Out of scope:** Sortie's own accounting (`run_history` tokens, `agent.max_tokens`) stays as it is. Whether it should count the usage the broker observes is an open question in the design.

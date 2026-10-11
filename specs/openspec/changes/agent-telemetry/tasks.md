@@ -36,4 +36,3 @@
   - `acp-broker/examples/telemetry/collector.yaml`.
 
   Verify that `otelcol-contrib validate --config acp-broker/examples/telemetry/collector.yaml` succeeds, and that the guide's example broker command runs as written.
-- [ ] 5.2 Report ADR-0008 as stale to the user, with the addendum the design proposes; do not edit it. Verify that the report is in this change's `verification.md`, and that `openspec validate agent-telemetry --strict --store agent-platform-specs` passes.

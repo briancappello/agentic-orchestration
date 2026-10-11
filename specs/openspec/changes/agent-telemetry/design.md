@@ -125,7 +125,7 @@ The broker plan said "standard library only", and adding a dependency needs the 
 **Option A: OTLP/HTTP with JSON encoding, on the standard library.** About 300 to 400 lines in `acp-broker/internal/telemetry/otlp`: OTLP JSON structs, a batcher, retry with backoff, and the final flush.
 - Pros:
   - No new modules.
-  - It keeps the broker plan's "standard library only" and does not touch the reason ADR-0008 gave for deferring OTel.
+  - It keeps the broker plan's "standard library only".
   - Both the Collector and Langfuse accept HTTP/JSON.
   - We export one signal and a few span shapes, so the surface is small.
 - Cons:
@@ -141,7 +141,7 @@ The broker plan said "standard library only", and adding a dependency needs the 
 - Cons, measured on 2026-10-11 with a minimal program using `otlptracehttp` and the SDK batcher:
   - It compiles in 23 modules, all of them new to the broker: `go.opentelemetry.io/{otel, otel/sdk, otel/trace, otel/metric, otel/log, auto/sdk, proto/otlp, exporters/otlp/otlptrace, …/otlptracehttp}`, `google.golang.org/grpc`, `github.com/grpc-ecosystem/grpc-gateway/v2`, `google.golang.org/genproto/googleapis/{api,rpc}`, `golang.org/x/net`, `golang.org/x/text`, `github.com/go-logr/{logr,stdr}`, and `github.com/cenkalti/backoff/v5`. `protobuf`, `x/sys`, `xxhash`, and `uuid` are already present.
   - The minimal program is 21.7 MB. Today's whole broker binary is 11.7 MB.
-  - The SDK is shared by both binaries' module, so the Sortie release takes on the dependency tree that ADR-0008 cited (direct dependencies "from 3 to 13+").
+  - The broker gains about 15 modules to vet and keep current.
   - It does not fit the broker plan's "standard library only".
   - Its `OTEL_*` variables, if used for configuration, would also reach the agent (see D10).
 
@@ -221,7 +221,3 @@ These are listed, not decided. None changes the specs or the task breakdown of t
 5. **Pi usage.** When pi-acp#106 lands, are Pi's counts per turn or cumulative? The spec requires per-turn counts as reported. A cumulative report would need a difference, which is an agent-specific rule to place in the broker notes.
 6. **OTLP metrics.** Should the broker also emit OTLP metrics (turns, tokens, and holds per rule) for Prometheus through the Collector? Langfuse covers cost; this would only matter for alerting outside Langfuse.
 7. **Standard `OTEL_*` variables.** Should the broker also accept them, for example `OTEL_EXPORTER_OTLP_ENDPOINT`, and strip them from the agent's environment? D10 avoids them for now.
-
-## Stale decision records (report only)
-
-- **Sortie's ADR-0008 (accepted)** defers the OTel SDK for Sortie and puts distributed tracing out of scope. This change keeps the Sortie orchestrator as it is: the tracing exporter is in the broker, a separate program.
