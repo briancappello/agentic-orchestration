@@ -2,12 +2,21 @@
 
 A plan starts in an agent session that writes an OpenSpec change: *what* we want to build. Nothing turns that into *how* we build it, meaning deliverables ordered in sequence or in parallel. Nothing turns those deliverables into tracker tickets that Sortie can dispatch. Today a person creates the epics, stories, and dependencies by hand in the tracker. A graph of work is slow to enter that way and easy to get wrong.
 
+Planning is also a conversation, and today it happens blind: the agent writes files, and nobody can see the graph that is taking shape until it is finished. We want to plan in the same place we look at the plan. Chatting with the planning agent should redraw the graph as the agent writes it, and the same view should later show the live state of that graph while agents carry it out.
+
 Sortie already starts only unblocked tickets, so a correct dependency graph in the tracker is all that sequencing needs. Sortie cannot write that graph. Its tracker contract can change status, comment, and add or remove labels. It cannot create an issue, set a parent, or add a dependency, in any tracker. Whatever we build must not tie us to Huly. It must work with every tracker Sortie supports now or adds later.
 
 ## What Changes
 
 - Add a **breakdown** artifact to OpenSpec changes. It records the change's deliverables, each with an id, a title, acceptance criteria, the spec sections it covers, and `depends_on`. `depends_on` may name deliverables in other changes. An agent drafts it from the change's proposal, specs, and design, and a person reviews it before anything reaches a tracker. We add it through a custom schema forked from `spec-driven`, not by changing OpenSpec.
 - Add a **plan of plans** file to the spec store. It lists the store's changes and the dependencies between them. OpenSpec has no dependencies between changes: upstream PR #1923 proposed them and was closed without merging. This file is the epic-level graph.
+- Add a **plan workbench**: one web app with two panes.
+  - **Graph pane (60% of the width).** It draws the plan as a left-to-right DAG: epics at the project level, and one epic's stories after a drill-down. Border colour shows status, a hatch shows a deliverable without a spec, and badges show live agent activity from Sortie. The prototype in `~/dev/huly-dag-prototype` is the starting point.
+  - **Chat pane (40% of the width).** It holds an interactive planning session with an agent. In that session you write the OpenSpec change, its breakdown, and the plan of plans.
+  - **Two sources for one graph.** Before a sync, the graph pane draws the draft plan from the files in the spec store, and it redraws whenever the agent changes them. After a sync, it draws the tracker's issues and Sortie's live state. A deliverable keeps its identity across that boundary, so drafted, synced, and in-flight work all appear in one picture.
+  - **The agent can see what you point at.** Selecting a node in the graph adds it to the chat's context, so you can say "split this one" or "this should wait for Billing".
+  - **It runs `sortie plan sync` from the workbench, with a preview first.** A person approves the preview before anything is written to the tracker.
+- Run the planning session through **`acp-broker`** (change `acp-broker`). The broker's authenticated HTTP transport (Server-Sent Events plus `POST`) carries the chat. The session works in the spec store as its workspace, and any ACP agent can run it. The workbench adds no agent integration of its own.
 - Add **tracker write capabilities** to Sortie's tracker contract as optional interfaces, alongside `BlockerReader`:
   - create an issue with a title, a body, and a kind (epic or story);
   - update those fields;
@@ -32,6 +41,8 @@ Sortie already starts only unblocked tickets, so a correct dependency graph in t
 - `sortie/tracker-write-capabilities`: the optional adapter interfaces for creating issues, parenting, and dependencies, how an adapter declares them, and the errors each returns.
 - `sortie/plan-sync`: the `sortie plan sync` command, including how a deliverable maps to an issue, idempotency, a dry run, and refusal when the tracker lacks a needed capability.
 - `sortie/tracker-api-planning-operations`: the new `tracker_api` operations and their project scoping.
+- `planning/plan-workbench`: the two-pane web app, covering the layout, the graph rules (columns by dependency depth, status, planned and unplanned, drill-down), how the draft and tracker sources merge, live Sortie state, selection as chat context, and sync with a preview.
+- `planning/planning-session`: the interactive planning session in the chat pane, covering how it starts, its workspace (the spec store), the artifacts it may write, and how its file changes reach the graph pane.
 
 ### Modified Capabilities
 
@@ -52,9 +63,13 @@ None.
   - the tracker-contract section;
   - the workflow reference for the new subcommand;
   - the Huly adapter notes.
-- Downstream: the DAG viewer prototype (`~/dev/huly-dag-prototype`) reads the graph this change creates. It reads the tracker, so it inherits the same independence from any one tracker.
+- Workbench: a new web app grown from `~/dev/huly-dag-prototype`.
+  - It reads the spec store, the tracker through Sortie, and Sortie's `/api/v1/state`.
+  - It talks to the planning agent through `acp-broker`.
+  - It never calls a tracker directly, so it works with any tracker Sortie supports.
+  - Where it runs (served by Sortie, by the broker, or on its own) and its stack are decided in design.
+- Depends on change `acp-broker`, for the HTTP viewer transport and the session registry.
 - Out of scope:
-  - the viewer itself;
   - write capabilities for adapters other than Huly;
   - syncing state back from the tracker into the breakdown;
-  - deciding who runs the breakdown step (an agent stage in Sortie or an interactive session). Design weighs that last choice.
+  - editing the graph by drag and drop; in this change the graph changes only through the planning session.
