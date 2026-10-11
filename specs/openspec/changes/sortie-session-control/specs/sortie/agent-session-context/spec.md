@@ -17,7 +17,7 @@ When Sortie launches an agent process for a work session, the process environmen
 - `SORTIE_API_URL`, the base URL of Sortie's HTTP server, or empty when the server is disabled
 - `SORTIE_SESSION_TOKEN`, the run's scoped session token, for work sessions only. Its rules are in capability `sortie/control-api-auth`.
 
-Each value other than the token SHALL be the one Sortie records for the same run in its run history. The operator control token SHALL never be placed in the agent environment.
+Each value other than the token and the attempt SHALL be the one Sortie records for the same run in its run history. `SORTIE_ATTEMPT` SHALL match the MCP sidecar's `SORTIE_ATTEMPT` for the same run, which is the run history attempt minus one, or empty when that is zero. The operator control token SHALL never be placed in the agent environment.
 
 #### Scenario: Local launch carries the identity
 - **WHEN** Sortie starts a local agent process for issue `LIVE-1` on rule `implement` in chain `c-42`
