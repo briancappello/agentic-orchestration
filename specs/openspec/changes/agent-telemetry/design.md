@@ -118,9 +118,9 @@ Transcript content is collected only when the content option is on. With it off,
 
 Viewers keep their unmasked stream. Masking happens only in the exporter, after the loop has handed the span over.
 
-### D8. The exporter: a dependency decision for the user (pending)
+### D8. The exporter: OTLP/HTTP JSON on the standard library (decided 2026-10-11)
 
-The broker plan said "standard library only", and adding a dependency needs the user's approval. This decision is the user's. Both options meet the specs, and the recorder (D1) does not depend on the choice.
+The broker plan said "standard library only", and adding a dependency needs the user's approval. The user chose Option A on 2026-10-11. Both options meet the specs, and the recorder (D1) does not depend on the choice; Option B is kept below as the recorded alternative.
 
 **Option A: OTLP/HTTP with JSON encoding, on the standard library.** About 300 to 400 lines in `acp-broker/internal/telemetry/otlp`: OTLP JSON structs, a batcher, retry with backoff, and the final flush.
 - Pros:
@@ -145,9 +145,9 @@ The broker plan said "standard library only", and adding a dependency needs the 
   - It does not fit the broker plan's "standard library only".
   - Its `OTEL_*` variables, if used for configuration, would also reach the agent (see D10).
 
-**Recommendation: Option A.** We emit one signal, from one process, in a handful of shapes, and Langfuse is the main consumer. The encoding risk is bounded by tests. Option B's cost falls on every Sortie build. If we later need OTLP metrics or logs from the broker, or OTel inside Sortie itself, we revisit, and the change stays inside the exporter package.
+**Decision: Option A.** We emit one signal, from one process, in a handful of shapes, and Langfuse is the main consumer. The encoding risk is bounded by tests. Option B's cost falls on every rebase onto upstream. If we later need OTLP metrics or logs from the broker, we revisit, and the change stays inside the exporter package.
 
-Neither option uses CGo. Tasks 2.x assume Option A. If the user chooses Option B, task 2.2 becomes "wire `otlptracehttp` and the SDK batcher behind the exporter interface", and task 2.3's golden tests are dropped.
+Neither option uses CGo. Tasks 2.x implement Option A.
 
 ### D9. Exporter limits
 
@@ -198,10 +198,6 @@ Cost per stage in Langfuse: filter traces by the `rule` metadata, or by `chain_i
 2. Run a Collector and Langfuse (v3.22.0 or later) next to Sortie, and configure the Collector from the example.
 3. Add `-otlp-endpoint http://127.0.0.1:4318` to the broker prefix in a workflow's `agent.command`.
 4. Rollback: remove the flag. No state is stored, and Sortie is not involved.
-
-## Decision needed before implementation
-
-- **The exporter dependency (D8).** Option A is the standard library, recommended. Option B is the OpenTelemetry Go SDK. Tasks 2.x assume A. This must be answered before task 2.2 starts. It changes only the exporter package.
 
 ## Open Questions
 

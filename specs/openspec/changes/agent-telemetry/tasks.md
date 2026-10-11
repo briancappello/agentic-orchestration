@@ -1,6 +1,6 @@
 ## 1. Decision and session facts
 
-- [ ] 1.1 Get the user's choice for the exporter dependency (design D8: Option A, standard library, recommended; Option B, OpenTelemetry Go SDK). Record it in D8 and adjust tasks 2.2 and 2.3 if B is chosen. Verify that D8 no longer says "pending" and that `openspec validate agent-telemetry --strict` passes.
+- [x] 1.1 Get the user's choice for the exporter dependency. Decided 2026-10-11: Option A, OTLP/HTTP JSON on the standard library (design D8).
 - [ ] 1.2 Read `SORTIE_DISPATCH_ID` into the broker's session environment alongside the other `SORTIE_*` labels. Verify with a `sortieclient` test that reads all five labels, and one where they are unset.
 - [ ] 1.3 Track the session's model in the loop: the `configOptions` entry of category `model`, from `session/new` and `session/load` results, from results of the driver's `session/set_config_option`, and from `config_option_update` session updates. Verify with loop tests using a fake agent for each source and for an agent that reports no model.
 
