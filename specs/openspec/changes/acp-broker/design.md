@@ -79,7 +79,9 @@ Each waiting request gets two loop timers: escalation (default 30 seconds, or at
 
 ### D7. Steering selection
 
-The broker reads steering support once, from the `initialize` result. Native: `_session/steering` with `idleBehavior: "promptRequired"`. Fallback: the spike's same-session turn with automatic handback. When ACP PR #1261 (`session/inject`) lands, the broker prefers it whenever the agent advertises it, and keeps the vendor extension as the second choice. The broker notes track this.
+The broker reads steering support once, from the `initialize` result. Native: `_session/steering` with `idleBehavior: "promptRequired"`. Fallback: the spike's same-session turn with automatic handback.
+
+Native steering only applies while a driver turn is running. An agent with native steering answers a steer on an idle session with `{"outcome":"promptRequired"}` and drops the text, so an idle session is steered with the same-session turn for every agent: the broker holds Sortie with reason `steer`, queues driver prompts, and hands back when the turn ends. A native steer can still race the end of the driver's turn. When it comes back `promptRequired`, the broker resends it once if a new driver turn is running by then, and otherwise runs it as a same-session turn. A second `promptRequired` also becomes a same-session turn (cancelling a driver turn that is running, as the fallback does), so a steer is never resent in a loop. If humans took the floor while the steer was in flight, the steer is dropped with a message to send a prompt, because the steer turn's automatic handback would end their takeover. We chose this over omitting `idleBehavior`, which makes Claude start a turn itself: the broker would not see that turn as its own, so it could not hold Sortie or queue driver prompts around it. When ACP PR #1261 (`session/inject`) lands, the broker prefers it whenever the agent advertises it, and keeps the vendor extension as the second choice. The broker notes track this.
 
 ### D8. Credential-check sessions are pass-through
 

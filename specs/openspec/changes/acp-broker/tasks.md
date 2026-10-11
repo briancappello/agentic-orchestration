@@ -10,6 +10,7 @@ All work is in `acp-broker/`, starting from the spike. Every task ends with `go 
 ## 2. Steering
 
 - [x] 2.1 Keep native and fallback steering, and add the "one steer at a time" checks. Verify with tests for native steering (floor unchanged), fallback steering (cancel, same-session prompt, automatic handback), steering while idle (driver prompt queued), and each rejection.
+- [ ] 2.2 Steer an idle session the same way for every agent: skip native steering when no driver turn runs and run a same-session steer turn instead; on a `promptRequired` answer, resend once if a driver turn is running, else run a steer turn. Verify with tests for a native steer while idle (hold `steer`, then release), `promptRequired` with a new driver turn (resent natively), and `promptRequired` while idle (steer turn). Update the operator guide's `steer` row and the broker notes, and live-check an idle steer with Claude.
 
 ## 3. Sortie integration
 
