@@ -39,7 +39,8 @@ Sortie already starts only unblocked tickets, so a correct dependency graph in t
 - `planning/breakdown-artifact`: the breakdown format, its rules (unique ids, no cycles, dependencies that resolve), and how it relates to the change it belongs to.
 - `planning/plan-of-plans`: the store-level file that orders changes, and how it combines with breakdowns into one graph.
 - `sortie/tracker-write-capabilities`: the optional adapter interfaces for creating issues, parenting, and dependencies, how an adapter declares them, and the errors each returns.
-- `sortie/plan-sync`: the `sortie plan sync` command, including how a deliverable maps to an issue, idempotency, a dry run, and refusal when the tracker lacks a needed capability.
+- `sortie/plan-sync`: syncing a plan into the tracker, as both the `sortie plan sync` command and an HTTP endpoint. Covers how a deliverable maps to an issue, idempotency, a preview, and refusal when the tracker lacks a needed capability.
+- `sortie/plan-graph-api`: the HTTP endpoint that returns the synced plan graph from the tracker in a form that does not depend on the tracker.
 - `sortie/tracker-api-planning-operations`: the new `tracker_api` operations and their project scoping.
 - `planning/plan-workbench`: the two-pane web app, covering the layout, the graph rules (columns by dependency depth, status, planned and unplanned, drill-down), how the draft and tracker sources merge, live Sortie state, selection as chat context, and sync with a preview.
 - `planning/planning-session`: the interactive planning session in the chat pane, covering how it starts, its workspace (the spec store), the artifacts it may write, and how its file changes reach the graph pane.
@@ -69,7 +70,11 @@ None.
   - It runs the sync through Sortie.
   - It relays the planning session to and from `acp-broker`.
   - It never calls a tracker directly, so it works with any tracker Sortie supports.
-- Sortie needs a way for the workbench to read the synced plan graph (issues, parents, dependencies) and to start a sync. Today its HTTP API exposes only the orchestrator's runtime state. Design decides between a new read and sync endpoint on Sortie's API and the backend calling the `sortie plan` subcommand.
+- Sortie fork, HTTP API:
+  - new endpoints that read the synced plan graph (issues, parents, dependencies, plan keys) through the configured adapter;
+  - new endpoints that preview a sync and then apply it.
+
+  The workbench may run on another machine than Sortie, so it uses these endpoints, not the subcommand.
 - Depends on change `acp-broker`, for the HTTP viewer transport and the session registry.
 - Out of scope:
   - write capabilities for adapters other than Huly;
