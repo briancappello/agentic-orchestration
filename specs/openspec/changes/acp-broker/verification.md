@@ -262,3 +262,100 @@ Notes:
 - **Takeover ends the run early.** With `max_turns: 1`, Sortie ends the run when the held driver turn is answered with `end_turn` on handback. A takeover therefore ends the run unless the workflow allows more turns. This is expected: a handed-back turn looks like an ordinary completed turn to Sortie.
 - **Claude stopped after the steer.** It wrote `human.txt` and then ended its turn without finishing the remaining original steps. That is the agent's own choice; the broker delivered the steer as an injection.
 - **Brief holds with a viewer attached.** In the Claude run, the second permission request was answered by the attached viewer within milliseconds, so it produced a hold of 0 ms. The broker holds the run whenever a request waits, viewer or not.
+
+## Task 2.2: steer an idle session the same way for every agent
+
+Code: `acp-broker`.
+
+### Tests
+
+New tests in `acp-broker/internal/broker/steering_test.go`:
+- `TestSteer_NativeWhileIdleRunsASteerTurn`
+- `TestSteer_PromptRequiredResendsIntoANewDriverTurn`
+- `TestSteer_PromptRequiredWhileIdleRunsASteerTurn`
+- `TestSteer_SecondPromptRequiredCancelsAndRunsASteerTurn`
+- `TestSteer_PromptRequiredAfterATakeoverIsDropped`
+
+New tests in `acp-broker/internal/broker/hold_test.go`:
+- `TestHold_NativeSteerWhileIdleHoldsUntilItsTurnEnds`
+- `TestHold_PromptRequiredWhileIdleHoldsUntilItsTurnEnds`
+
+```
+$ set -o pipefail; go test -race -count=1 ./acp-broker/...
+ok  	github.com/briancappello/agentic-orchestration/acp-broker/internal/broker	3.256s
+ok  	github.com/briancappello/agentic-orchestration/acp-broker/internal/registry	2.026s
+ok  	github.com/briancappello/agentic-orchestration/acp-broker/internal/sortieclient	1.226s
+ok  	github.com/briancappello/agentic-orchestration/acp-broker/internal/transport	3.758s
+ok  	github.com/briancappello/agentic-orchestration/acp-broker/cmd/acp-broker	11.735s
+$ golangci-lint run ./acp-broker/...
+0 issues.
+```
+
+Each part of the fix was broken on purpose, and the tests were run again:
+
+| Break | Tests that failed |
+| --- | --- |
+| Send a native steer even when idle | `NativeWhileIdleRunsASteerTurn`, `Hold_NativeSteerWhileIdle…` |
+| Treat `promptRequired` as final | all five `PromptRequired…` tests |
+| Resend without a limit | `SecondPromptRequiredCancelsAndRunsASteerTurn` |
+| No takeover guard | `PromptRequiredAfterATakeoverIsDropped` |
+
+### Live check with Claude
+
+Harness: `/tmp/opencode/scs-live`, with the broker built from these tasks. It adds the `idle` mode:
+- `run.sh claude idle` uses `max_turns: 2` and an issue that finishes only on the second turn. Turn 1 creates `progress.txt`. Turn 2 appends to it and writes `needs-human-review`.
+- `viewer.py` attaches at once. It steers on the first `driverTurn: none` state after a driver turn was active.
+
+```
+cd /tmp/opencode/scs-live && ./run.sh claude idle > run-claude-idle.out 2>&1
+```
+
+**Sortie leaves no idle gap by itself.** The first attempt steered when turn 1 ended. Sortie's turn-2 prompt reached the broker 0.5 ms after the `none` state (seq 24 at `22:15:45.819235`, seq 25 `active` at `.819736`). The steer therefore went natively into turn 2 and came back `injected`, as the spec requires for a running turn. At the end of the run, the driver closed its input 3 ms after the last turn ended. Under Sortie, a session is idle only for milliseconds, so the `promptRequired` race is the more likely case there. An idle session matters most for a broker without Sortie, or for a slower driver. Logs: `*-claude-idle-race.*`.
+
+**A gap made with `SIGSTOP`.** To get a real idle window with real components, the viewer pauses Sortie by its recorded PID (`kill -STOP`), steers, and resumes it (`kill -CONT`). It pauses once turn 1's permission request is answered and Sortie has confirmed the release. Turn 1 then ends while Sortie cannot send turn 2.
+
+A first try paused Sortie before it confirmed the release, while the hold call for the permission request was still in flight. That call landed late and kept its reason. The release and the `steer` hold then merged into "still held", so Sortie showed `permission request` for the steer. This follows the documented rule that a held run keeps its first reason; the cause was the pause, not the broker. Logs: `*-claude-idle-early-stop.*`.
+
+The clean run (`viewer-claude-idle.log`, trimmed):
+
+```
+  4.7s POST /commands {"op": "permit", "id": "0", "option": "allow_once"} -> 200 state  floor=driver
+  4.7s SORTIE after the answer: {'held': False, ...}
+  4.7s SIGSTOP sortie 484180 after turn 1's request was answered and released
+  5.3s EVENT id=23 {"type": "state", "floor": "driver", "driverTurn": "none", "steering": true}
+  5.3s POST /commands {"op": "steer", "text": "Human here, steering while you are idle: create the file human.txt ..."} -> 200 state  floor=human
+  5.3s SIGCONT sortie 484180
+  5.5s SORTIE after the idle steer: {'held': True, 'hold_reason': 'steer', 'holder': 'acp-broker', ...}
+  5.5s EVENT id=24 {"type": "state", "floor": "human", "driverTurn": "none", "steering": true}
+  5.5s EVENT id=25 {"type": "state", "floor": "human", "driverTurn": "none+queued", "steering": true}
+  6.3s POST /commands {"op": "permit", "id": "1", "option": "allow_once"} -> 200 state  floor=human
+  6.8s EVENT id=39 {"type": "result", "op": "steer-turn", "result": {"stopReason": "end_turn", "usage": {...}}}
+  6.8s SORTIE after the steer's outcome: {'held': False, 'held_total_ms': 1453}
+  6.8s EVENT id=40 {"type": "state", "floor": "driver", "driverTurn": "active", "steering": true}
+ 10.3s state after the steer: floor=driver driverTurn=none
+identifier|rule_name|status|turns_completed|held_ms
+LIVE-1||succeeded|2|1455
+turn 1 done
+turn 2 done
+human was here
+```
+
+From the broker log (`broker-claude-idle.log`): no `_session/steering` was sent in this run.
+
+```
+16:17:55.555 sortie hold updated held=true reason=steer
+16:17:57.000 sortie hold updated held=false reason=steer
+```
+
+Sortie logged `run released ... held_ms: 1445` at `16:17:57.000`.
+
+### Result
+
+| Check | Claude |
+| --- | --- |
+| An idle steer of a native-steering agent runs as a same-session turn, with no `_session/steering` | yes |
+| Sortie holds the run with reason `steer` during the steer turn | yes |
+| Sortie's next prompt is queued (`none+queued`) and forwarded on handback | yes |
+| Automatic handback and release when the steer turn ends; the run finishes `succeeded` | yes (`held_ms` 1455) |
+| A steer during a running turn stays native (`injected`) | yes (first attempt) |
+| `promptRequired` race (resend, or a steer turn) | unit tests only; not provoked live |
