@@ -359,3 +359,96 @@ Sortie logged `run released ... held_ms: 1445` at `16:17:57.000`.
 | Automatic handback and release when the steer turn ends; the run finishes `succeeded` | yes (`held_ms` 1455) |
 | A steer during a running turn stays native (`injected`) | yes (first attempt) |
 | `promptRequired` race (resend, or a steer turn) | unit tests only; not provoked live |
+
+## Task 2.3: steering as a queue; interrupting as a separate command
+
+Code: `acp-broker`. This supersedes the cancel-and-resend behavior recorded under task 2.2.
+
+### Tests
+
+Broker tests went from 78 to 82. The steering tests were rewritten around the new rules, one per spec scenario:
+- `TestSteer_NativeInjectsIntoTheRunningTurn`
+- `TestSteer_WaitsForTheRunningTurnWithoutNativeSteering`
+- `TestSteer_QueuedSteersGoAsOneMessage`
+- `TestSteer_IdleRunsASteerTurnForEveryAgent`
+- `TestSteer_PromptRequiredRunsAsATurnBeforeTheDriverGetsControl`
+- `TestSteer_PromptRequiredBeforeTheTurnEndsIsNotSentNativelyAgain`
+- `TestSteer_AcceptedWhileInterruptedAndKeepsTheFloor`
+- `TestSteer_WaitsForAHumanTurnWithoutNativeSteering`
+- `TestSteer_DriverCancelGetsItsAnswerAndTheSteerStillLands`
+- `TestSteer_DriverCancelWhileWaitingForSteersGetsItsAnswerAtOnce`
+- `TestSteer_InterruptDuringASteerTurnKeepsTheAnswerUntilHandback`
+- `TestInterrupt_AlwaysGivesHumansTheFloor` (all three spellings)
+- `TestHold_QueuedSteerHoldsWhileTheDriverWaits`
+- `TestHold_PromptRequiredHoldsUntilTheSteerTurnEnds`
+
+```
+$ set -o pipefail; go test -race -count=1 ./acp-broker/...
+ok  	github.com/briancappello/agentic-orchestration/acp-broker/internal/broker	3.454s
+ok  	github.com/briancappello/agentic-orchestration/acp-broker/internal/registry	2.025s
+ok  	github.com/briancappello/agentic-orchestration/acp-broker/internal/sortieclient	1.219s
+ok  	github.com/briancappello/agentic-orchestration/acp-broker/internal/transport	3.716s
+ok  	github.com/briancappello/agentic-orchestration/acp-broker/cmd/acp-broker	11.720s
+$ golangci-lint run ./acp-broker/...
+0 issues.
+```
+
+The steering, hold, and interrupt tests also passed 5 times in a row (`-count=5`). Each rule was broken on purpose, and the tests were run again:
+
+| Break | Tests that failed |
+| --- | --- |
+| Do not withhold the driver's answer | `WaitsForTheRunningTurn…`, `PromptRequiredRunsAsATurn…`, `InterruptDuringASteerTurn…`, `Hold_PromptRequired…`, `SteerWithoutSteeringRunsAfterTheDriverTurn` |
+| Steer natively when idle | `IdleRunsASteerTurnForEveryAgent`, both `PromptRequired…`, `Hold_NativeSteerWhileIdle…`, `Hold_PromptRequired…` |
+| Deliver only the first queued steer | `QueuedSteersGoAsOneMessage` |
+| Allow a second native attempt after `promptRequired` | `PromptRequiredBeforeTheTurnEndsIsNotSentNativelyAgain` |
+| The driver's cancel keeps a withheld answer | `DriverCancelWhileWaitingForSteers…` |
+| A steer cancels the running turn | `NativeInjectsIntoTheRunningTurn`, `WaitsForTheRunningTurn…`, `SteerWithoutSteeringRunsAfterTheDriverTurn` |
+| Refuse steers while interrupted | `AcceptedWhileInterruptedAndKeepsTheFloor`, `WaitsForAHumanTurn…` |
+| An interrupt when idle leaves the floor | `Interrupt_AlwaysGivesHumansTheFloor`, `WaitsForAHumanTurn…` |
+
+### Live checks
+
+Harness `/tmp/opencode/scs-live`, binaries built from `645c8224`. The new viewer mode is `queue`. It sends two steers during Sortie's only turn (`max_turns: 1`), once `progress.txt` exists.
+
+```
+./run.sh opencode queue > run-opencode-queue.out 2>&1
+./run.sh claude queue   > run-claude-queue.out 2>&1
+./run.sh opencode takeover > run-opencode-interrupt.out 2>&1
+```
+
+**OpenCode (no native steering).** The steers queued and nothing was cancelled. Trimmed output:
+
+```
+33.2s POST /commands {"op": "steer", "text": "Human here: also create the file human.txt ..."} -> 200 state  floor=driver
+33.2s POST /commands {"op": "steer", "text": "Human again: then append the line 'second steer' to human.txt."} -> 200 state  floor=driver
+33.2s SORTIE while the steers wait: {'held': False, ...}
+33.2s state: floor=driver driverTurn=active steersQueued=2
+  ... the agent finishes its original steps (sleep, append, .sortie/status) ...
+57.7s state: floor=driver driverTurn=held steersQueued=2
+57.7s SORTIE while its answer is withheld: {'held': True, 'hold_reason': 'steer', 'holder': 'acp-broker', ...}
+57.7s state: floor=driver driverTurn=held steersQueued=0
+62.1s EVENT {"type": "result", "op": "steer-turn", "result": {"stopReason": "end_turn", ...}}
+62.1s SORTIE after the steer's outcome: {'held': False, 'held_total_ms': 4396}
+identifier|rule_name|status|turns_completed|held_ms
+LIVE-1||succeeded|1|4396
+step 1 done
+step 3 done
+human was here
+second steer
+```
+
+Both steers landed in one steer turn after Sortie's last turn, and before Sortie continued to its handoff.
+
+**Claude (native steering).** The first steer was injected at once. The second queued while the first awaited its outcome, and was injected next. There were two `steer` results, both `injected`. Sortie was never held for the steers. The agent did both steers and its own steps: `succeeded`, 1 turn, `held_ms` 8, with `human.txt` holding both lines.
+
+**Interrupt, through the `takeover` alias.** Sortie held the run with reason `interrupt`. The human prompt ran in the same session, and the handback released the run: `succeeded`, `held_ms` 9150.
+
+### Result
+
+| Check | OpenCode | Claude |
+| --- | --- | --- |
+| Steers accepted during a running turn, nothing cancelled | yes | yes |
+| Several queued steers delivered together | yes (one steer turn) | yes (second injected after the first) |
+| A steer lands before Sortie gets control back, even on its last turn | yes (answer withheld, hold `steer`) | yes (injected mid-turn) |
+| The run finishes normally | `succeeded` | `succeeded` |
+| Interrupt gives humans the floor; handback returns it | yes (hold `interrupt`) | not run |

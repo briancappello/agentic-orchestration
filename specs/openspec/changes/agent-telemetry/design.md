@@ -59,7 +59,7 @@ Alternative considered: deriving spans from the viewer event stream (`update`, `
 | `human` | the broker sends its own prompt for op `prompt` | the agent answers that ID |
 | `steer` | the broker sends its own prompt for op `steer-turn` | the agent answers that ID |
 
-A driver turn cancelled for a takeover carries `acp.turn.cancelled_for = takeover`. The loop already knows this when it holds the request. A native steer result becomes a span event `steer` on the open driver turn, with the outcome. The broker resends a native steer at most once, so a span can carry two events. On broker stop, open turns and tool calls end with `acp.unfinished = true`.
+A turn cancelled by an interrupt carries `acp.turn.cancelled_for = interrupt`. The loop knows this when it handles the interrupt. A native steer result becomes a span event `steer` on the running turn, with the outcome and `acp.steer.count`. Steers queued behind one in flight are injected next, so a span can carry several steer events. A steer turn carries `acp.steer.count`. A driver turn's span ends when the agent answers it, even when the broker withholds that answer from the driver while steers land. On broker stop, open turns and tool calls end with `acp.unfinished = true`.
 
 ### D3. One trace per turn; a dispatch is a Langfuse session
 

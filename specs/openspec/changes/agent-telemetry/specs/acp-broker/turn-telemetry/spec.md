@@ -32,18 +32,18 @@ A driver prompt that the broker queues while humans hold the floor SHALL start i
 - **THEN** its turn span starts at handback
 
 ### Requirement: The turn's outcome
-Each turn span SHALL carry the stop reason the agent returned. A turn that the agent answers with an error SHALL be marked as failed, with the error message. A driver turn cancelled because humans took over SHALL record that it was cancelled for a takeover. A turn still running when the broker stops SHALL end at that moment and be marked unfinished.
+Each turn span SHALL carry the stop reason the agent returned. A turn that the agent answers with an error SHALL be marked as failed, with the error message. A turn cancelled by a viewer interrupt SHALL record that it was cancelled for an interrupt. A turn still running when the broker stops SHALL end at that moment and be marked unfinished.
 
-#### Scenario: Takeover cancels a driver turn
-- **WHEN** a viewer takes over during driver prompt 7, and the agent answers it with stop reason `cancelled`
-- **THEN** the turn span for prompt 7 ends with stop reason `cancelled` and records that the cancel came from a takeover
+#### Scenario: Interrupt cancels a driver turn
+- **WHEN** a viewer interrupts during driver prompt 7, and the agent answers it with stop reason `cancelled`
+- **THEN** the turn span for prompt 7 ends with stop reason `cancelled` and records that the cancel came from an interrupt
 
 #### Scenario: Broker stops mid-turn
 - **WHEN** the agent exits while a turn is running
 - **THEN** that turn's span ends when the broker stops and is marked unfinished
 
 ### Requirement: A native steer is an event on the running turn
-A steer that the agent accepts into a running turn through native steering SHALL be recorded as an event on that turn's span, with the agent's outcome. It SHALL NOT be recorded as a turn.
+Steers that the agent accepts into a running turn through native steering SHALL be recorded as an event on that turn's span, with the agent's outcome and the number of steers delivered together. They SHALL NOT be recorded as a turn. A steer turn's span SHALL carry the number of steers it delivered.
 
 #### Scenario: Native steer accepted
 - **WHEN** a viewer steers during a driver turn and the agent answers `injected`
