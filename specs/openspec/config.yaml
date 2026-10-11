@@ -1,13 +1,37 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  This store holds the specs for our agent platform: how we run autonomous
+  coding agents against tracker tickets, watch them, steer them, and measure
+  them. It is our own design. We reuse open source to keep friction low and
+  keep each fork close enough to its upstream to take fixes. Upstream design
+  decisions are inputs and merge costs, not constraints.
+
+  Components and where their code lives:
+    - sortie (~/dev/sortie, our fork of sortie-ai/sortie, Go): the
+      orchestrator. Polls the tracker, runs agent sessions per ticket, stage
+      chains, reactions, handoff. Our changes stay small, isolated, and
+      rebased onto upstream.
+    - acp-broker (acp-broker/ in this repository, Go):
+      sits between sortie and an ACP agent. One session, two input vectors:
+      the autonomous driver and humans (watch, steer, take over, hand back,
+      answer permissions).
+    - Agents over ACP: opencode (primary), pi via pi-acp, claude-agent-acp
+      (used to validate designs against a second agent).
+    - Sandboxes: VMs where agents run tools freely. Free tool use is a goal;
+      the sandbox is what makes it safe. Candidates: wtvm (~/dev/wtvm),
+      smolvm (smol-machines).
+    - Human surfaces: acp-broker attach (TUI), herdr (~/dev/herdr) panes and
+      the herdr-web-ui plugin for web and phone.
+    - Tracker: Huly (prototype adapter on sortie branch prototype/huly-tracker).
+    - Telemetry: OpenTelemetry Collector; Langfuse (self-hosted, MIT core) for
+      LLM traces and cost per stage; sortie's Prometheus metrics.
+
+  Conventions:
+    - Go code follows sortie's AGENTS.md (no CGo, generic names in core,
+      adapters behind registries).
+    - Record upstream work we track (for example ACP PRs) in
+      acp-broker/docs/notes.md.
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
