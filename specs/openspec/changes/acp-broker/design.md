@@ -77,11 +77,29 @@ Alternative: an operator token file named by a broker flag. Rejected:
 
 Each waiting request gets two loop timers: escalation (default 30 seconds, or at once with no viewer attached) and the answer timeout (default 10 minutes). Escalation sets the desired hold and calls escalate with kind `permission` or `question`. A request is a question when none of its options has an allow kind. Any resolution clears both timers and the hold taken for that request. Free-text questions are out of scope, because the agents signal them in incompatible ways.
 
-### D7. Steering selection
+### D7. Steering is a queue; interrupting is separate
 
-The broker reads steering support once, from the `initialize` result. Native: `_session/steering` with `idleBehavior: "promptRequired"`. Fallback: the spike's same-session turn with automatic handback.
+We treat the session as a log of messages. A steer adds one entry. It always lands, and it lands before the driver gets control back. It never cancels anything. Cancelling is the separate `interrupt` command (also accepted as `takeover` and `cancel`), as in OpenCode's terminal UI. There, Enter queues a message while the agent works, and Esc interrupts. An interrupt always gives humans the floor, and only an explicit handback returns it to Sortie.
 
-Native steering only applies while a driver turn is running. An agent with native steering answers a steer on an idle session with `{"outcome":"promptRequired"}` and drops the text, so an idle session is steered with the same-session turn for every agent: the broker holds Sortie with reason `steer`, queues driver prompts, and hands back when the turn ends. A native steer can still race the end of the driver's turn. When it comes back `promptRequired`, the broker resends it once if a new driver turn is running by then, and otherwise runs it as a same-session turn. A second `promptRequired` also becomes a same-session turn (cancelling a driver turn that is running, as the fallback does), so a steer is never resent in a loop. If humans took the floor while the steer was in flight, the steer is dropped with a message to send a prompt, because the steer turn's automatic handback would end their takeover. We chose this over omitting `idleBehavior`, which makes Claude start a turn itself: the broker would not see that turn as its own, so it could not hold Sortie or queue driver prompts around it. When ACP PR #1261 (`session/inject`) lands, the broker prefers it whenever the agent advertises it, and keeps the vendor extension as the second choice. The broker notes track this.
+The broker reads steering support once, from the `initialize` result. Queued steers are delivered together as one message, one text block per steer, because models handle several instructions in one message well:
+- **A turn is running and the agent advertises steering.** The broker sends `_session/steering` with `idleBehavior: "promptRequired"`. This applies to driver, human, and steer turns.
+- **A turn is running and the agent has no native steering.** The steers wait for that turn to end.
+- **No turn is running.** The broker sends the steers as a same-session `session/prompt`, a steer turn, for every agent.
+
+**The driver's turn-end answer is withheld while steers are pending.** This makes "lands before the driver gets control back" hold, even on Sortie's last turn. While the answer is withheld:
+- Sortie is held with reason `steer`, so its turn clock stops;
+- driver prompts queue;
+- session updates still reach the driver.
+
+When the last steer turn ends, the broker passes the original answer on and releases the hold.
+
+**The `promptRequired` race goes away.** A native steer can arrive just as the turn ends, and the agent answers it `promptRequired`. But the driver's answer is still withheld at that point, so Sortie cannot have started another turn. The broker puts the steers back at the front of the queue and runs them as a steer turn. There is no resend and no retry loop.
+
+**Interrupt and the driver's own cancel.**
+- An interrupt during a steer turn cancels that turn. The withheld answer then waits for handback, like a held turn.
+- When the driver cancels its own turn, it gets its answer at once; the driver's cancel wins. Its queued steers then run as an idle steer turn.
+
+We chose a steer turn over omitting `idleBehavior`, which makes Claude start a turn itself. The broker would not see that turn as its own, so it could not hold Sortie or queue driver prompts around it. We chose withholding the driver's answer over putting steers in front of the driver's next prompt: on Sortie's last turn there is no next prompt, and the steer would be lost. When ACP PR #1261 (`session/inject`) lands, the broker prefers it whenever the agent advertises it, and keeps the vendor extension as the second choice. The broker notes track this.
 
 ### D8. Credential-check sessions are pass-through
 
@@ -91,7 +109,7 @@ When `SORTIE_SESSION_PURPOSE=credential-check`, the broker relays but does not r
 
 - [The viewer token is long-lived and shared] → It never travels in URLs. Browsers trade it once for a cookie that expires and dies with the broker. Recommend a TLS front end (Tailscale serve) so the cookie can be `Secure`. Per-user tokens are a later change.
 - [A local agent reads `SORTIE_SESSION_TOKEN` from the broker's environment] → Accepted. The token is scoped to its own run (see D4), and the sandbox closes the gap.
-- [A forgotten takeover holds a run and its slot] → Automatic handback after the viewer grace period (D1 timers). Sortie's held-runs gauge allows an alert.
+- [A forgotten interrupt holds a run and its slot] → Automatic handback after the viewer grace period (D1 timers). Sortie's held-runs gauge allows an alert.
 - [The default 10-minute permission wait can stall a run that nobody watches] → It is configurable per broker, and 0 means no limit. Escalation shows the wait in Sortie's held state and metrics.
 - [Agents change their ACP behavior: new steering methods, permission shapes, usage fields] → The broker notes record what each agent does. The behavior is pinned by tests with a fake agent, plus one live check per supported agent before each upgrade.
 - [Replay sends transcripts, which may contain secrets, to every viewer] → Viewers need the token or local user access, the same trust as the session itself. Masking before telemetry is handled in change `agent-telemetry`.

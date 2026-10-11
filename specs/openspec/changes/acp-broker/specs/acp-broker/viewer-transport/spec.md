@@ -20,7 +20,7 @@ Over HTTP:
 
 ### Requirement: Events carry a sequence number
 Every event SHALL carry a sequence number that increases by one per event, and the time it was produced. The event types SHALL be:
-- `state`: the floor, the session ID, the driver turn state, and whether steering is supported
+- `state`: the floor, the session ID, the driver turn state, whether steering is supported, and how many steers are queued
 - `update`: a raw `session/update` params object
 - `permission` and `permission_resolved`
 - `result`: the outcome of a viewer command that ran a turn
@@ -44,13 +44,13 @@ The broker SHALL keep a replay buffer of the most recent events, by default the 
 
 ### Requirement: Commands
 The broker SHALL accept these commands:
-- `steer`, `takeover`, `prompt`, `cancel`, and `handback`
+- `steer`, `interrupt` (also accepted as `takeover` and `cancel`), `prompt`, and `handback`
 - `permit`, with a request ID and an option
 - `state`
 
 An invalid command, or one not allowed in the current state, SHALL return an `error` that names the reason, and SHALL change nothing.
 
-#### Scenario: Handback without takeover
+#### Scenario: Handback without an interrupt
 - **WHEN** the driver holds the floor
 - **AND** a viewer sends `handback`
 - **THEN** the viewer receives an `error` event and the floor does not change

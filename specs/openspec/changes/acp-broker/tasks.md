@@ -11,6 +11,15 @@ All work is in `acp-broker/`, starting from the spike. Every task ends with `go 
 
 - [x] 2.1 Keep native and fallback steering, and add the "one steer at a time" checks. Verify with tests for native steering (floor unchanged), fallback steering (cancel, same-session prompt, automatic handback), steering while idle (driver prompt queued), and each rejection.
 - [x] 2.2 Steer an idle session the same way for every agent: skip native steering when no driver turn runs and run a same-session steer turn instead; on a `promptRequired` answer, resend once if a driver turn is running, else run a steer turn. Verify with tests for a native steer while idle (hold `steer`, then release), `promptRequired` with a new driver turn (resent natively), and `promptRequired` while idle (steer turn). Update the operator guide's `steer` row and the broker notes, and live-check an idle steer with Claude.
+- [ ] 2.3 Make steering a queue of log entries and interrupting a separate command (design D7, user decision 2026-10-11). Changes:
+  - steers are always accepted and delivered together, injected natively into any running turn or run as a steer turn when idle or after the running turn ends;
+  - the driver's answer is withheld until its steers land, with a `steer` hold;
+  - `promptRequired` requeues the steer and runs it as a turn, with no resend;
+  - no steer ever cancels a turn;
+  - `interrupt` (aliases `takeover`, `cancel`) always gives humans the floor;
+  - steers under a human floor keep the floor;
+  - `state` reports queued steers.
+  Verify with loop tests for each new scenario in the steering and session-relay specs, a check that each test fails when its rule is removed, the operator guide and notes updated, and live checks with OpenCode (steer queued until turn end) and Claude.
 
 ## 3. Sortie integration
 

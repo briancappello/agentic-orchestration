@@ -34,11 +34,11 @@ When a permission request has had no answer for the answer timeout (10 minutes b
 - **AND** the broker releases the hold it took for that request
 
 ### Requirement: Cancelled turns cancel waiting requests
-When the turn that asked is cancelled, by a takeover, a viewer cancel, or the driver, the broker SHALL answer each waiting permission request with the `cancelled` outcome.
+When the turn that asked is cancelled, by a viewer interrupt or by the driver, the broker SHALL answer each waiting permission request with the `cancelled` outcome.
 
-#### Scenario: Takeover while a request waits
+#### Scenario: Interrupt while a request waits
 - **WHEN** a permission request waits
-- **AND** a viewer takes over
+- **AND** a viewer interrupts
 - **THEN** the agent receives the `cancelled` outcome for that request
 
 ### Requirement: Agent questions escalate the same way

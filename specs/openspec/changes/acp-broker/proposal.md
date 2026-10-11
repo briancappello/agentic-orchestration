@@ -15,7 +15,7 @@ We want autonomous agent sessions that people can watch, steer, take over, and h
   - prompts in the same session
   - queued driver prompts
   - the driver's own cancel winning
-  - steering, native or through a same-session turn
+  - steering as a queue of messages that always land, natively when the agent supports it and as a same-session turn otherwise; interrupting is a separate command
   - permission requests going to viewers first
 - Tell Sortie when a human holds the session: the broker calls Sortie's hold and release endpoints (change `sortie-session-control`), so Sortie's clocks pause.
 - Escalate agent questions and permission requests to people through Sortie's escalation endpoint when no viewer answers. The request waits for an answer for a configurable time.
@@ -28,8 +28,8 @@ We want autonomous agent sessions that people can watch, steer, take over, and h
 ## Capabilities
 
 ### New Capabilities
-- `acp-broker/session-relay`: relaying one ACP session between the driver and the agent. Floor control, takeover and handback, queued and cancelled driver prompts, and Sortie hold integration.
-- `acp-broker/steering`: injecting human input into a running session, natively when the agent supports it and through a same-session turn when it does not.
+- `acp-broker/session-relay`: relaying one ACP session between the driver and the agent. Floor control, interrupt and handback, queued and cancelled driver prompts, and Sortie hold integration.
+- `acp-broker/steering`: queuing human messages into a session so they always land, natively mid-turn when the agent supports it and as a same-session turn when it does not.
 - `acp-broker/permission-escalation`: routing agent permission requests and questions to viewers, escalating to people through Sortie, and falling back to the driver.
 - `acp-broker/viewer-transport`: the viewer protocol over a local socket and authenticated HTTP (Server-Sent Events plus `POST`). Covers the event and command shapes and replay for late viewers.
 - `acp-broker/session-registry`: how clients find live sessions by issue key, and what a session advertises about itself.
