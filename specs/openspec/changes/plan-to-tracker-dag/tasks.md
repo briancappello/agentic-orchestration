@@ -63,7 +63,7 @@ The work spans three repositories:
 
 ## 7. Workbench frontend (Vite, Svelte 5)
 
-- [ ] 7.1 Scaffold Vite with Svelte 5 and TypeScript. Port the prototype's `DESIGN.md` tokens to CSS variables. Build the 60/40 two-pane shell, which stacks below 1200px. Verify with a component test of the pane widths at 1440px and the stacked order at 900px.
+- [x] 7.1 Scaffold Vite with Svelte 5 and TypeScript. Port the prototype's `DESIGN.md` tokens to CSS variables. Build the 60/40 two-pane shell, which stacks below 1200px. Verify with a component test of the pane widths at 1440px and the stacked order at 900px.
 - [ ] 7.2 Port the prototype's layout to a framework-free TypeScript module: columns from the backend's depth, row placement, edges, the frontier, and stubs for links to other epics. Verify with unit tests for the chain-of-three case and the drill-down placement of cross-epic stubs.
 - [ ] 7.3 Build the graph pane:
   - epic and story levels, with drill-down and back;
