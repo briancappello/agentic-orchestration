@@ -206,3 +206,21 @@ What survives on the guest disk:
 - the work tree, unchanged by the interrupted step.
 
 The resumed agent sees the interrupted call and recovers on its own. This matches the design's "no graceful TERM" risk: the loss is the current step, not the session. A guest-side TERM relay is not needed for opencode.
+
+## Task group 2: smol-builder
+
+Repository `~/dev/smol-builder`, module `github.com/briancappello/agentic-orchestration/smol-builder`. `make test` and `make lint` pass (0 issues).
+
+| Task | Commit | Verified by |
+|---|---|---|
+| 2.1 | `d9ef6d9` | `go build ./...` and `make test` on the empty set. The five layers are byte-identical to the spike's `golden/` (`diff -r`), so every pin is the same. |
+| 2.2 | `d129ae9` | `TestParseRejects`, 24 cases, each asserting the error names the entry: unknown key, unknown or duplicate layer, `base` listed, escaping paths (`..`, absolute, symlinks), missing file, wrong `ARG BASE` / `FROM ${BASE}` header. |
+| 2.3 | `95f8687` | `TestResolveOrderIgnoresListing`, `TestResolveChangedLayerFile`, `TestResolveProjectLayerLast`, `TestResolveSharedPrefix`. |
+| 2.4 | `2277fed` | Fake-tool unit tests for the command sequence, tag reuse, builder deletion on every failure and on cancel, and an unchanged output on failure. The gated test `SMOL_BUILDER_SMOLVM_TEST=1 go test -run TestIntegration -v ./internal/build/` passed in 33.4 s: the machine created from the pack printed `/usr/local/go/bin/go`, `go version go1.27.2 linux/amd64`, `layers=base+go` and `/workspace`, `pack_sha256` matched the file, and a forced `RUN false` project layer and an injected pack failure each left the previous output intact and no builder machine behind. |
+| 2.5 | `2af5a2f` | The README's commands were run as written: build of `examples/go-libpq` (report `layers: [base, go, project]`, `pack_sha256` equal to `sha256sum`), then a machine from it printing `go1.27.2`, `libpq-dev` installed, `base+go`, `/workspace`. `go install` used a temporary `GOBIN`, and `pack prune` ran with `--dry-run` only. |
+
+Findings:
+
+- Packs are not byte-reproducible: the same image packed twice gave different SHA-256s. The image tag identifies the stack; `pack_sha256` identifies one file. That is what Sortie records.
+- The base layer carries only opencode as an agent CLI, as the spike did. The stack-definition spec asks for "the supported agent CLIs". claude-agent-acp needs Node, which is in the `node` layer, not the base. See the open questions at the end of this file.
+- The base layer's apt packages are not pinned by version, while the spec asks for every downloaded artifact to be pinned. Carried over unchanged from the spike.
