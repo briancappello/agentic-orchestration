@@ -7,13 +7,15 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .auth import COOKIE_NAME, Sessions, verify_password
 from .config import Config
+from .hub import Hub, sse
 from .plan_state import PlanState, watch
+from .sortie import SortieClient
 
 
 class LoginBody(BaseModel):
@@ -22,14 +24,20 @@ class LoginBody(BaseModel):
 
 def create_app(config: Config, **services) -> FastAPI:
     """Build the app. ``services`` lets tests inject collaborators:
-    ``validate`` replaces planlib.validate."""
+    ``validate`` replaces planlib.validate and ``sortie`` the Sortie client."""
     plan_state = PlanState(config.store, **({"validate": services["validate"]} if "validate" in services else {}))
+    sortie = services.get("sortie") or SortieClient(config.sortie_url, config.sortie_token)
+    hub = Hub(plan_state, sortie)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         stop = asyncio.Event()
+        hub.bind(asyncio.get_running_loop())
         await asyncio.to_thread(plan_state.refresh)
-        tasks = [asyncio.create_task(watch(plan_state, config.debounce_ms, stop))]
+        tasks = [
+            asyncio.create_task(watch(plan_state, config.debounce_ms, stop)),
+            asyncio.create_task(hub.poll_loop(config.poll_seconds, stop)),
+        ]
         try:
             yield
         finally:
@@ -37,9 +45,12 @@ def create_app(config: Config, **services) -> FastAPI:
             for t in tasks:
                 t.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
+            await sortie.aclose()
 
     app = FastAPI(title="plan workbench", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.plan = plan_state
+    app.state.hub = hub
+    app.state.sortie = sortie
     sessions = Sessions(config.secret_key, config.session_max_age)
     app.state.config = config
     app.state.sessions = sessions
@@ -74,6 +85,34 @@ def create_app(config: Config, **services) -> FastAPI:
     def validation() -> dict:
         snap = plan_state.snapshot()
         return {"version": snap["version"], "valid": snap["valid"], "errors": snap["errors"], "has_graph": snap["graph"] is not None}
+
+    @app.get("/api/graph", dependencies=[Depends(require_operator)])
+    def graph() -> dict:
+        return hub.doc
+
+    @app.get("/api/events", dependencies=[Depends(require_operator)])
+    async def events(request: Request) -> StreamingResponse:
+        queue = hub.subscribe()
+
+        async def stream():
+            try:
+                yield sse("graph", hub.doc)
+                idle = 0.0
+                while not await request.is_disconnected():
+                    try:
+                        doc = await asyncio.wait_for(queue.get(), timeout=1)
+                    except TimeoutError:
+                        idle += 1
+                        if idle >= 15:
+                            idle = 0
+                            yield ": keepalive\n\n"
+                        continue
+                    idle = 0
+                    yield sse("graph", doc)
+            finally:
+                hub.unsubscribe(queue)
+
+        return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-store"})
 
     @app.exception_handler(HTTPException)
     async def http_error(_request: Request, exc: HTTPException) -> JSONResponse:
