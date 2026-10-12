@@ -44,17 +44,36 @@ The Sortie work is in the fork (`~/dev/sortie`), on a branch off `feat/session-c
 - [ ] 6.2 Add the per-issue host listener under the state directory. It starts `sortie mcp-server` with the issue's session environment for each connection, is recreated at startup for every workspace with a VM, and is removed with the workspace. Verify with tests: two issues each get their own identity, and a listener restarted at the same path serves a new connection.
 - [ ] 6.3 Generate the guest `mcp.json` for smolvm sessions, naming `/opt/sortie/sortie mcp-relay /run/sortie/tools.sock`, and keep the current output for `local` and SSH. Maintain the read-only binary directory with a copy of the running binary. Verify with `GenerateMCPConfig` tests for each kind, and a gated test where an agent in a VM calls `sortie_status` and gets its own issue's status.
 
-## 7. Documentation
+## 7. Repository sync
 
-- [ ] 7.1 Document `environment` in `docs/workflow-reference.md` and in the fork's configuration, workspace, agent adapter contract, and security architecture sections. Add a `CHANGELOG.md` entry. Verify that every key and validation error in the specs appears in the reference.
-- [ ] 7.2 Write the smolvm environment guide in the fork. It covers installation and the pinned version, building a pack with `smol-builder`, `allow_hosts` for each agent, credential bindings including git over HTTPS with `set_header`, cloning in `after_create`, the agent support list from 1.2, `smolvm machine egress-events`, `smolvm pack prune`, and rollback. Verify that its example workflow passes `sortie validate`.
+- [ ] 7.1 Add `environment.smolvm.repository` to config with the validations in the guest-repository-sync spec: required `url` and `base`, the `branch_prefix` and `max_bundle_mib` defaults, and `project` required with `provider`. Verify with config tests for each default and error.
+- [ ] 7.2 Add `internal/gitsync`: the per-URL bare mirror in the state directory, the lock file, upstream fetch with `--prune`, and a git runner that always sets `core.hooksPath=/dev/null`, `core.fsmonitor=false` and `transfer.fsckObjects=true`. Verify with tests against a local upstream: a fetch mirrors `refs/heads/*`, two concurrent operations on one mirror serialize, and a commit adding a `.gitattributes` filter with a host-side driver configured in the test's global config runs no driver during import.
+- [ ] 7.3 Implement seeding: issue-branch name check, a bundle of base plus the upstream issue branch when it exists, piping it in through `Environment.Command`, then guest clone, checkout, and `origin` URL. Hook it into `Prepare` before `after_create`. Verify with a fake-environment test asserting the guest command sequence, and a gated test where a new issue's `after_create` sees `/workspace` on `sortie/<key>` at `origin/main`, and an existing upstream branch is checked out at its tip.
+- [ ] 7.4 Implement the refresh before later runs, updating only `refs/remotes/origin/*`, with a warning and the mirror's last state on upstream failure. Verify with a gated test: a new upstream `main` commit is visible as `origin/main` in the next run, and a local branch and uncommitted file are unchanged.
+- [ ] 7.5 Implement export: guest bundle of the issue branch, reading it out with the size cap, `list-heads` check, import into `refs/sortie/incoming/<key>`, and the no-push cases. Verify with tests for a bundle naming an extra ref, an oversized bundle, a missing branch, and an unchanged branch, each leaving the mirror's refs unchanged.
+- [ ] 7.6 Implement the push with `--force-with-lease` against `refs/sortie/pushed/<key>` (or absence), updating that ref after success. Verify with tests against a local upstream: a first push, a rebase replacing Sortie's own push, and a human commit making the push fail with `branch moved upstream` and leaving the upstream at the human's commit.
+- [ ] 7.7 Wire export into the worker after `after_run` and before the tracker handoff. On failure, report an export error, skip the transition, keep the VM, and retry. Record the exported commit in run history (migration). Verify with worker tests using a fake gitsync: a failed export leaves the issue active and schedules a retry, and a successful export precedes the handoff.
+- [ ] 7.8 Write the trusted SCM record to `<workspace.root>/<key>/.sortie-host/scm.json`, and make every SCM metadata reader use it under smolvm with `repository`. Verify with tests where a forged `.sortie/scm.json` with another `pr_number` is ignored by CI, review, auto-merge, and startup recovery.
 
-## 8. End-to-end check
+## 8. Pull requests
 
-- [ ] 8.1 Build a pack with `smol-builder` for a small Go repository. Run Sortie with the file tracker, the `agent-client-protocol` kind running `opencode acp`, `host_prefix` set to the ACP broker, and `environment.kind: smolvm`. Confirm all of the following and record the commands and output in `verification.md`:
-  - `after_create` clones inside the VM;
-  - the agent fixes a failing test, commits, and pushes to a scratch GitHub repository through a `set_header` credential binding;
+- [ ] 8.1 Add the optional `domain.PullRequestOpener` interface with `EnsurePullRequest`, and implement it in the GitHub, GitLab, and Gitea adapters: find an open pull request by head, else create it, and map permission failures to an authentication error naming the scope. Verify with `httptest` tests per adapter for found, created, and the scope error.
+- [ ] 8.2 Validate that `repository.provider` equals every active SCM reaction's provider and that its adapter implements the opener. Build the adapter when either reactions or export need it. Verify with config and startup tests for a mismatch, an adapter without the interface, and export as the only SCM user.
+- [ ] 8.3 After a push, read `.sortie/pr.json` (capped, sanitized, title cut to 256), fall back to the default title and body, ensure the pull request, and store it in the trusted record. Verify with tests for a suggested title, an absent file, an oversized file, control characters, and a failed call failing the export.
+
+## 9. Documentation
+
+- [ ] 9.1 Document `environment` in `docs/workflow-reference.md` and in the fork's configuration, workspace, agent adapter contract, and security architecture sections. Add a `CHANGELOG.md` entry. Verify that every key and validation error in the specs appears in the reference.
+- [ ] 9.2 Write the smolvm environment guide in the fork. It covers installation and the pinned version, building a pack with `smol-builder`, `allow_hosts` for each agent, credential bindings, `repository` with the mirror, branch, push and pull-request rules, what `after_create` should still do, the agent support list from 1.2, host git credentials for the mirror, `smolvm machine egress-events`, `smolvm pack prune`, and rollback. Verify that its example workflow passes `sortie validate`.
+
+## 10. End-to-end check
+
+- [ ] 10.1 Build a pack with `smol-builder` for a small Go repository. Run Sortie with the file tracker, a scratch GitHub repository as `repository` with `provider: github`, the `agent-client-protocol` kind running `opencode acp`, `host_prefix` set to the ACP broker, and `environment.kind: smolvm`. Confirm all of the following and record the commands and output in `verification.md`:
+  - the guest workspace is seeded on `sortie/<key>` and the VM's allowlist has no git host;
+  - the agent fixes a failing test and commits;
+  - Sortie exports the branch, pushes it, and opens a pull request with the agent's `.sortie/pr.json` title;
+  - a second run after a new commit on `main` sees it as `origin/main`, and a forged `.sortie/scm.json` does not change the recorded pull request;
   - `sortie_status` works from the VM;
   - handoff evidence sees the commit;
-  - the API key and the session token are absent from the guest;
+  - the API key, the session token, and every git credential are absent from the guest;
   - the VM stops after the run and is deleted when the issue reaches `Done`.

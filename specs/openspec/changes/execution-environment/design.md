@@ -46,7 +46,7 @@ See proposal.md for the motivation. The facts below come from the Sortie fork (`
 - Running the environment on a remote host. smolvm runs where Sortie runs.
 - Combining `smolvm` with `worker.ssh_hosts`.
 - Graceful agent shutdown inside the VM. smolvm delivers no TERM. Session teardown relies on the existing stop flow, then on stopping the VM.
-- Any change to the tracker handoff. Agents still push and open pull requests themselves, now from inside the VM.
+- Agents pushing or opening pull requests from inside the VM. Under smolvm with a `repository`, only Sortie talks to the git host (decisions 14 to 17).
 - Hosting stack packs in a registry, warm VM pools, and checkpoints.
 
 ## Decisions
@@ -81,10 +81,16 @@ environment:
     cpus: 4
     memory_mib: 8192
     storage_gib: 20
-    allow_hosts: [openrouter.ai, models.opencode.ai, registry.npmjs.org, github.com, "*.githubusercontent.com"]
+    allow_hosts: [openrouter.ai, models.opencode.ai, registry.npmjs.org]
     credentials:
       - {name: openrouter, env: OPENROUTER_API_KEY, hosts: [openrouter.ai]}
-      - {name: github, env: GITHUB_BASIC_AUTH, hosts: [github.com], set_header: authorization}
+    repository:           # optional; decisions 14 to 17
+      url: git@github.com:org/app.git   # fetched and pushed by the host, with the host's credentials
+      base: main
+      branch_prefix: sortie/            # issue branch = prefix + workspace key
+      provider: github                  # SCM adapter that opens pull requests; optional
+      project: org/app                  # owner/repo for that adapter; required with provider
+      max_bundle_mib: 512
     pass_env: []          # host variables copied into the guest in plain text, opt-in
     ssh_agent: false
 ```
@@ -154,11 +160,11 @@ The VM's lifecycle follows the workspace's:
 
 ### 6. The guest workspace and the shared control directory
 
-**The workspace lives on the VM's own disk.** The guest workspace is `/workspace`. The repository is cloned there by `after_create`, which now runs in the guest. Code never sits on a host mount. A mount would be 8x slower, and it would put guest-planted symlinks and setuid files on the host.
+**The workspace lives on the VM's own disk.** The guest workspace is `/workspace`. With `repository` set, Sortie seeds it from a bundle before `after_create` runs (decision 14). Without it, `after_create`, which now runs in the guest, must obtain the code itself. Code never sits on a host mount. A mount would be 8x slower, and it would put guest-planted symlinks and setuid files on the host.
 
 **Only the control directory is shared.** The host keeps the per-issue workspace directory at `<workspace.root>/<key>`, as today. Sortie creates its `.sortie` subdirectory before the VM exists, and mounts it read-write at `/run/sortie/control`.
 
-After `after_create` succeeds, Sortie runs `ln -s /run/sortie/control /workspace/.sortie` in the guest. The link is not mounted directly at `/workspace/.sortie` because `/workspace` must be empty when `after_create` runs: hooks commonly run `git clone <url> .`. Today, too, the host `.sortie` appears only after `after_create`.
+After `after_create` succeeds, Sortie runs `ln -s /run/sortie/control /workspace/.sortie` in the guest. The link is not mounted directly at `/workspace/.sortie` because `/workspace` must be empty when `after_create` runs: hooks commonly run `git clone <url> .`, and seeding clones into it too. Today, too, the host `.sortie` appears only after `after_create`.
 
 A repository that commits its own `.sortie` entry fails preparation with an error that names it, and Sortie never overwrites that entry. The spike verified that a mount nested on the guest disk shares writes both ways.
 
@@ -190,7 +196,7 @@ The fingerprint hashes the same three command outputs. For untracked files, the 
 **Alternatives considered:**
 
 - **Hardened host git** (`-c core.hooksPath=/dev/null -c core.fsmonitor= --no-textconv`, `safe.directory`). It reduces the surface, but it is a denylist against git's growing config surface. It also needs the work tree on the host, which the guest workspace rules out.
-- **Exporting a bundle on every run.** Out of scope; see the proposal.
+- **Hardened host git against the guest repository.** Rejected for the same reason. Moving work out uses bundles imported into a host-owned mirror instead (decision 15), where host git never reads a guest-controlled `.git`.
 
 ### 8. Hooks, verification, and triage run in the guest
 
@@ -198,12 +204,7 @@ The fingerprint hashes the same three command outputs. For untracked files, the 
 
 **Triage.** Reaction triage writes its input file into the guest's tmpfs instead of a host temporary directory. That path is `/run/sortie/triage/<run id>/input.json`, written by piping it through `Command` with `cat`. Triage reads the result back with `head -c <cap>`. The guest's `/run` is tmpfs, so leftovers vanish when the VM stops, and the externally authored text stays out of the workspace tree, as the host design intended.
 
-**Two setup gaps.** Under smolvm, `after_create` usually does `git clone` in the guest. It needs network access to the git host and credentials:
-
-- `allow_hosts` must name the git host.
-- Credentials come from a binding with `set_header` (HTTPS) or from `ssh_agent`.
-
-Both are workflow configuration. Sortie adds no special case for them.
+**After seeding, `after_create` is setup only.** With `repository` set, the code is already in `/workspace` when `after_create` runs, so the hook installs dependencies and similar. It cannot reach the git host, because nothing on the allowlist names it.
 
 ### 9. Sortie tools reach the host through a socket
 
@@ -283,23 +284,127 @@ The base layer installs agents but no credentials, and its opencode config holds
 
 A workspace with no record is one created before this change, and counts as `local`. Without this rule, switching from `smolvm` back to `local` would leave an existing host directory that holds only `.sortie`. The agent would start in an empty tree and `after_create` would not run.
 
+### 14. A host-owned mirror seeds and refreshes the guest
+
+**The mirror.** For each distinct `repository.url`, Sortie keeps a bare repository at `<state dir>/repos/<sha256(url)[:16]>.git`. Only Sortie writes it. It holds:
+
+- `refs/heads/*`, fetched from the upstream with `--prune`;
+- `refs/sortie/incoming/<key>`, one ref per issue, written only by the import (decision 15);
+- `refs/sortie/pushed/<key>`, the last commit Sortie pushed for that issue.
+
+Every host git command on the mirror runs with `-c core.hooksPath=/dev/null -c core.fsmonitor=false -c transfer.fsckObjects=true`. Operations on one mirror are serialized by an exclusive lock file next to it. Host git here is safe because the mirror is never a work tree and no guest process ever writes it: objects arrive only through `git fetch` from a bundle, with every object checked.
+
+The host's own git configuration and credentials (SSH agent, credential helper) are used for the upstream. They never reach the guest.
+
+**The issue branch.** It is `branch_prefix` plus the workspace key, for example `sortie/ENG-42`. Sortie checks it with `git check-ref-format --branch`. An invalid name fails preparation with the name in the error.
+
+**Moving bundles across the boundary.** A bundle crosses only through `Environment.Command`:
+
+- in: the host pipes it to `cat > /run/sortie/git/in.bundle`;
+- out: the host reads `cat /run/sortie/git/out.bundle` and stops at `max_bundle_mib`.
+
+No file copy API and no shared mount is involved. `/run` is tmpfs in the guest, so bundles never land in the workspace.
+
+**Seeding a new workspace.** Before `after_create`:
+
+1. Sortie fetches the upstream into the mirror. A failure here fails preparation.
+2. It creates a bundle of `refs/heads/<base>`, plus `refs/heads/<issue branch>` when that exists upstream.
+3. It sends the bundle into the guest.
+4. The guest runs `git clone --origin origin /run/sortie/git/in.bundle /workspace`.
+5. The guest checks out the issue branch: from `origin/<issue branch>` when it exists, else as a new branch at `origin/<base>`.
+6. The guest sets `origin`'s URL to `repository.url`, so tools show the real remote. The guest still cannot reach it.
+
+**Refreshing before each later run.** In `Prepare`, for an existing VM, Sortie fetches the upstream and sends the same two refs. The guest runs `git fetch /run/sortie/git/in.bundle '+refs/heads/*:refs/remotes/origin/*'`. The agent's branch and work tree are untouched, but `origin/main` and `origin/<issue branch>` are current. So a merge-conflict reaction can rebase, and commits a human pushed to the branch are visible. If the upstream fetch fails on refresh, Sortie logs a warning and continues with the mirror's last state.
+
+**Alternative considered: the guest clones upstream itself.** It needs egress to the git host and a read credential in the guest. The user chose option 2 to avoid both.
+
+### 15. Export: import exactly one ref, never touch a guest `.git`
+
+The export runs at the end of every run that ended normally, after `after_run` and before the tracker handoff:
+
+1. **Bundle in the guest.** The guest runs `git bundle create /run/sortie/git/out.bundle refs/heads/<issue branch>`. A missing branch means nothing to export.
+2. **Read it out.** Sortie reads the bundle as bytes, up to `max_bundle_mib`, into a file in the host state directory. A larger bundle fails the export.
+3. **Check the heads.** `git bundle list-heads` must name exactly `refs/heads/<issue branch>`, and nothing else.
+4. **Import.** `git fetch <bundle> refs/heads/<issue branch>:refs/sortie/incoming/<key>` runs in the mirror, with the safe configuration.
+5. **Skip when there is nothing new.** If the incoming commit equals the upstream branch tip, or equals the base when the branch does not exist upstream, there is nothing to push. The export succeeds with no push.
+
+**Only committed work is exported.** Uncommitted changes stay in the guest workspace for the next run. The handoff evidence still reports a changed work tree as today.
+
+**Alternatives considered:**
+
+- **Auto-commit of uncommitted work** (homelab did a WIP commit). Rejected: it puts commits the agent didn't make on the branch, and it is easy to add later as a guest hook.
+- **Reading `.git` objects through the shared mount.** Rejected: that is the escape class this change closes.
+
+### 16. Push: the host's credentials, never over someone else's commits
+
+Sortie pushes with `git push <url> refs/sortie/incoming/<key>:refs/heads/<branch> --force-with-lease=refs/heads/<branch>:<expected>`. `<expected>` is:
+
+- `refs/sortie/pushed/<key>` when Sortie pushed this branch before;
+- the empty value (branch must not exist) when it did not.
+
+The rules that follow from that lease:
+
+- **Agent rebases are allowed.** Sortie's own earlier push can be replaced.
+- **Commits someone else pushed since Sortie's last push are never overwritten.** The lease fails. The export reports `branch moved upstream`, and the run fails. The next run's refresh brings that commit into the guest as `origin/<branch>`, so the agent can integrate it.
+
+After a successful push, Sortie updates `refs/sortie/pushed/<key>`. It records the commit and the push time in the run history and in the trusted SCM record (decision 17).
+
+**A failed export fails the run.** That covers any step of decisions 15 and 16. The run is reported as failed with an export error and retried with the normal backoff. The tracker is not transitioned. The VM and its workspace are kept, so the committed work is still there for the retry.
+
+**Alternative considered: always force-push.** Rejected: a human's commit on the branch would be silently lost.
+
+### 17. Sortie opens the pull request and owns the SCM record
+
+**Opening the pull request.** `domain.PullRequestOpener` is a new optional interface, alongside `AutoMergeScopeVerifier`:
+
+```go
+EnsurePullRequest(ctx, owner, repo, head, base, title, body string) (PullRequest{Number int, URL string, Created bool}, error)
+```
+
+It returns the open pull request whose head is `head`, when one exists. Otherwise it creates one. The GitHub, GitLab (merge requests), and Gitea adapters implement it. `SCMAdapter` itself is unchanged, so no other implementer or test fake breaks.
+
+**When it runs.** After a push, when `repository.provider` is set, Sortie calls it with:
+
+- `head`: the issue branch;
+- `base`: `repository.base`;
+- `owner/repo`: from `repository.project`.
+
+`provider` must equal the provider of every active SCM reaction, the same rule Sortie already applies across reactions. The adapter is built from the same configuration block those reactions use. A provider whose adapter lacks the interface fails validation.
+
+**Title and body.** The agent may suggest them in `.sortie/pr.json`: `{"title": "...", "body": "..."}`. That is agent-authored text, so Sortie:
+
+- reads it through `workspacekit`, capped at 64 KiB;
+- strips control characters other than newline and tab;
+- cuts the title to 256 characters.
+
+Without the file, the title is `<identifier>: <issue title>` and the body links the issue. Sortie never runs the text through a shell. A failure to open the pull request fails the export.
+
+**The trusted SCM record.** Under smolvm with `repository`, Sortie writes the SCM record itself to `<workspace.root>/<key>/.sortie-host/scm.json`. That directory is host-only: it is not under the shared `.sortie`, and the guest has no path to it. The record has `branch`, `sha`, `pushed_at`, `pr_number`, `owner`, and `repo`. Every reader of SCM metadata (CI, review, bot review, auto-merge, merge conflicts, label commands, startup recovery) reads this record and ignores `.sortie/scm.json`.
+
+Otherwise an agent could write a different `pr_number` and point CI polling, reviews, or auto-merge at another pull request.
+
+**Alternative considered: an operator export hook running `gh pr create`.** The user chose the adapter method: there is no script to maintain, and the forge credentials and error mapping Sortie already has are reused.
+
 ## Risks / Trade-offs
 
 - **[smolvm churns fast, with one main maintainer]** → Pin the version range (decision 10). Keep every smolvm detail in one package. Keep the spike scripts as a re-validation suite to run before widening the range.
 - **[No graceful TERM inside the VM]** Sortie's stop flow sends SIGTERM to the launch's process group. Under smolvm that ends the CLI, and the CLI ends the guest command at once, so `agent.stop_grace_ms` gives the agent no time to shut down cleanly. → Accept it for this change. In-flight output is lost. The agent's own session state lives on the guest disk and survives for `ResumeSessionID`. The tasks measure what an agent loses when stopped mid-turn. A guest-side TERM relay is a follow-up if that loss matters.
 - **[TLS interception for credentials]** Some clients carry their own trust store, which may be the case for the Rust codex binary. → Verify each agent kind in the VM before claiming support: opencode is verified, and claude-agent-acp and codex are checked in the tasks. An unsupported kind fails its credential check visibly instead of leaking a key. Other limits apply on credential hosts: HTTP/1.1 only, no WebSocket upgrade, and request bodies capped at 8 MiB.
-- **[Exfiltration to allowed hosts]** An agent can still push data anywhere it may reach, for example to `github.com`. → The allowlist is policy, and the default is empty. Operators see denials with `smolvm machine egress-events --name <vm>`. The VM name appears in `/api/v1/state`.
+- **[Exfiltration to allowed hosts]** An agent can still send data to any host on the allowlist, such as a package registry. With `repository` set, the git host needs no entry, so git is not an exfiltration path. → The allowlist is policy, and the default is empty. Operators see denials with `smolvm machine egress-events --name <vm>`. The VM name appears in `/api/v1/state`.
 - **[The shared `.sortie` mount can fill the host disk]** → Sortie never reads past its caps. Disk use is bounded by the workspace root's filesystem, as today. Not mitigated further in this change.
 - **[Tools reachable by any guest process]** → Same as today: every process the agent starts can already reach the tools. The socket is per issue, and the tool server it starts is scoped to that issue's session env.
+- **[Everything the agent commits reaches the upstream]** Sortie pushes any commit on the issue branch, including changes to CI configuration or to the repository's own sandbox setup. → Branch protection on the base branch stays the gate for merging. Path-based export policy is out of scope, and a follow-up if needed.
+- **[Host push credentials]** Sortie pushes with the operator's git credentials, which may reach more than this repository. → They never enter the guest, and the only ref Sortie pushes is the issue branch. Prefer a deploy key or a token scoped to the repository.
+- **[Bundle-based refresh costs time]** Each run fetches upstream and sends a bundle of two branches. → Bundles of a whole branch history can be large for big repositories; `max_bundle_mib` bounds the output side. Incremental bundles (`base..branch` with prerequisites) are a later optimization that changes no spec.
 - **[The pack extraction cache grows]** It reached 9.8 GiB in the spike. → Document `smolvm pack prune` in the smolvm environment guide.
 - **[KVM unavailable]** → The startup check fails with smolvm's own message, and Sortie does not start.
 
 ## Migration Plan
 
 1. Install smolvm 1.26.x on the host. Build a pack with `smol-builder build` for the project.
-2. In one workflow, set `environment.kind: smolvm`, along with `pack`, `allow_hosts`, and `credentials`. Move `after_create` to clone with in-guest credentials.
+2. In one workflow, set `environment.kind: smolvm`, along with `pack`, `allow_hosts`, `credentials`, and `repository`. Remove the clone from `after_create`, and remove push and pull-request steps from the prompt and hooks; Sortie does both.
 3. Existing issue workspaces are recreated on their next dispatch (decision 13).
-4. **Rollback:** set `environment.kind: local`. Workspaces are recreated on the host on their next dispatch, and leftover VMs are swept.
+4. **Rollback:** set `environment.kind: local`, and restore the clone in `after_create` and the push and pull-request steps the agent did before. Workspaces are recreated on the host on their next dispatch, and leftover VMs are swept. Branches and pull requests Sortie created stay upstream.
 
 The default stays `local`, so a workflow that doesn't set `environment` sees no change.
 
