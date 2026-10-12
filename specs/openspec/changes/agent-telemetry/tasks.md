@@ -29,7 +29,7 @@
 
 ## 5. Documentation
 
-- [ ] 5.1 Update the broker's docs in the same change:
+- [x] 5.1 Update the broker's docs in the same change:
   - `acp-broker/docs/guide.md`: telemetry flags, the Collector-to-Langfuse pipeline, what is masked and what the content option exports, the cost-per-stage filter, and a model definition for Claude's alias;
   - `acp-broker/docs/notes.md`: usage meaning and model reporting per agent, and Pi's pending usage;
   - `CHANGELOG.md`;

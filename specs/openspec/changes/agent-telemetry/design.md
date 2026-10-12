@@ -86,7 +86,7 @@ Alternative considered: one trace per broker session, with a long root span. Rej
 | Labels, on every span | `langfuse.session.id`; `langfuse.trace.metadata.{issue, rule, chain_id, dispatch_id, attempt, origin, agent}`; also `sortie.issue.identifier`, `sortie.rule`, `sortie.chain.id`, `sortie.dispatch.id`, `sortie.attempt`, `acp.session.id`, `acp.agent.name`, `acp.agent.version` |
 | Content, opt-in | `langfuse.observation.input` and `langfuse.observation.output` (JSON strings) on turns and tool calls |
 
-The usage-detail key names must match the usage types of Langfuse's model price definitions, or Langfuse computes no cost. The planned keys are `input`, `output`, `cache_read_input_tokens`, `cache_creation_input_tokens`, and `total`. Task 4.2 checks them against a running Langfuse before they are fixed.
+The usage-detail key names must match the usage types of Langfuse's model price definitions, or Langfuse computes no cost. The keys are `input`, `output`, `cache_read_input_tokens`, `cache_creation_input_tokens`, and `total`, plus `reasoning` when reported. Task 4.2 confirmed them against Langfuse 4.56.0, whose Anthropic definitions price exactly these keys. Langfuse requires the buckets not to overlap. OpenCode and Claude both report them that way: each total equals the sum of its buckets.
 
 ### D5. The model comes from the session configuration
 
@@ -185,7 +185,7 @@ Cost per stage in Langfuse: filter traces by the `rule` metadata, or by `chain_i
 
 - [`redact` masks only values it was told about. A secret the agent reads from a file, or one it prints in a new form, is not known] → Transcript content is off by default. Titles are cut to 200 characters. Sandboxes keep production secrets out of the agent's reach. Pattern-based masking is an open question.
 - [Tool titles can carry commands, paths, or file names, which may be sensitive even when they are not secrets] → They are masked and cut. If that is not enough, an operator option to drop titles is a small follow-up. It does not change the specs' default.
-- [Agents differ in what their usage counts mean, for example whether input includes cached reads] → The spec exports counts as reported, without adjustment. The broker notes record each agent's meaning. Claude's input excludes cached reads, as observed; OpenCode is checked in task 4.2.
+- [Agents differ in what their usage counts mean, for example whether input includes cached reads] → The spec exports counts as reported, without adjustment. The broker notes record each agent's meaning. Task 4.2 found that both OpenCode's and Claude's input exclude cached reads. An agent that reports inclusive counts would make Langfuse overstate cost, so check each new agent before relying on its cost.
 - [Claude reports the model as an alias (`haiku`), which Langfuse cannot price] → Langfuse lets an operator add a model definition that matches the alias, and the guide shows how. Whether the broker should resolve aliases is an open question.
 - [Langfuse rewrites malformed spans instead of refusing them, so encoding bugs can be silent] → Golden tests on the encoder, and a live check through a real Collector into a real Langfuse that asserts type, model, usage, and cost (tasks 4.1 and 4.2).
 - [Unbounded growth of span state in a very long turn with many tool calls] → Open tool spans are capped per turn (1024). Beyond the cap, tool calls are counted on the turn span and not recorded one by one.
@@ -213,7 +213,7 @@ These are listed, not decided. None changes the specs or the task breakdown of t
    - That is a separate change in both repositories.
 2. **Model aliases.** Should the broker resolve an alias such as Claude's `haiku` to a priced model ID? It could use the configuration option's display name or `_meta.quota.model_usage`. Or should this stay a Langfuse model definition?
 3. **Pattern-based masking.** Should well-known token formats (cloud keys, GitHub tokens, JWTs) be masked by pattern, on top of known values? That would belong in the broker's secrets package, beside the registry of known values.
-4. **Usage-detail keys.** Which keys does the deployed Langfuse version price for each provider? Task 4.2 settles them for Anthropic models via OpenCode and Claude. Other providers may need more keys.
+4. **Usage-detail keys for other providers.** Task 4.2 settled the keys for Anthropic models, through OpenCode and Claude. Models from other providers, for example through OpenCode, may be priced on other keys. Check each one when it is first used.
 5. **Pi usage.** When pi-acp#106 lands, are Pi's counts per turn or cumulative? The spec requires per-turn counts as reported. A cumulative report would need a difference, which is an agent-specific rule to place in the broker notes.
 6. **OTLP metrics.** Should the broker also emit OTLP metrics (turns, tokens, and holds per rule) for Prometheus through the Collector? Langfuse covers cost; this would only matter for alerting outside Langfuse.
 7. **Standard `OTEL_*` variables.** Should the broker also accept them, for example `OTEL_EXPORTER_OTLP_ENDPOINT`, and strip them from the agent's environment? D10 avoids them for now.

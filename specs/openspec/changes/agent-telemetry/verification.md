@@ -166,3 +166,39 @@ OpenCode answers a cancelled turn with all-zero usage, so the interrupted OpenCo
 | OpenCode's input-token meaning | it excludes cached reads, like Claude's |
 
 Another program on this host also exports to `127.0.0.1:4318`: an `ai_pair.daemon.heartbeat` span appeared in Langfuse. It is not ours, and the checks above filter on `issue` metadata.
+
+## Task 5.1: documentation
+
+Code: `acp-broker`.
+
+The changes:
+- **`acp-broker/docs/guide.md`:**
+  - the four telemetry flags in the flag table, and the telemetry labels in the environment table;
+  - a new "Telemetry" section: what a trace holds, the Collector-to-Langfuse pipeline, the export guarantees, why `OTEL_*` variables are not used, what Langfuse shows, the cost-per-stage filter, a model definition for Claude's alias, the usage keys, and masking.
+- **`acp-broker/docs/notes.md`:** per-agent usage meaning and model reporting, and Pi's missing usage.
+- **`CHANGELOG.md`** and **`docs/README.md`.**
+- **`acp-broker/examples/telemetry/collector.yaml`.**
+
+The example configuration validates:
+
+```
+$ podman run --rm -v $EX:/cfg.yaml:Z -e LANGFUSE_OTLP_ENDPOINT=http://127.0.0.1:3100/api/public/otel -e LANGFUSE_AUTH=eA== \
+    docker.io/otel/opentelemetry-collector-contrib:latest validate --config /cfg.yaml
+validate exit 0
+```
+
+The guide's example broker command was run as written: `acp-broker -otlp-endpoint http://127.0.0.1:4318 -- opencode acp`, with `opencode` on `PATH`, the isolated `XDG_CONFIG_HOME` in the environment, and `SORTIE_DISPATCH_ID=GUIDE-CHECK`. The collector from the example sat in front of Langfuse. One real OpenCode turn arrived priced:
+
+```
+prompt 0 -> {"stopReason": "end_turn", "usage": {"inputTokens": 4, "outputTokens": 4, "totalTokens": 13777, "cachedWriteTokens": 13769}, "_meta": {}}
+broker exit 0
+GENERATION turn driver anthropic/claude-haiku-5-5 {'cache_creation_input_tokens': 13769, 'input': 4, 'output': 4, 'total': 13777} 0.001723525
+```
+
+OpenCode left out the zero `cachedReadTokens`, and the export carried only the counts reported, as the spec requires.
+
+## Final checks
+
+- `make test` in `acp-broker/` passes, the new `otlp` package included, with no failures. `make lint` reports 0 issues.
+- Broker and telemetry tests went from 82 to 117. Each new rule was also checked by breaking it and seeing its test fail; the commits' sessions list the breaks.
+- `openspec validate agent-telemetry --strict --store agent-platform-specs` passes.
