@@ -63,8 +63,8 @@ The Sortie work is in the fork (`~/dev/sortie`), on a branch off `feat/session-c
 
 ## 9. Documentation
 
-- [ ] 9.1 Document `environment` in `docs/workflow-reference.md` and in the fork's configuration, workspace, agent adapter contract, and security architecture sections. Add a `CHANGELOG.md` entry. Verify that every key and validation error in the specs appears in the reference.
-- [ ] 9.2 Write the smolvm environment guide in the fork. It covers installation and the pinned version, building a pack with `smol-builder`, `allow_hosts` for each agent, credential bindings, `repository` with the mirror, branch, push and pull-request rules, what `after_create` should still do, the agent support list from 1.2, host git credentials for the mirror, `smolvm machine egress-events`, `smolvm pack prune`, and rollback. Verify that its example workflow passes `sortie validate`.
+- [x] 9.1 Document `environment` in `docs/workflow-reference.md` and in the fork's configuration, workspace, agent adapter contract, and security architecture sections. Add a `CHANGELOG.md` entry. Verify that every key and validation error in the specs appears in the reference.
+- [x] 9.2 Write the smolvm environment guide in the fork. It covers installation and the pinned version, building a pack with `smol-builder`, `allow_hosts` for each agent, credential bindings, `repository` with the mirror, branch, push and pull-request rules, what `after_create` should still do, the agent support list from 1.2, host git credentials for the mirror, `smolvm machine egress-events`, `smolvm pack prune`, and rollback. Verify that its example workflow passes `sortie validate`.
 
 ## 10. End-to-end check
 

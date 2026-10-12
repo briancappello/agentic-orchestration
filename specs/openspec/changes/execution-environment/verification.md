@@ -314,3 +314,19 @@ Related commit: `5f6ca01c` adds `/.sortie` to the seeded repository's `.git/info
 | 8.3 | `158d069c` | `TestPullRequestTextFor` (suggested title and body, absent file, oversized file, control characters, title cut to 256 runes, malformed JSON, a link refused), `TestDefaultPullRequestText` (`ENG-42: Calculator adds wrong`), `TestExportIssueBranch_EnsuresThePullRequest` (the record stores `pr_number`, owner and repo; a failed call fails the export and is retried on the next run). |
 
 Related commit: `6c356877` adds `ExportResult.UpToDate`, so a record write that failed after a successful push is repaired by the next run instead of being lost.
+
+## Task group 9: documentation
+
+| Task | Commit | Verified by |
+|---|---|---|
+| 9.1 | `ceb68e63`, `f8b087ed`, `388f5738` | A parity script (`/tmp/opencode/ee/parity.py`) found all 20 keys, 4 credential keys, 32 error fields and 39 error messages from the config code, the host check, the repository-provider check and the dispatch preflight in `docs/workflow-reference.md`. `make lint-docs` reports 0 errors. |
+| 9.2 | `e892d833` | `docs/smolvm-environment-guide.md`. Its example workflow, with only the pack path replaced by a real pack, passes `sortie validate --format json` with `{"valid":true,"errors":[],"warnings":[]}`, including the smolvm version check and the agent-credential preflight. The claude-agent-acp variant also validates. |
+
+Fixes found while checking the docs against the code, each with a test that fails before the fix:
+
+- `aa7c9472` (security): under smolvm, hooks, triage and git inspection inherited every host `SORTIE_*` variable, and the carrier forwarded them into the guest with `-e`. That could put `SORTIE_TRACKER_API_KEY` in the guest. Now nothing is inherited when the environment runs elsewhere; `local` is unchanged.
+- `a1598285`: `after_run` in a VM received the host path in `SORTIE_SELF_REVIEW_SUMMARY_PATH`; it now receives the guest path.
+- `48630f01`: the provider-mismatch error named `label_commands.provider` instead of `reactions.label_commands.provider`.
+- `0b9d0bf7`: `sortie validate` warned `unknown_key` for a provider block named only by a reaction or by `repository.provider`.
+
+Accepted ADRs made stale by this change, not edited: 0009 (the MCP stdio sidecar: under smolvm the agent starts `mcp-relay`, and Sortie starts the tool server on the host) and 0018 (retention by age: under smolvm with a repository, `pushed_at` comes from `.sortie-host/scm.json`).
