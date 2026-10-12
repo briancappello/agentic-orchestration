@@ -1,0 +1,19 @@
+schema_version: 1
+status: draft
+deliverables:
+  - id: invoice
+    title: Generate invoices
+    kind: story
+    depends_on: [accounts-api/accounts-close]
+    covers:
+      - billing/invoicing#Monthly invoice
+    acceptance_criteria:
+      - An invoice is generated on the first day of each month.
+  - id: tax
+    title: Apply tax rules
+    kind: enabler
+    depends_on: [invoice]
+    covers: []
+    acceptance_criteria:
+      - Tax is computed per region.
+    notes: Region tables come from finance.
