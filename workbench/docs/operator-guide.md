@@ -131,6 +131,8 @@ uv run workbench serve --port 8790
 
 The tokens stay in this process. The browser holds only the workbench's own cookie.
 
+To work on the workbench itself, add `--reload`: the backend restarts when its Python code changes. Run `npm run dev` in `frontend/` and open `http://localhost:5173` for hot reload of the frontend; Vite forwards `/api` to the backend on port 8790. A backend restart ends the running planning session, so start a new one after it.
+
 ## 5. Plan
 
 Open `http://127.0.0.1:8790` and sign in.

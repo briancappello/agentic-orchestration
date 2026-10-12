@@ -13,6 +13,7 @@ def main(argv: list[str] | None = None) -> int:
     serve = sub.add_parser("serve", help="run the workbench server")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8790)
+    serve.add_argument("--reload", action="store_true", help="restart when the backend's Python code changes (development)")
     sub.add_parser("hash-password", help="read a password and print its hash for WORKBENCH_PASSWORD_HASH")
     args = parser.parse_args(argv)
 
@@ -33,15 +34,25 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
-    from .app import create_app
+    from pathlib import Path
+
     from .config import Config, ConfigError
 
     try:
-        config = Config.from_env()
+        Config.from_env()  # fail here, once, rather than in every reloaded worker
     except ConfigError as exc:
         print(f"workbench: {exc}", file=sys.stderr)
         return 2
-    uvicorn.run(create_app(config), host=args.host, port=args.port, log_level="info")
+    src = Path(__file__).resolve().parents[1]
+    uvicorn.run(
+        "workbench.app:create_app_from_env",
+        factory=True,
+        host=args.host,
+        port=args.port,
+        log_level="info",
+        reload=args.reload,
+        reload_dirs=[str(src / "workbench"), str(src / "planlib")] if args.reload else None,
+    )
     return 0
 
 

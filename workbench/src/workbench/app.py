@@ -137,6 +137,11 @@ def create_app(config: Config, **services) -> FastAPI:
     return app
 
 
+def create_app_from_env() -> FastAPI:
+    """The app for ``uvicorn --factory``, configured from the environment."""
+    return create_app(Config.from_env())
+
+
 def _mount_frontend(app: FastAPI, dist: Path | None) -> None:
     if dist is None or not (dist / "index.html").is_file():
         return
