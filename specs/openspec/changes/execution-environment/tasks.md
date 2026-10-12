@@ -2,9 +2,9 @@ The Sortie work is in the fork (`~/dev/sortie`), on a branch off `feat/session-c
 
 ## 1. Remaining smolvm checks
 
-- [ ] 1.1 Extend the spike with three mounts on one machine: a read-write `-v` at `/run/sortie/control`, a read-only `-v` at `/opt/sortie` holding a copy of the Sortie binary, and `--mount-socket` at `/run/sortie/tools.sock`. Check that `/opt/sortie/sortie --version` runs in the guest, that a guest write to `/opt/sortie` fails, and that `ln -s /run/sortie/control /workspace/.sortie` then shares writes both ways. Record the commands and output in the change's `verification.md`.
-- [ ] 1.2 In the spike VM, run claude-agent-acp and codex with a credential binding for their API hosts, and record for each whether its HTTPS client accepts the substituted certificate. Verify by recording one successful turn per agent, or the exact TLS error, in `verification.md`. Then list every agent kind as supported or not supported in the environment guide draft.
-- [ ] 1.3 Stop a running `opencode acp` turn by sending SIGTERM to the `smolvm machine exec` process. Record what the next `session/load` (resume) of that session sees. Verify by recording the result in `verification.md`. This is the measurement the "no graceful TERM" risk asks for.
+- [x] 1.1 Extend the spike with three mounts on one machine: a read-write `-v` at `/run/sortie/control`, a read-only `-v` at `/opt/sortie` holding a copy of the Sortie binary, and `--mount-socket` at `/run/sortie/tools.sock`. Check that `/opt/sortie/sortie --version` runs in the guest, that a guest write to `/opt/sortie` fails, and that `ln -s /run/sortie/control /workspace/.sortie` then shares writes both ways. Record the commands and output in the change's `verification.md`.
+- [x] 1.2 In the spike VM, run claude-agent-acp and codex with a credential binding for their API hosts, and record for each whether its HTTPS client accepts the substituted certificate. Verify by recording one successful turn per agent, or the exact TLS error, in `verification.md`. Then list every agent kind as supported or not supported in the environment guide draft.
+- [x] 1.3 Stop a running `opencode acp` turn by sending SIGTERM to the `smolvm machine exec` process. Record what the next `session/load` (resume) of that session sees. Verify by recording the result in `verification.md`. This is the measurement the "no graceful TERM" risk asks for.
 
 ## 2. smol-builder tool
 
