@@ -35,7 +35,7 @@ The work spans three repositories:
 
 - [x] 4.1 Resolve the Epic and Story task types from config (`huly.epic_type`, `huly.story_type`) when the adapter is constructed. Fail with the project's task type names when either is missing. Verify with fake-RPC tests and the env-gated integration test.
 - [x] 4.2 Ensure the `sortiePlanKey` attribute exists on `tracker:class:Issue`, creating it on the first write, and implement `PlanKeyFinder` with it. Verify against the local Huly (v0.7.426) that the attribute is created once, survives a rename in the UI, and finds the issue. Record how to remove it in the Huly adapter notes.
-- [ ] 4.3 Implement `IssueCreator`:
+- [x] 4.3 Implement `IssueCreator`:
   - get the issue number with a `$inc` on the sequence using `retrieve: true`;
   - compute the rank with a port of Huly's rank function and its tests;
   - store the description through collaborator `createContent`;
