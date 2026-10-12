@@ -1,0 +1,113 @@
+/** Read-only helpers over a merged graph: status, progress, badges, neighbours. */
+import type { GraphNode, MergedGraph } from "./types";
+
+export type StatusClass = "done" | "prog" | "todo";
+
+const ACTIVE_STATE = /progress|review|doing|active|started/i;
+
+export interface Badge {
+  kind: "run" | "retry" | "budget";
+  label: string;
+}
+
+export class GraphModel {
+  readonly byKey: Map<string, GraphNode>;
+  readonly epics: GraphNode[];
+  private readonly blockersOf = new Map<string, string[]>();
+  private readonly blockedOf = new Map<string, string[]>();
+  private readonly childrenOf = new Map<string, GraphNode[]>();
+
+  constructor(readonly doc: MergedGraph) {
+    this.byKey = new Map(doc.nodes.map((n) => [n.plan_key, n]));
+    this.epics = doc.nodes.filter((n) => n.kind === "epic");
+    for (const b of doc.blocks) {
+      (this.blockersOf.get(b.blocked) ?? this.blockersOf.set(b.blocked, []).get(b.blocked)!).push(b.blocker);
+      (this.blockedOf.get(b.blocker) ?? this.blockedOf.set(b.blocker, []).get(b.blocker)!).push(b.blocked);
+    }
+    const parentOf = new Map(doc.parents.map((p) => [p.child, p.parent]));
+    for (const n of doc.nodes) {
+      if (n.kind !== "story") continue;
+      const parent = parentOf.get(n.plan_key) ?? n.change;
+      (this.childrenOf.get(parent) ?? this.childrenOf.set(parent, []).get(parent)!).push(n);
+    }
+  }
+
+  node(key: string | null | undefined): GraphNode | undefined {
+    return key ? this.byKey.get(key) : undefined;
+  }
+
+  storiesOf(epicKey: string): GraphNode[] {
+    return this.childrenOf.get(epicKey) ?? [];
+  }
+
+  blockers(key: string): string[] {
+    return (this.blockersOf.get(key) ?? []).filter((k) => this.byKey.has(k));
+  }
+
+  unblocks(key: string): string[] {
+    return (this.blockedOf.get(key) ?? []).filter((k) => this.byKey.has(k));
+  }
+
+  epicOf(n: GraphNode): GraphNode | undefined {
+    return n.kind === "epic" ? n : this.byKey.get(this.doc.parents.find((p) => p.child === n.plan_key)?.parent ?? n.change);
+  }
+
+  statusClass(n: GraphNode): StatusClass {
+    if (n.kind === "epic") {
+      const stories = this.storiesOf(n.plan_key);
+      if (n.tracker?.terminal || (stories.length > 0 && stories.every((s) => this.isDone(s)))) return "done";
+      if (stories.some((s) => this.statusClass(s) !== "todo") || (n.tracker && ACTIVE_STATE.test(n.tracker.state))) return "prog";
+      return "todo";
+    }
+    if (n.tracker?.terminal) return "done";
+    if (n.runtime && n.runtime.status !== "budget_held") return "prog";
+    if (n.tracker && ACTIVE_STATE.test(n.tracker.state)) return "prog";
+    return "todo";
+  }
+
+  isDone(n: GraphNode | undefined): boolean {
+    return !!n && this.statusClass(n) === "done";
+  }
+
+  statusLabel(n: GraphNode): string {
+    if (n.tracker) return n.tracker.state;
+    return n.status === "draft" ? "Not synced" : "To do";
+  }
+
+  progress(epic: GraphNode): { done: number; total: number } {
+    const stories = this.storiesOf(epic.plan_key);
+    return { done: stories.filter((s) => this.isDone(s)).length, total: stories.length };
+  }
+
+  badge(n: GraphNode): Badge | null {
+    if (n.kind === "story") return runtimeBadge(n);
+    const badges = this.storiesOf(n.plan_key).map(runtimeBadge).filter((b): b is Badge => b !== null);
+    const running = badges.filter((b) => b.kind === "run").length;
+    if (running) return { kind: "run", label: running === 1 ? "1 agent running" : `${running} agents running` };
+    if (badges.some((b) => b.kind === "retry")) return { kind: "retry", label: "agent retrying" };
+    if (badges.length) return { kind: "budget", label: "budget held" };
+    return null;
+  }
+
+  /** Not done, not started, and every blocker done. */
+  isReady(n: GraphNode): boolean {
+    return this.statusClass(n) === "todo" && !n.runtime && this.blockers(n.plan_key).every((b) => this.isDone(this.byKey.get(b)));
+  }
+
+  identifier(n: GraphNode): string {
+    return n.tracker?.identifier ?? n.plan_key;
+  }
+}
+
+function runtimeBadge(n: GraphNode): Badge | null {
+  switch (n.runtime?.status) {
+    case "running":
+      return { kind: "run", label: `running · turn ${n.runtime.turn_count ?? 0}` };
+    case "retrying":
+      return { kind: "retry", label: `retrying · attempt ${n.runtime.attempt ?? 1}` };
+    case "budget_held":
+      return { kind: "budget", label: "budget held" };
+    default:
+      return null;
+  }
+}
