@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
@@ -11,6 +13,7 @@ from pydantic import BaseModel
 
 from .auth import COOKIE_NAME, Sessions, verify_password
 from .config import Config
+from .plan_state import PlanState, watch
 
 
 class LoginBody(BaseModel):
@@ -18,8 +21,25 @@ class LoginBody(BaseModel):
 
 
 def create_app(config: Config, **services) -> FastAPI:
-    """Build the app. ``services`` lets tests inject collaborators."""
-    app = FastAPI(title="plan workbench", docs_url=None, redoc_url=None, openapi_url=None)
+    """Build the app. ``services`` lets tests inject collaborators:
+    ``validate`` replaces planlib.validate."""
+    plan_state = PlanState(config.store, **({"validate": services["validate"]} if "validate" in services else {}))
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        stop = asyncio.Event()
+        await asyncio.to_thread(plan_state.refresh)
+        tasks = [asyncio.create_task(watch(plan_state, config.debounce_ms, stop))]
+        try:
+            yield
+        finally:
+            stop.set()
+            for t in tasks:
+                t.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    app = FastAPI(title="plan workbench", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+    app.state.plan = plan_state
     sessions = Sessions(config.secret_key, config.session_max_age)
     app.state.config = config
     app.state.sessions = sessions
@@ -49,6 +69,11 @@ def create_app(config: Config, **services) -> FastAPI:
     @app.get("/api/me", dependencies=[Depends(require_operator)])
     def me() -> dict:
         return {"signed_in": True, "store": config.store.name}
+
+    @app.get("/api/validation", dependencies=[Depends(require_operator)])
+    def validation() -> dict:
+        snap = plan_state.snapshot()
+        return {"version": snap["version"], "valid": snap["valid"], "errors": snap["errors"], "has_graph": snap["graph"] is not None}
 
     @app.exception_handler(HTTPException)
     async def http_error(_request: Request, exc: HTTPException) -> JSONResponse:
