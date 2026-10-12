@@ -79,8 +79,8 @@ The work spans three repositories:
 
 ## 8. End to end
 
-- [ ] 8.1 Write the planning session prompt (store, schema, write limit, run `planlib validate` after every write) and the operator guide for running Sortie, the broker, and the workbench together on one host. Verify by following the guide on a clean checkout.
-- [ ] 8.2 Live check against the local Huly. In the workbench chat:
+- [x] 8.1 Write the planning session prompt (store, schema, write limit, run `planlib validate` after every write) and the operator guide for running Sortie, the broker, and the workbench together on one host. Verify by following the guide on a clean checkout.
+- [x] 8.2 Live check against the local Huly. In the workbench chat:
   1. the agent drafts a breakdown for one change;
   2. a planted cycle is reported and fixed in the session;
   3. the person approves the breakdown;
