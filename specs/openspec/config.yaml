@@ -19,8 +19,9 @@ context: |
     - Agents over ACP: opencode (primary), pi via pi-acp, claude-agent-acp
       (used to validate designs against a second agent).
     - Sandboxes: VMs where agents run tools freely. Free tool use is a goal;
-      the sandbox is what makes it safe. Candidates: wtvm (~/dev/wtvm),
-      smolvm (smol-machines).
+      the sandbox is what makes it safe. Chosen: smolvm (smol-machines,
+      libkrun microVMs), driven over its HTTP API on a unix socket. wtvm
+      (~/dev/wtvm) is prior art only.
     - Human surfaces: acp-broker attach (TUI), herdr (~/dev/herdr) panes and
       the herdr-web-ui plugin for web and phone.
     - Tracker: Huly (prototype adapter on sortie branch prototype/huly-tracker).
