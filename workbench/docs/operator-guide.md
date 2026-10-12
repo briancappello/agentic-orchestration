@@ -119,6 +119,7 @@ uv run workbench hash-password > ~/.config/plan-workbench-password-hash   # type
 | `WORKBENCH_AGENT_COMMAND` | No | Agent command, default `opencode acp`. |
 | `WORKBENCH_PROMPT_FILE` | No | Planning prompt, default `prompts/planning-session.md`. |
 | `WORKBENCH_COOKIE_SECURE` | No | `1` behind HTTPS. |
+| `WORKBENCH_RUNTIME_DIR` | No | Where the running session's state, broker token, and logs live. Default: `$XDG_RUNTIME_DIR/plan-workbench/<store>-<hash>`, else under `~/.cache`. |
 
 ```sh
 export WORKBENCH_STORE=~/dev/agent-platform-specs
@@ -131,7 +132,7 @@ uv run workbench serve --port 8790
 
 The tokens stay in this process. The browser holds only the workbench's own cookie.
 
-To work on the workbench itself, add `--reload`: the backend restarts when its Python code changes. Run `npm run dev` in `frontend/` and open `http://localhost:5173` for hot reload of the frontend; Vite forwards `/api` to the backend on port 8790. A backend restart ends the running planning session, so start a new one after it.
+To work on the workbench itself, add `--reload`: the backend restarts when its Python code changes. Run `npm run dev` in `frontend/` and open `http://localhost:5173` for hot reload of the frontend; Vite forwards `/api` to the backend on port 8790. Keep `WORKBENCH_SECRET_KEY` fixed so a restart keeps you signed in.
 
 ## 5. Plan
 
@@ -144,15 +145,16 @@ Open `http://127.0.0.1:8790` and sign in.
 5. **Sync.** Choose **Sync…** in the graph's top bar. The dialog shows how many issues will be created and updated and how many relations added and removed. Nothing reaches the tracker until you apply. A tracker that lacks a needed capability is named, and there is no apply.
 6. **Run.** Move the stories to `Todo` in the tracker. Sortie dispatches the unblocked ones; their running badges appear on the graph within a few seconds.
 
-Ending the session in the chat pane stops its broker. A reload, or opening the workbench in another tab, reattaches to the running session with its history.
+A planning session runs apart from the backend: a detached driver process holds the broker, and the backend finds it again through the runtime directory. So a page reload, another tab, a backend restart, or a `--reload` after a code change reattaches to the same session with its history. Only **End session** in the chat pane stops it.
 
 ## Stop
 
-Stop the workbench with Ctrl-C; it stops its broker. Then stop Sortie with Ctrl-C.
+Choose **End session** in the chat pane first: stopping the backend leaves the planning session and its agent running, and the next backend start reattaches to it. Then stop the workbench and Sortie with Ctrl-C.
 
 ## Troubleshooting
 
 - **"Sortie unreachable" in the top bar.** Check `WORKBENCH_SORTIE_URL` and the token: `curl -H "Authorization: Bearer $WORKBENCH_SORTIE_TOKEN" $WORKBENCH_SORTIE_URL/api/v1/plan/graph`.
-- **The session does not start.** `acp-broker` is not on `PATH`, or the agent command fails. The broker's standard error is kept in the session's runtime directory, named in the workbench log.
+- **The session does not start.** `acp-broker` is not on `PATH`, or the agent command fails. The runtime directory, named in the workbench log, holds `driver.log`, the broker's `<key>.stderr`, and `state.json`, whose `error` field says what failed.
+- **A session is still running after the backend stopped.** That is by design. Start the backend and choose **End session**, or send SIGTERM to the `driver_pid` in the runtime directory's `state.json`.
 - **`planlib: ... planning schema not found`.** The store has no `openspec/schemas/planning/`.
 - **Sync refused with `stale_preview`.** The plan or the tracker changed after the preview. Preview again.

@@ -25,6 +25,7 @@ class Config:
     agent_command: list[str] = field(default_factory=lambda: ["opencode", "acp"])
     prompt_file: Path | None = None
     frontend_dir: Path | None = None
+    runtime_dir: Path | None = None
     session_max_age: int = 12 * 3600
     debounce_ms: int = 300
     poll_seconds: float = 5.0
@@ -56,5 +57,6 @@ class Config:
             agent_command=shlex.split(env.get("WORKBENCH_AGENT_COMMAND", "opencode acp")),
             prompt_file=Path(prompt),
             frontend_dir=Path(frontend),
+            runtime_dir=Path(env["WORKBENCH_RUNTIME_DIR"]).expanduser() if env.get("WORKBENCH_RUNTIME_DIR") else None,
             cookie_secure=env.get("WORKBENCH_COOKIE_SECURE", "") == "1",
         )

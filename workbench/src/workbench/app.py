@@ -35,7 +35,7 @@ def create_app(config: Config, **services) -> FastAPI:
     sortie = services.get("sortie") or SortieClient(config.sortie_url, config.sortie_token)
     hub = Hub(plan_state, sortie)
     planning = services.get("sessions") or SessionManager(
-        config.store, config.broker_command, config.agent_command, config.prompt_file
+        config.store, config.broker_command, config.agent_command, config.prompt_file, runtime_dir=config.runtime_dir
     )
 
     @asynccontextmanager

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import shutil
@@ -59,14 +60,35 @@ def flat(ev):
     return json.dumps(ev)
 
 
-@pytest.fixture
-def session_app(store, tmp_path):
-    store.plan([])
+def make_app(store, tmp_path):
     prompt = tmp_path / "prompt.md"
     prompt.write_text("You plan in {{store}}.")
     manager = SessionManager(store.root, [BROKER], [sys.executable, str(FAKE_AGENT)], prompt, runtime_dir=tmp_path / "rt")
     app = create_app(make_config(store.root), validate=validate_offline, sortie=FakeSortie().client(), sessions=manager)
     return app, manager
+
+
+def broker_pid(manager):
+    return json.loads((manager.runtime_dir / "state.json").read_text())["broker_pid"]
+
+
+def wait_dead(pid, timeout=10):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        time.sleep(0.05)
+    return False
+
+
+@pytest.fixture
+def session_app(store, tmp_path):
+    store.plan([])
+    app, manager = make_app(store, tmp_path)
+    yield app, manager
+    asyncio.run(manager.stop())
 
 
 def test_round_trip_permission_and_reattach(session_app):
@@ -77,7 +99,7 @@ def test_round_trip_permission_and_reattach(session_app):
 
         started = client.post("/api/session").json()
         assert started["active"] is True
-        pid = manager.session.process.pid
+        pid = broker_pid(manager)
         rec = next((manager.runtime_dir / "registry").glob(f"{started['key']}.*.json"))
         assert json.loads(rec.read_text())["pid"] == pid
 
@@ -110,13 +132,58 @@ def test_round_trip_permission_and_reattach(session_app):
         assert texts == ["hello agent", "ASK-PERMISSION please"]
 
         assert client.delete("/api/session").json() == {"active": False}
-        deadline = time.monotonic() + 5
-        while time.monotonic() < deadline:
-            try:
-                os.kill(pid, 0)
-            except ProcessLookupError:
-                break
-            time.sleep(0.05)
-        else:
-            raise AssertionError("broker still running after the session ended")
+        assert wait_dead(pid), "broker still running after the session ended"
         assert client.post("/api/session/commands", json={"op": "state"}).status_code == 409
+
+
+def test_session_survives_a_backend_restart(store, tmp_path):
+    store.plan([])
+    app, manager = make_app(store, tmp_path)
+    try:
+        with live_server(app) as base, httpx.Client(base_url=base, timeout=20) as client:
+            client.post("/api/login", json={"password": PASSWORD})
+            client.post("/api/session")
+            pid = broker_pid(manager)
+            with client.stream("GET", "/api/session/events") as r:
+                gen = events(r.iter_lines())
+                until(gen, lambda e: "echo: You plan in " in flat(e))
+                client.post("/api/session/commands", json={"op": "steer", "text": "before restart"})
+                until(gen, lambda e: "echo: before restart" in flat(e))
+        # The first backend is gone: its server and lifespan have shut down.
+
+        app2, manager2 = make_app(store, tmp_path)
+        with live_server(app2) as base, httpx.Client(base_url=base, timeout=20) as client:
+            client.post("/api/login", json={"password": PASSWORD})
+            status = client.get("/api/session").json()
+            assert status["active"] is True and broker_pid(manager2) == pid
+            assert [m["text"] for m in status["messages"]] == ["before restart"]
+            with client.stream("GET", "/api/session/events") as r:
+                gen = events(r.iter_lines())
+                until(gen, lambda e: "echo: before restart" in flat(e))  # replayed history
+                client.post("/api/session/commands", json={"op": "steer", "text": "after restart"})
+                until(gen, lambda e: "echo: after restart" in flat(e))
+            assert client.delete("/api/session").json() == {"active": False}
+        assert wait_dead(pid)
+    finally:
+        asyncio.run(manager.stop())
+
+
+def test_a_dead_session_reads_as_ended_and_restarts(store, tmp_path):
+    store.plan([])
+    app, manager = make_app(store, tmp_path)
+    try:
+        with live_server(app) as base, httpx.Client(base_url=base, timeout=20) as client:
+            client.post("/api/login", json={"password": PASSWORD})
+            client.post("/api/session")
+            pid = broker_pid(manager)
+            os.kill(pid, 9)
+            assert wait_dead(pid)
+            deadline = time.monotonic() + 10
+            while client.get("/api/session").json()["active"] and time.monotonic() < deadline:
+                time.sleep(0.05)
+            assert client.get("/api/session").json()["active"] is False
+            assert client.post("/api/session/commands", json={"op": "state"}).status_code == 409
+            assert client.post("/api/session").json()["active"] is True
+            assert broker_pid(manager) != pid
+    finally:
+        asyncio.run(manager.stop())
