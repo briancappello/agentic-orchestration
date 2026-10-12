@@ -29,7 +29,7 @@ The work spans three repositories:
 ## 3. Sortie: tracker write capabilities
 
 - [x] 3.1 Add the optional interfaces `IssueCreator`, `IssueUpdater`, `IssueParenter`, `DependencyLinker`, and `PlanKeyFinder`, and the `tracker_unsupported_operation` error kind, to `internal/domain`. Add `WriteCapabilities` and `PlanKeyStorage` to `registry.TrackerMeta`, with a check at registration that a declared capability is implemented. Verify with registry tests: a declared but unimplemented capability is rejected, and every existing adapter still registers with no write capabilities.
-- [ ] 3.2 Update the tracker-contract section and the adapter-concepts doc for the new capabilities. Verify with `make lint-docs`.
+- [x] 3.2 Update the tracker-contract section and the adapter-concepts doc for the new capabilities. Verify with `make lint-docs`.
 
 ## 4. Sortie: Huly write path
 
