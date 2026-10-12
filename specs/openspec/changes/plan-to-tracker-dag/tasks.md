@@ -13,7 +13,7 @@ The work spans three repositories:
 
 - [x] 2.1 Create `~/dev/plan-workbench` with a Python project for `planlib`, using PyYAML, jsonschema, and networkx. Load the schemas from the store path given at run time, and refuse a newer `schema_version` with a message that names both versions. Verify with tests for loading, a version mismatch, and unknown fields.
 - [x] 2.2 Read requirement names for `covers` from `openspec show <change> --type change --json`. Pin the tested OpenSpec version, and fail clearly when the output shape is unexpected. Verify against a fixture captured from OpenSpec 1.13, and against a real change in the store.
-- [ ] 2.3 Implement the graph checks:
+- [x] 2.3 Implement the graph checks:
   - unique ids;
   - refs that resolve;
   - changes in the plan that exist;
