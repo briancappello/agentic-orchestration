@@ -55,7 +55,7 @@ The work spans three repositories:
 
 ## 6. Workbench backend (FastAPI)
 
-- [ ] 6.1 Scaffold the FastAPI app. Add configuration (the store path, the Sortie URL and token, the broker command, and the operator password hash) and sign-in with a signed `HttpOnly` cookie. Verify with tests: unauthenticated requests get `401`, sign-in works, and no response body or header carries the Sortie or broker token.
+- [x] 6.1 Scaffold the FastAPI app. Add configuration (the store path, the Sortie URL and token, the broker command, and the operator password hash) and sign-in with a signed `HttpOnly` cookie. Verify with tests: unauthenticated requests get `401`, sign-in works, and no response body or header carries the Sortie or broker token.
 - [ ] 6.2 Watch `openspec/` with `watchfiles`, debounce for 300 ms, run `planlib`, and keep the last valid graph plus the current errors. Verify with a test that edits a fixture store: a valid edit updates the graph within two seconds, and an edit that adds a cycle keeps the last graph and reports the cycle.
 - [ ] 6.3 Merge the validated graph with Sortie's `/api/v1/plan/graph` by plan key into draft, synced, and orphaned nodes. Poll runtime state every five seconds. Serve `GET /api/graph` and an SSE stream `/api/events`. Verify with tests against a fake Sortie for the draft-beside-synced scenario and orphan marking.
 - [ ] 6.4 Add the sync proxy: preview through Sortie, then apply with the preview id. Add the Approve action, which calls `planlib.approve` for one change. Verify with tests: nothing reaches Sortie's apply without a confirmation, a missing capability blocks apply, and approving then editing returns the change to draft.
