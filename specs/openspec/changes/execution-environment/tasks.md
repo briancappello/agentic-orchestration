@@ -40,9 +40,9 @@ The Sortie work is in the fork (`~/dev/sortie`), on a branch off `feat/session-c
 
 ## 6. Guest tool server
 
-- [ ] 6.1 Add the `sortie mcp-relay <socket>` subcommand: it copies stdio to the socket, and when the connection closes before any response it exits non-zero with `tool server unavailable`. Verify with tests against a listening socket, a socket that closes immediately, and a missing socket.
-- [ ] 6.2 Add the per-issue host listener under the state directory. It starts `sortie mcp-server` with the issue's session environment for each connection, is recreated at startup for every workspace with a VM, and is removed with the workspace. Verify with tests: two issues each get their own identity, and a listener restarted at the same path serves a new connection.
-- [ ] 6.3 Generate the guest `mcp.json` for smolvm sessions, naming `/opt/sortie/sortie mcp-relay /run/sortie/tools.sock`, and keep the current output for `local` and SSH. Maintain the read-only binary directory with a copy of the running binary. Verify with `GenerateMCPConfig` tests for each kind, and a gated test where an agent in a VM calls `sortie_status` and gets its own issue's status.
+- [x] 6.1 Add the `sortie mcp-relay <socket>` subcommand: it copies stdio to the socket, and when the connection closes before any response it exits non-zero with `tool server unavailable`. Verify with tests against a listening socket, a socket that closes immediately, and a missing socket.
+- [x] 6.2 Add the per-issue host listener under the state directory. It starts `sortie mcp-server` with the issue's session environment for each connection, is recreated at startup for every workspace with a VM, and is removed with the workspace. Verify with tests: two issues each get their own identity, and a listener restarted at the same path serves a new connection.
+- [x] 6.3 Generate the guest `mcp.json` for smolvm sessions, naming `/opt/sortie/sortie mcp-relay /run/sortie/tools.sock`, and keep the current output for `local` and SSH. Maintain the read-only binary directory with a copy of the running binary. Verify with `GenerateMCPConfig` tests for each kind, and a gated test where an agent in a VM calls `sortie_status` and gets its own issue's status.
 
 ## 7. Repository sync
 

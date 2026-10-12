@@ -281,3 +281,11 @@ Measured smolvm 1.26.1 facts that shaped the code:
 - `--mount-socket` accepts a host socket path that does not exist yet.
 - Machine names: at most 117 characters for a pack VM to start, `[A-Za-z0-9_-]`, no `--`, no trailing `-`. Sortie caps names at 63 characters and appends a hash of the key when it rewrites one.
 - Errors before the guest command starts: `Error: vm not found: <name>` (exit 1), `Error: agent operation failed: connect: machine '<name>' is not running...` (exit 1), `Error: io operation failed: connection closed` (exit 1). These are classified as connection failures. A missing guest program or working directory exits 255 and is an agent failure.
+
+## Task group 6: guest tool server
+
+| Task | Commit | Verified by |
+|---|---|---|
+| 6.1 | `7298f4b1` | `TestMCPRelay_ListeningSocket` (with half-close), `TestMCPRelay_SocketClosesImmediately`, `TestMCPRelay_MissingSocket`, `TestMCPRelay_AcceptsButNeverAnswers`. EOF, a connect error, or any read error before the first response byte (which covers the measured `ECONNRESET`) prints `tool server unavailable` and exits 1. A first-byte deadline of 30 s bounds a listener that accepts and never answers. |
+| 6.2 | `37627439` | `internal/toolsocket` tests (own identity per socket, restart at the same path including a stale socket file, 0600 mode, kill and reap on close) and orchestrator tests `TestServeToolSocket_TwoIssuesEachGetTheirOwnIdentity`, `TestRecoverToolSockets_ServesTheRecordedIdentityAfterRestart`, `TestToolSocket_RemovedWithTheWorkspace`. After a restart, the identity comes from `<state dir>/env/<key>/tool-session.json`, which the guest cannot reach, never from `.sortie`. |
+| 6.3 | `fc80be76` | `TestGenerateMCPConfig_PerEnvironmentKind` (local, SSH, socket environment; no secret, database path, workflow path or host binary path in the guest file). Gated `TestIntegration_GuestCallsSortieToolsOnTheHost`: a static Sortie binary in `/opt/sortie`, a host `mcp-server` behind the socket, and a scripted MCP client in the guest running `/opt/sortie/sortie mcp-relay /run/sortie/tools.sock`; `sortie_status` returned this workspace's status (`turn_number:4, max_turns:17`). With the listener stopped, the relay exited non-zero with `tool server unavailable`, and a new listener at the same path served the running VM again. |
