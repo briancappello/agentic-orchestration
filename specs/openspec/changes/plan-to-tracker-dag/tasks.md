@@ -42,7 +42,7 @@ The work spans three repositories:
   - create the issue in the parent's `subIssues` collection, or under `NoParent`.
 
   Verify that unit tests cover the rank and the transaction shape, and that the integration test creates an epic and a story that Huly's UI shows nested, with the right type and description.
-- [ ] 4.4 Implement `IssueUpdater`, `IssueParenter` (`attachedTo` and `parents`), and `DependencyLinker` (`blockedBy` with `$push` and `$pull`, idempotent). Declare all four capabilities. Verify with fake-RPC tests for linking twice and unlinking a missing relation, and with an integration test after which the existing `FetchCandidateIssues` reports the new blocker.
+- [x] 4.4 Implement `IssueUpdater`, `IssueParenter` (`attachedTo` and `parents`), and `DependencyLinker` (`blockedBy` with `$push` and `$pull`, idempotent). Declare all four capabilities. Verify with fake-RPC tests for linking twice and unlinking a missing relation, and with an integration test after which the existing `FetchCandidateIssues` reports the new blocker.
 
 ## 5. Sortie: plan sync and graph API
 
