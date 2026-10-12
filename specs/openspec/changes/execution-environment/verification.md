@@ -256,3 +256,28 @@ Notes:
 
 - Under `local`, a prefix written into `agent.command` today also wraps auxiliary launches and canaries. `host_prefix` does not, as the spec requires. Session launches are byte-identical to the `agent.command` form.
 - The carrier passes the adapter's own settings (for example `OPENCODE_CONFIG_CONTENT`) into the guest with `-e`. Decision 3 does not list them. They are agent configuration, not host variables, but they appear in the host process's argv.
+
+## Task group 5: smolvm kind
+
+Gated tests run with `SORTIE_SMOLVM_TEST=1` against the spike's base pack. Without the gate they skip. After every run, `smolvm machine ls` listed only `ag1`.
+
+| Task | Commit | Verified by |
+|---|---|---|
+| 5.1 | `623f2daf` | A fake smolvm CLI (the test binary re-run as a script) for `TestCheckVersion`, `TestCheckHost_RefusesUnsupportedVersion`, `..._RefusesMissingBinary`, `TestParseMachines_RecordedListing` (the recorded `ls --json`), `TestCLI_WrapsFailures`, `TestCLI_KeepsLastEightKiBOfStderr`. `TestBoot_RefusesUnsupportedSmolvmVersion`: startup exits 1 and stderr names `1.30.0` and `1.26.x`. `TestWorkflowValidate_ReloadRefusesUnsupportedSmolvmVersion`: the reload is rejected and the previous config kept. |
+| 5.2 | `9e3ff345` | `TestPrepare_CreatesAndStartsTheVM` asserts the exact `create` argv, with exactly two `-v`, one `--mount-socket`, and none of `--nested`, `--allow-system-mounts`, `--docker-socket`, `-p`, `--net`. Gated `TestIntegration_PrepareRealVM`: four labels, `"mounts": 2`, no network, control directory shared, `/opt/sortie` read-only, restart keeps the guest workspace. |
+| 5.3 | `35851643` | `TestCommand_Argv` (the token and API URL never reach the argv), `TestLaunchArgv`, `TestConnectionFailed`. Gated `TestIntegration_HookRunsInTheGuest`: `after_create: uname -n > created-on` leaves the VM hostname in the guest file and no `created-on` on the host; the hook sees `SORTIE_ENVIRONMENT=smolvm` and `SORTIE_WORKSPACE=/workspace`. Gated `TestIntegration_ConnectionFailedOnRealExits`. |
+| 5.4 | `88ab1a8f` | Gated `TestIntegration_ControlDirectoryIsShared`: the guest writes `blocked` and the host reads it with `workspace.ReadStatusFile`; a planted link to `/etc/passwd` is refused. Gated `TestIntegration_ExistingSortieEntryFailsPreparation`: a `.sortie` directory or a dangling link fails preparation naming `/workspace/.sortie`, unchanged. |
+| 5.5 | `94a44e31`, `92722c10` | Fake-CLI tests for Release, Remove and Sweep selection (running key kept; unlabeled, unmanaged and other-workflow VMs kept; path-traversal labels ignored). Orchestrator tests: Release is the worker's last step for every exit kind; cleanup runs `before_remove`, then Remove, then deletes the directory, using the recorded kind. Gated `TestIntegration_ReleaseRemove` and `TestIntegration_Sweep` (the managed VM is deleted after its workspace goes, and an unlabeled VM stays running). `92722c10` makes dispatches without setup hooks prepare the environment too. |
+| 5.6 | `424501a2` | `TestValidateDispatchConfig_AgentCredential*`: a bound variable, a `pass_env` variable, an unset variable, the failing case (error names the variable), rule-routed kinds. |
+| 5.7 | `e2b1340b` | Migration `026_run_history_environment_image.sql` (upgrade from v25 and fresh database), `TestHandleState_Environment` and `TestHandleIssueDetail_Environment` with and without an environment, and a fake-CLI test that a rebuilt pack does not change an existing VM's recorded digest. |
+
+Related commits: `d2cce0b7` moves the binary directory to `<state dir>/env-bin`, so it cannot collide with `<state dir>/env/<key>` for a key named `bin`. `2caf2ca8` makes `Prepare` refuse a VM labeled for another workflow instead of replacing it. `94ed3fc4` runs reaction triage with its input and result in the guest's `/run/sortie/triage/<run id>/` (verified tmpfs, mode 700, removed afterwards). `92ae99dd` fixes a pre-existing flake in `TestMaskTruncated_NothingRegisteredMatchesMask`.
+
+Measured smolvm 1.26.1 facts that shaped the code:
+
+- `machine exec` without `-i` or `--stream` holds back all output until the command exits, so non-interactive commands use `--stream`.
+- A `--credential` without `--allow-host-pattern` opens the whole network (`curl https://example.com` returned 200). Credential hosts are therefore always added to the allowlist.
+- The credential value is read from the environment of `machine start`, not `create` or `exec`.
+- `--mount-socket` accepts a host socket path that does not exist yet.
+- Machine names: at most 117 characters for a pack VM to start, `[A-Za-z0-9_-]`, no `--`, no trailing `-`. Sortie caps names at 63 characters and appends a hash of the key when it rewrites one.
+- Errors before the guest command starts: `Error: vm not found: <name>` (exit 1), `Error: agent operation failed: connect: machine '<name>' is not running...` (exit 1), `Error: io operation failed: connection closed` (exit 1). These are classified as connection failures. A missing guest program or working directory exits 255 and is an agent failure.
