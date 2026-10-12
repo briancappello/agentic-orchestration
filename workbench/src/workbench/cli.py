@@ -26,7 +26,12 @@ def main(argv: list[str] | None = None) -> int:
         print(hash_password(password))
         return 0
 
+    import logging
+
     import uvicorn
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
     from .app import create_app
     from .config import Config, ConfigError

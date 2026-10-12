@@ -131,6 +131,7 @@ class SessionManager:
                                       workdir=self.store, started_at=time.time())
             self.session = session
             session.driver = asyncio.create_task(self._drive(session))
+            log.info("planning session %s started: broker pid %d, logs in %s", key, process.pid, self.runtime_dir)
             return session.status()
 
     async def stop(self) -> dict[str, Any]:
