@@ -5,7 +5,7 @@ Makes the tracker match the approved plan. It creates, updates, parents, and lin
 ## ADDED Requirements
 
 ### Requirement: Sync from the spec store
-Sortie SHALL provide `sortie plan sync --store <path>` and `POST /api/v1/plan/sync`. Both SHALL read the plan file and every approved breakdown in the store, and SHALL make the configured tracker match the combined graph:
+Sortie SHALL provide `sortie plan sync --store <path>` and `POST /api/v1/plan/sync`. The command SHALL read the store at the path. The endpoint SHALL take a store snapshot in its request: the plan file, each change's breakdown, and the requirement names in each change's specs. Sortie SHALL NOT need access to the store's files. Both SHALL read the plan and every approved breakdown, and SHALL make the configured tracker match the combined graph:
 - every planned change has an epic issue;
 - every deliverable has a story issue;
 - every story is parented to its change's epic;
@@ -17,6 +17,14 @@ The command and the endpoint SHALL behave identically.
 - **WHEN** the store plans `accounts-api` with 3 approved deliverables and `billing` with 2
 - **AND** the tracker holds none of them
 - **THEN** after the sync the tracker holds 2 epics and 5 stories with the plan's parents and blocking relations
+
+### Requirement: Parse without syncing
+Sortie SHALL provide `POST /api/v1/plan/parse`. It SHALL take a store snapshot and return the combined graph and every validation error, as the breakdown and plan-of-plans specs define them. It SHALL NOT contact the tracker. A sync SHALL use the same parsing and validation, so the two always agree.
+
+#### Scenario: Parse an invalid snapshot
+- **WHEN** a client posts a snapshot whose breakdown has a dependency cycle
+- **THEN** the response lists the cycle with its deliverable ids
+- **AND** no tracker request is made
 
 ### Requirement: Preview before apply
 A sync SHALL first compute a preview: the issues to create, the issues to update, and the parents and relations to add or remove. A sync SHALL change the tracker only when it is applied. The preview SHALL be returned by `sortie plan sync --dry-run` and by `POST /api/v1/plan/sync` with `"apply": false`. An apply SHALL carry the id of the preview it applies. Sortie SHALL refuse an apply when the store or the tracker has changed since that preview was computed.
