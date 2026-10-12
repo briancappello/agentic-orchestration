@@ -74,7 +74,7 @@ The work spans three repositories:
 
   Verify with component tests for each scenario in the node-encoding and live-redraw requirements.
 - [x] 7.4 Build the chat pane: the streaming conversation, tool calls, and permission controls. Add the context card on top, which shows the selected node's details (or ready, active, and unplanned lists when nothing is selected) and attaches the selection to the next message, with a way to remove it. Verify with component tests for the attach and detach scenario, and a permission answer reaching the relay.
-- [ ] 7.5 Build the validation panel, where selecting an error selects its node. Build the sync dialog, which shows the preview counts and requires a confirm, and the per-change Approve action. Verify with component tests for a missing capability and for confirm-then-apply.
+- [x] 7.5 Build the validation panel, where selecting an error selects its node. Build the sync dialog, which shows the preview counts and requires a confirm, and the per-change Approve action. Verify with component tests for a missing capability and for confirm-then-apply.
 - [ ] 7.6 Run the impeccable finish review on the built workbench at 1440px and 390px, and fix the material findings. Verify with the reviewer's `ship` disposition.
 
 ## 8. End to end
