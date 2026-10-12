@@ -224,3 +224,20 @@ Findings:
 - Packs are not byte-reproducible: the same image packed twice gave different SHA-256s. The image tag identifies the stack; `pack_sha256` identifies one file. That is what Sortie records.
 - The base layer carries only opencode as an agent CLI, as the spike did. The stack-definition spec asks for "the supported agent CLIs". claude-agent-acp needs Node, which is in the `node` layer, not the base. See the open questions at the end of this file.
 - The base layer's apt packages are not pinned by version, while the spec asks for every downloaded artifact to be pinned. Carried over unchanged from the spike.
+
+## Task group 3: environment configuration and the local kind
+
+Fork branch `feat/execution-environment`, worktree `~/dev/sortie-worktrees/execution-environment`. The baseline on `feat/session-control` was clean: `make test` passed, and `make lint` reported 0 issues for linux, darwin and windows. Every commit below passed `go vet`, the full `make test`, and `make lint`.
+
+| Task | Commit | Verified by |
+|---|---|---|
+| 3.1 | `d152ddfa` | `TestEnvironmentConfig_Errors` (45 cases, one per error, each naming the dotted setting and the value), `TestValidateFrontMatter_Environment`, and `TestManager_ReloadRetainsOnUnknownEnvironmentKind`: a reload with `environment.kind: firecracker` keeps the previous config and prompt, and `LastLoadError()` names `environment.kind` and `firecracker`. |
+| 3.2 | `1f3ee27d` | Unit tests for the `local` kind (`TestCommand`, `TestCommandRuns`, `TestGuestPathIsIdentity`, `TestLifecycleNoOps`, ...) and `TestEnvironmentKindsRegistered`, which resolves both kinds. The registry lives in `internal/environment` (`environment.Registry`), because `internal/config` already imports `internal/registry`. |
+| 3.3 | `667bc38a` | Every existing test in `internal/workspace` and `internal/orchestrator` passes with no edit. One recording-environment test per call site: hooks in `Prepare`, `Finish`, `Cleanup`, `CleanupByPath`, `CleanupTerminal`; `env.Prepare` and `env.Remove`; the self-review diff and verification commands; handoff baseline and compare; reaction triage (host temporary files under `local`); the worker-exit cleanup; the sweep. |
+| 3.4 | `7ea25009` | The existing handoff-evidence tests pass unchanged. `TestHandoffEvidence_UntrackedFileHashedInEnvironment` changes an untracked file in a directory standing in for the guest and sees the fingerprint change while the host directory stays empty. |
+| 3.5 | `43b69e7c` | Lifecycle tests: an unrecorded workspace under `local` is kept with no `after_create` re-run and no `.sortie` created; the same workspace under a fake second kind gets the `local` kind's `Remove`, is prepared again with `after_create`, and is recorded as `{"kind":"fakevm","name":"vm-REC-1"}`. |
+
+Notes:
+
+- `git hash-object --stdin-paths` follows symlinks and stops at the first path it cannot hash, such as a dangling link. The implementation records such a path as unhashable, keeps the IDs already printed, and restarts after it, up to 64 such paths. A symlink retargeted to identical content, and a change of only the executable bit of an untracked file, no longer change the fingerprint.
+- `local` writes no `.sortie/environment` record, because `.sortie` must not exist before `after_create` in a local workspace. A missing record means `local`, as the spec says.
