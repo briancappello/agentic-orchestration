@@ -3,14 +3,30 @@
   import type { GraphNode, ViewState } from "../lib/types";
 
   let {
-    model, view, attached, onattach, onselect,
+    model, view, attached, onattach, onselect, onapprove,
   }: {
     model: GraphModel;
     view: ViewState;
     attached: string[];
     onattach: (key: string) => void;
     onselect: (key: string) => void;
+    onapprove?: (change: string) => Promise<unknown>;
   } = $props();
+
+  let approving = $state(false);
+  let approveError = $state("");
+  async function approve(change: string) {
+    if (!onapprove) return;
+    approving = true;
+    approveError = "";
+    try {
+      await onapprove(change);
+    } catch (err) {
+      approveError = err instanceof Error ? err.message : "Approval failed.";
+    } finally {
+      approving = false;
+    }
+  }
 
   let open = $state(true);
   const node = $derived(model.node(view.selected));
@@ -78,9 +94,17 @@
             <dd>{#if node.tracker.url}<a href={node.tracker.url} target="_blank" rel="noopener">{node.tracker.identifier} ↗</a>{:else}{node.tracker.identifier}{/if}</dd>
           {/if}
         </dl>
-        {#if !attached.includes(node.plan_key)}
-          <button type="button" class="attach" onclick={() => onattach(node.plan_key)}>Attach to message</button>
-        {/if}
+        <div class="acts">
+          {#if !attached.includes(node.plan_key)}
+            <button type="button" class="attach" onclick={() => onattach(node.plan_key)}>Attach to message</button>
+          {/if}
+          {#if node.kind === "epic" && node.approval === "draft" && onapprove}
+            <button type="button" class="attach approve" data-approve={node.change} disabled={approving} onclick={() => approve(node.change)}>
+              {approving ? "Approving…" : "Approve breakdown"}
+            </button>
+          {/if}
+        </div>
+        {#if approveError}<p class="err" role="alert">{approveError}</p>{/if}
       </div>
     {:else}
       <div class="lists">
@@ -127,7 +151,11 @@
   .link { font: 500 11.5px var(--font-mono); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line); }
   .link:hover { text-decoration-color: var(--ink); }
   .none { color: var(--mute); font-size: 12px; }
-  .attach { margin-top: var(--s-md); height: 34px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-button); background: #fff; font-weight: 600; }
+  .acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: var(--s-md); }
+  .approve { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .approve:hover:not(:disabled) { background: #000; }
+  .err { color: var(--alert); font-size: 12px; margin-top: 6px; }
+  .attach { height: 34px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-button); background: #fff; font-weight: 600; }
   .attach:hover { border-color: var(--ink); }
   .lists { display: flex; flex-direction: column; gap: var(--s-md); }
   .list { list-style: none; display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }

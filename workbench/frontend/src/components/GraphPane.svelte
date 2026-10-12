@@ -4,6 +4,7 @@
   import { GraphModel } from "../lib/model";
   import type { MergedGraph, ViewState } from "../lib/types";
   import Card from "./Card.svelte";
+  import ValidationPanel from "./ValidationPanel.svelte";
 
   let {
     doc, view, onselect, onopen, onback, ontogglecross, actions,
@@ -116,6 +117,8 @@
     <li><i class="agent-mark"></i>Agent</li>
   </ul>
 </div>
+
+<ValidationPanel errors={doc.validation.errors} has={(k) => model.byKey.has(k)} onselect={selectStub} />
 
 <section class="canvas" aria-label="Dependency graph" data-level={view.epic ?? "project"}>
   {#if nodes.length === 0}

@@ -3,7 +3,7 @@
   import type { SessionClient } from "../src/lib/session";
   import type { MergedGraph, ViewState } from "../src/lib/types";
 
-  let { initial, session }: { initial: MergedGraph; session: SessionClient } = $props();
+  let { initial, session, onapprove = undefined }: { initial: MergedGraph; session: SessionClient; onapprove?: (c: string) => Promise<unknown> } = $props();
   // svelte-ignore state_referenced_locally
   let doc = $state(initial);
   let view: ViewState = $state({ epic: null, selected: null, showCross: true });
@@ -13,5 +13,5 @@
 </script>
 
 <div style="display:flex;flex-direction:column;height:800px">
-  <ChatPane {doc} {view} {session} onselect={(k) => (view.selected = k)} />
+  <ChatPane {doc} {view} {session} {onapprove} onselect={(k) => (view.selected = k)} />
 </div>

@@ -7,12 +7,13 @@
   import ContextCard from "./ContextCard.svelte";
 
   let {
-    doc, view, session, onselect,
+    doc, view, session, onselect, onapprove,
   }: {
     doc: MergedGraph;
     view: ViewState;
     session: SessionClient;
     onselect: (key: string | null) => void;
+    onapprove?: (change: string) => Promise<unknown>;
   } = $props();
 
   const model = $derived(new GraphModel(doc));
@@ -116,7 +117,7 @@
   onDestroy(() => unsubscribe?.());
 </script>
 
-<ContextCard {model} {view} {attached} onattach={(k) => (attached = [...attached, k])} onselect={(k) => onselect(k)} />
+<ContextCard {model} {view} {attached} {onapprove} onattach={(k) => (attached = [...attached, k])} onselect={(k) => onselect(k)} />
 
 <div class="session-bar">
   <span class="state" class:on={active}><i></i>{active ? (transcript.busy ? "Agent working" : "Planning session") : "No session"}</span>
