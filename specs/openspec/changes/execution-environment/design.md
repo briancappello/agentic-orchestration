@@ -77,7 +77,7 @@ environment:
   host_prefix: [acp-broker, -http, 127.0.0.1:7701, --]   # optional
   smolvm:
     binary: smolvm        # optional, resolved once at startup
-    pack: /var/lib/agent-stacks/myproject.smolmachine
+    pack: /var/lib/smol-builder/myproject.smolmachine
     cpus: 4
     memory_mib: 8192
     storage_gib: 20
@@ -238,25 +238,25 @@ These are read as JSON (`machine ls --json`): whether a VM exists, its state, it
 
 **One file per workflow.** `environment.smolvm.pack` names a `.smolmachine` file on the Sortie host. Sortie checks that it exists and is readable at startup and on reload. It records the file's SHA-256 in the new VM's `sortie.pack` label and in the run history row of every run.
 
-**What a rebuilt pack affects.** `agent-stack build` rewrites the file in place. Rewriting it affects only VMs created after the rewrite. Existing VMs keep the base they were created from: smolvm caches pack extractions by content. To move an issue onto a new pack, remove its workspace.
+**What a rebuilt pack affects.** `smol-builder build` rewrites the file in place. Rewriting it affects only VMs created after the rewrite. Existing VMs keep the base they were created from: smolvm caches pack extractions by content. To move an issue onto a new pack, remove its workspace.
 
 **Alternative considered: registry references pinned by digest.** These are better for sharing between hosts. The spike found that smolvm's pack VM cannot pull from a registry on the host's loopback, and we run one host. Deferred.
 
-### 12. `agent-stack`: a separate tool in its own repository
+### 12. `smol-builder`: a separate tool in its own repository
 
-The new repository `~/dev/agent-stacks` holds:
+The new repository `~/dev/smol-builder` holds:
 
-- `cmd/agent-stack`: Go, no CGo, a single binary.
+- `cmd/smol-builder`: Go, no CGo, a single binary.
 - `layers/`: the layer library. `base`, `go`, `node`, `python`, and `rust` are ported from the spike with the same pins.
 
-A project declares its stack in its own repository, in `agent-stack.toml` at the root:
+A project declares its stack in its own repository, in `smol-builder.toml` at the root:
 
 ```toml
 layers = ["go", "node"]          # names from the layer library
 project_layer = "ci/agent.Dockerfile"   # optional, applied last
 ```
 
-`agent-stack build --repo <dir> --output <file>.smolmachine [--layers <dir>]` does the following:
+`smol-builder build --repo <dir> --output <file>.smolmachine [--layers <dir>]` does the following:
 
 1. Applies layers in sorted order, then the project layer.
 2. Tags each image by a content hash of the chain.
@@ -271,7 +271,7 @@ The base layer installs agents but no credentials, and its opencode config holds
 
 **Why Go, not the spike's Python.** It is the same toolchain and test style as the fork, and a single binary to install. It runs `podman` and `smolvm` as subprocesses, as the spike did.
 
-**Alternative considered: Sortie builds packs from `agent-stack.toml` on demand.** The user rejected it. It would add a container-engine dependency, and build failures, to dispatch.
+**Alternative considered: Sortie builds packs from `smol-builder.toml` on demand.** The user rejected it. It would add a container-engine dependency, and build failures, to dispatch.
 
 ### 13. Switching a workflow's environment kind is a cold restart per issue
 
@@ -296,7 +296,7 @@ A workspace with no record is one created before this change, and counts as `loc
 
 ## Migration Plan
 
-1. Install smolvm 1.26.x on the host. Build a pack with `agent-stack build` for the project.
+1. Install smolvm 1.26.x on the host. Build a pack with `smol-builder build` for the project.
 2. In one workflow, set `environment.kind: smolvm`, along with `pack`, `allow_hosts`, and `credentials`. Move `after_create` to clone with in-guest credentials.
 3. Existing issue workspaces are recreated on their next dispatch (decision 13).
 4. **Rollback:** set `environment.kind: local`. Workspaces are recreated on the host on their next dispatch, and leftover VMs are swept.

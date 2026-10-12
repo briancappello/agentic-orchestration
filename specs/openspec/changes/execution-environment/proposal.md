@@ -28,7 +28,7 @@ The smolvm spike (sortie branch `spike/smolvm`) showed that a microVM per issue 
   - Sortie refuses to dispatch when an agent kind's credential variable would otherwise reach the guest in plain text.
 - Sortie tools (the MCP tool server) keep running on the host with the tracker credentials. The guest reaches them through a per-issue Unix socket.
 - A new optional `environment.host_prefix` keeps part of the agent command on the host, for example the ACP broker. Only the rest runs in the environment.
-- A separate tool, `agent-stack`, builds stack packs. Each project declares its stack in its own repository, in `agent-stack.toml`: a base of Linux, the agent and common tools, plus language layers such as `go`, `node`, `python` and `rust`. Each project may add one layer of its own. The tool builds a pinned, reproducible smolvm pack, and a workflow names that pack.
+- A separate tool, `smol-builder`, builds stack packs. Each project declares its stack in its own repository, in `smol-builder.toml`: a base of Linux, the agent and common tools, plus language layers such as `go`, `node`, `python` and `rust`. Each project may add one layer of its own. The tool builds a pinned, reproducible smolvm pack, and a workflow names that pack.
 - `smolvm` and `worker.ssh_hosts` are mutually exclusive. When the environment cannot start, dispatch waits. It never falls back to local execution.
 
 ## Capabilities
@@ -37,8 +37,8 @@ The smolvm spike (sortie branch `spike/smolvm`) showed that a microVM per issue 
 - `sortie/execution-environment`: the environment setting, which operations run inside it, the host prefix, the SSH exclusion, and the no-fallback rule.
 - `sortie/smolvm-environment`: the VM per issue: its lifecycle, the pack, the guest workspace, the shared control directory, resources, egress, credentials, and how leftover VMs are cleaned up.
 - `sortie/guest-tool-server`: how an agent inside the environment reaches Sortie's MCP tools, which run on the host.
-- `agent-stacks/stack-definition`: the `agent-stack.toml` format, the layer library, the layer order, and the project layer.
-- `agent-stacks/stack-builder`: how `agent-stack` turns a stack definition into a pinned smolvm pack, and what it reports.
+- `smol-builder/stack-definition`: the `smol-builder.toml` format, the layer library, the layer order, and the project layer.
+- `smol-builder/stack-builder`: how `smol-builder` turns a stack definition into a pinned smolvm pack, and what it reports.
 
 ### Modified Capabilities
 
@@ -55,7 +55,7 @@ None. This store has no archived specs yet.
 - `internal/orchestrator`: worker, self-review, reaction triage, MCP config, and startup cleanup.
 - `cmd/sortie`: blank imports, and a new `mcp-relay` subcommand.
 
-**New repository** `~/dev/agent-stacks`: the `agent-stack` tool (Go, no CGo) and the layer library. It replaces the spike's Python builder.
+**New repository** `~/dev/smol-builder`: the `smol-builder` tool (Go, no CGo) and the layer library. It replaces the spike's Python builder.
 
 **Dependencies:**
 

@@ -5,7 +5,7 @@ Lets each project declare, in its own repository, the development stack its agen
 ## ADDED Requirements
 
 ### Requirement: A stack is declared in the project's repository
-A project SHALL declare its stack in a file named `agent-stack.toml` at the root of its repository. The file SHALL have:
+A project SHALL declare its stack in a file named `smol-builder.toml` at the root of its repository. The file SHALL have:
 
 - `layers`: a list of layer names from the layer library. It may be empty.
 - `project_layer`: optional. The path, relative to the repository root, of a Dockerfile.
@@ -13,11 +13,11 @@ A project SHALL declare its stack in a file named `agent-stack.toml` at the root
 Any other key SHALL be rejected. So SHALL an unknown layer name, a layer listed twice, and a `project_layer` path that leaves the repository or does not exist. Each error SHALL name the offending entry.
 
 #### Scenario: Valid stack
-- **WHEN** `agent-stack.toml` holds `layers = ["go", "node"]`
+- **WHEN** `smol-builder.toml` holds `layers = ["go", "node"]`
 - **THEN** the stack is base plus go plus node
 
 #### Scenario: Unknown layer
-- **WHEN** `agent-stack.toml` holds `layers = ["go", "haskell"]` and the library has no `haskell` layer
+- **WHEN** `smol-builder.toml` holds `layers = ["go", "haskell"]` and the library has no `haskell` layer
 - **THEN** the definition is rejected with an error naming `haskell`
 
 #### Scenario: Project layer outside the repository

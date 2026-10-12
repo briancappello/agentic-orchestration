@@ -1,4 +1,4 @@
-The Sortie work is in the fork (`~/dev/sortie`), on a branch off `feat/session-control`. Run `make help` to find the lint and test targets; every Sortie task ends with them passing. Tests that need smolvm are gated by `SORTIE_SMOLVM_TEST=1`, and without it they skip cleanly. The stack tool lives in the new repository `~/dev/agent-stacks`. The spike scripts on sortie branch `spike/smolvm`, under `spikes/smolvm/`, are the reference for every smolvm behavior below.
+The Sortie work is in the fork (`~/dev/sortie`), on a branch off `feat/session-control`. Run `make help` to find the lint and test targets; every Sortie task ends with them passing. Tests that need smolvm are gated by `SORTIE_SMOLVM_TEST=1`, and without it they skip cleanly. The stack tool lives in the new repository `~/dev/smol-builder`. The spike scripts on sortie branch `spike/smolvm`, under `spikes/smolvm/`, are the reference for every smolvm behavior below.
 
 ## 1. Remaining smolvm checks
 
@@ -6,12 +6,12 @@ The Sortie work is in the fork (`~/dev/sortie`), on a branch off `feat/session-c
 - [ ] 1.2 In the spike VM, run claude-agent-acp and codex with a credential binding for their API hosts, and record for each whether its HTTPS client accepts the substituted certificate. Verify by recording one successful turn per agent, or the exact TLS error, in `verification.md`. Then list every agent kind as supported or not supported in the environment guide draft.
 - [ ] 1.3 Stop a running `opencode acp` turn by sending SIGTERM to the `smolvm machine exec` process. Record what the next `session/load` (resume) of that session sees. Verify by recording the result in `verification.md`. This is the measurement the "no graceful TERM" risk asks for.
 
-## 2. agent-stack tool
+## 2. smol-builder tool
 
-- [ ] 2.1 Create `~/dev/agent-stacks` with a Go module, `cmd/agent-stack`, and a `Makefile` with `test` and `lint` targets. Port `base`, `go`, `node`, `python`, and `rust` from the spike's `golden/` with the same pins. Verify with `go build ./...` and `make test` on the empty test set.
-- [ ] 2.2 Implement parsing and validation of `agent-stack.toml`: unknown keys, unknown or duplicate layers, project layer paths that escape the repository or are missing, and a project layer whose first instructions are not `ARG BASE` / `FROM ${BASE}`. Verify with table tests for every rejection in the stack-definition spec, each asserting that the error names the entry.
+- [ ] 2.1 Create `~/dev/smol-builder` with a Go module, `cmd/smol-builder`, and a `Makefile` with `test` and `lint` targets. Port `base`, `go`, `node`, `python`, and `rust` from the spike's `golden/` with the same pins. Verify with `go build ./...` and `make test` on the empty test set.
+- [ ] 2.2 Implement parsing and validation of `smol-builder.toml`: unknown keys, unknown or duplicate layers, project layer paths that escape the repository or are missing, and a project layer whose first instructions are not `ARG BASE` / `FROM ${BASE}`. Verify with table tests for every rejection in the stack-definition spec, each asserting that the error names the entry.
 - [ ] 2.3 Implement chain resolution: sorted library layers, then the project layer, each with a content-hash tag. Verify with unit tests: `["node","go"]` and `["go","node"]` yield identical tags, a changed layer file changes only its own tag and the tags after it, and the project layer is always last.
-- [ ] 2.4 Implement the build: podman or docker (detected, with the missing program named), reuse of existing tags, `save`, a builder machine with the image's `Env` and `WorkingDir` passed as `-e` and `-w`, `pack create --from-vm`, an atomic rename into the output, deletion of the builder machine on every path, and the JSON report. Verify with an integration test gated by `AGENT_STACK_SMOLVM_TEST=1`. It builds `["go"]`, checks that `go version` resolves through `PATH` in a machine created from the pack, checks that `pack_sha256` matches the file, and checks that a forced failure leaves the previous output intact and no builder machine behind.
+- [ ] 2.4 Implement the build: podman or docker (detected, with the missing program named), reuse of existing tags, `save`, a builder machine with the image's `Env` and `WorkingDir` passed as `-e` and `-w`, `pack create --from-vm`, an atomic rename into the output, deletion of the builder machine on every path, and the JSON report. Verify with an integration test gated by `SMOL_BUILDER_SMOLVM_TEST=1`. It builds `["go"]`, checks that `go version` resolves through `PATH` in a machine created from the pack, checks that `pack_sha256` matches the file, and checks that a forced failure leaves the previous output intact and no builder machine behind.
 - [ ] 2.5 Write the README: the stack file format, the layer library, and an example `project_layer`. Verify that its example commands run as written.
 
 ## 3. Environment configuration and the local kind
@@ -47,11 +47,11 @@ The Sortie work is in the fork (`~/dev/sortie`), on a branch off `feat/session-c
 ## 7. Documentation
 
 - [ ] 7.1 Document `environment` in `docs/workflow-reference.md` and in the fork's configuration, workspace, agent adapter contract, and security architecture sections. Add a `CHANGELOG.md` entry. Verify that every key and validation error in the specs appears in the reference.
-- [ ] 7.2 Write the smolvm environment guide in the fork. It covers installation and the pinned version, building a pack with `agent-stack`, `allow_hosts` for each agent, credential bindings including git over HTTPS with `set_header`, cloning in `after_create`, the agent support list from 1.2, `smolvm machine egress-events`, `smolvm pack prune`, and rollback. Verify that its example workflow passes `sortie validate`.
+- [ ] 7.2 Write the smolvm environment guide in the fork. It covers installation and the pinned version, building a pack with `smol-builder`, `allow_hosts` for each agent, credential bindings including git over HTTPS with `set_header`, cloning in `after_create`, the agent support list from 1.2, `smolvm machine egress-events`, `smolvm pack prune`, and rollback. Verify that its example workflow passes `sortie validate`.
 
 ## 8. End-to-end check
 
-- [ ] 8.1 Build a pack with `agent-stack` for a small Go repository. Run Sortie with the file tracker, the `agent-client-protocol` kind running `opencode acp`, `host_prefix` set to the ACP broker, and `environment.kind: smolvm`. Confirm all of the following and record the commands and output in `verification.md`:
+- [ ] 8.1 Build a pack with `smol-builder` for a small Go repository. Run Sortie with the file tracker, the `agent-client-protocol` kind running `opencode acp`, `host_prefix` set to the ACP broker, and `environment.kind: smolvm`. Confirm all of the following and record the commands and output in `verification.md`:
   - `after_create` clones inside the VM;
   - the agent fixes a failing test, commits, and pushes to a scratch GitHub repository through a `set_header` credential binding;
   - `sortie_status` works from the VM;

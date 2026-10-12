@@ -1,17 +1,17 @@
 ## Purpose
 
-Defines `agent-stack`, the separate tool that turns a project's stack definition into a smolvm pack that a Sortie workflow can name, and what it reports about the result.
+Defines `smol-builder`, the separate tool that turns a project's stack definition into a smolvm pack that a Sortie workflow can name, and what it reports about the result.
 
 ## ADDED Requirements
 
 ### Requirement: Build a pack from a repository
-`agent-stack build --repo <dir> --output <path>` SHALL read `<dir>/agent-stack.toml`, build the stack's image with the host's container engine, and write a smolvm pack to `<path>`. The layer library SHALL default to the one shipped with the tool. `--layers <dir>` SHALL select another one.
+`smol-builder build --repo <dir> --output <path>` SHALL read `<dir>/smol-builder.toml`, build the stack's image with the host's container engine, and write a smolvm pack to `<path>`. The layer library SHALL default to the one shipped with the tool. `--layers <dir>` SHALL select another one.
 
 The tool SHALL require podman or docker, and smolvm. It SHALL fail with an error naming the missing program when either is absent.
 
 #### Scenario: Build succeeds
 - **WHEN** a repository declares `layers = ["go"]`
-- **AND** `agent-stack build --repo . --output /var/lib/agent-stacks/app.smolmachine` runs
+- **AND** `smol-builder build --repo . --output /var/lib/smol-builder/app.smolmachine` runs
 - **THEN** the file exists and a smolvm machine created from it runs `go version`
 
 ### Requirement: The pack keeps the image's environment
@@ -35,7 +35,7 @@ The tool SHALL identify each step of a layer chain by a content hash of the base
 The tool SHALL write the pack under a temporary name in the output's directory, and rename it to the output path only after the pack is complete. When a build fails, the file previously at the output path SHALL be left unchanged.
 
 #### Scenario: Failed rebuild
-- **WHEN** `/var/lib/agent-stacks/app.smolmachine` exists
+- **WHEN** `/var/lib/smol-builder/app.smolmachine` exists
 - **AND** a rebuild fails in the `rust` step
 - **THEN** the existing file is unchanged
 
