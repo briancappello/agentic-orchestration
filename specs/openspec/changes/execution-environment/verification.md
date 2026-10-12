@@ -304,3 +304,13 @@ Measured smolvm 1.26.1 facts that shaped the code:
 | 7.8 | `5cd8689c` | `TestHandleWorkerExit_ReactionsIgnoreAForgedSCMFileUnderARepository` (all eight reaction seeds act on the recorded PR 42, not the forged 999), `TestRecoverPendingReactions_IgnoresAForgedSCMFileUnderARepository` (includes auto-merge), `TestFreshRunSeed_...`, `TestSweepWorkspaces_AgePassIgnoresAForgedPushTimeUnderARepository`, `TestEvaluateHandoffEvidence_...`. Forcing the source back to `.sortie/scm.json` makes all six forged-file tests fail. |
 
 Related commit: `5f6ca01c` adds `/.sortie` to the seeded repository's `.git/info/exclude`. Without it, `git add -A` would commit the control-directory link, and every later seed of that branch would fail on the committed `.sortie`.
+
+## Task group 8: pull requests
+
+| Task | Commit | Verified by |
+|---|---|---|
+| 8.1 | `59023090` | `httptest` `TestEnsurePullRequest` in the GitHub, GitLab and Gitea adapters: found (returned unchanged, `Created` false), created, a lost create race (GitHub 422, GitLab and Gitea 409) answered by re-reading the list, and the scope error reported as `ErrSCMAuth` naming `repo` / "Pull requests: write", `api`, or `write:repository`. |
+| 8.2 | `03488533` | `TestCheckRepositoryProvider` (mismatch names `environment.smolvm.repository.provider` and the reaction's provider setting; an adapter that cannot open pull requests is refused through `registry.SCMMeta.OpensPullRequests`), `TestRun_RepositoryProviderMismatchStopsStartup`, `TestRun_ExportAloneBuildsTheSCMAdapter`, `TestWorkflowValidate_ReloadRefusesARepositoryProviderMismatch`. |
+| 8.3 | `158d069c` | `TestPullRequestTextFor` (suggested title and body, absent file, oversized file, control characters, title cut to 256 runes, malformed JSON, a link refused), `TestDefaultPullRequestText` (`ENG-42: Calculator adds wrong`), `TestExportIssueBranch_EnsuresThePullRequest` (the record stores `pr_number`, owner and repo; a failed call fails the export and is retried on the next run). |
+
+Related commit: `6c356877` adds `ExportResult.UpToDate`, so a record write that failed after a successful push is repaired by the next run instead of being lost.

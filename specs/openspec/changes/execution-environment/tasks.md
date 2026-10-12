@@ -57,9 +57,9 @@ The Sortie work is in the fork (`~/dev/sortie`), on a branch off `feat/session-c
 
 ## 8. Pull requests
 
-- [ ] 8.1 Add the optional `domain.PullRequestOpener` interface with `EnsurePullRequest`, and implement it in the GitHub, GitLab, and Gitea adapters: find an open pull request by head, else create it, and map permission failures to an authentication error naming the scope. Verify with `httptest` tests per adapter for found, created, and the scope error.
-- [ ] 8.2 Validate that `repository.provider` equals every active SCM reaction's provider and that its adapter implements the opener. Build the adapter when either reactions or export need it. Verify with config and startup tests for a mismatch, an adapter without the interface, and export as the only SCM user.
-- [ ] 8.3 After a push, read `.sortie/pr.json` (capped, sanitized, title cut to 256), fall back to the default title and body, ensure the pull request, and store it in the trusted record. Verify with tests for a suggested title, an absent file, an oversized file, control characters, and a failed call failing the export.
+- [x] 8.1 Add the optional `domain.PullRequestOpener` interface with `EnsurePullRequest`, and implement it in the GitHub, GitLab, and Gitea adapters: find an open pull request by head, else create it, and map permission failures to an authentication error naming the scope. Verify with `httptest` tests per adapter for found, created, and the scope error.
+- [x] 8.2 Validate that `repository.provider` equals every active SCM reaction's provider and that its adapter implements the opener. Build the adapter when either reactions or export need it. Verify with config and startup tests for a mismatch, an adapter without the interface, and export as the only SCM user.
+- [x] 8.3 After a push, read `.sortie/pr.json` (capped, sanitized, title cut to 256), fall back to the default title and body, ensure the pull request, and store it in the trusted record. Verify with tests for a suggested title, an absent file, an oversized file, control characters, and a failed call failing the export.
 
 ## 9. Documentation
 
