@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .checks import check_graph, make_names_for
+from .graph import build_graph
 from .errors import PlanError
 from .requirements import openspec_show
 from .schemas import Schemas
@@ -32,4 +33,7 @@ def validate(root: str | Path, *, show=openspec_show, schemas: Schemas | None = 
     store = load_store(root, schemas)
     names_for = make_names_for(store, show=show)
     errors = list(store.errors) + check_graph(store, names_for)
-    return ValidationResult(errors=errors, store=store)
+    if errors or store.plan is None:
+        return ValidationResult(errors=errors, store=store)
+    graph, errors = build_graph(store, names_for, schemas)
+    return ValidationResult(errors=errors, store=store, graph=graph)

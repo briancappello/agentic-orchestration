@@ -1,0 +1,137 @@
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+
+from planlib import Schemas, approve, validate
+from planlib.cli import main
+from tests.conftest import breakdown, deliverable
+
+
+def no_openspec(*_):
+    raise AssertionError("openspec should not be called")
+
+
+def two_changes(store):
+    store.plan([("accounts-api", []), ("billing", ["accounts-api"]), ("search", [])])
+    store.change("accounts-api", breakdown(deliverable("accounts-close")))
+    store.change(
+        "billing",
+        breakdown(
+            deliverable("invoice", ["accounts-api/accounts-close"], notes="Use the ledger."),
+            deliverable("tax", ["invoice"], kind="enabler"),
+            deliverable("report", ["tax", "invoice"]),
+        ),
+    )
+    store.change("search")
+    store.change("drafty", breakdown(deliverable("x")))
+
+
+def by_key(graph):
+    return {n["plan_key"]: n for n in graph["nodes"]}
+
+
+def test_graph_matches_schema_and_holds_nodes_and_edges(store):
+    two_changes(store)
+    r = validate(store.root, show=no_openspec)
+    assert r.errors == []
+    g = r.graph
+    assert Schemas.load(store.root).check("plan-graph", g, file="g") == []
+
+    nodes = by_key(g)
+    assert set(nodes) == {
+        "accounts-api", "billing", "search",
+        "accounts-api/accounts-close", "billing/invoice", "billing/tax", "billing/report",
+    }
+    assert nodes["billing"]["kind"] == "epic" and nodes["billing/tax"]["deliverable_kind"] == "enabler"
+    assert nodes["search"]["approval"] == "unplanned"
+    assert nodes["billing/invoice"]["approval"] == "draft"
+    assert "Use the ledger." in nodes["billing/invoice"]["body"]
+    assert "## Acceptance criteria" in nodes["billing/invoice"]["body"]
+    assert {"child": "billing/tax", "parent": "billing"} in g["parents"]
+    assert {"blocker": "accounts-api", "blocked": "billing"} in g["blocks"]
+    assert {"blocker": "accounts-api/accounts-close", "blocked": "billing/invoice"} in g["blocks"]
+    assert g["unplanned_changes"] == ["drafty"]
+    assert g["source_digest"].startswith("sha256:")
+
+
+def test_depth_is_longest_chain_within_view(store):
+    two_changes(store)
+    nodes = by_key(validate(store.root, show=no_openspec).graph)
+    assert nodes["accounts-api"]["depth"] == 0
+    assert nodes["billing"]["depth"] == 1
+    assert nodes["search"]["depth"] == 0
+    # The cross-epic blocker does not push invoice right inside billing's view.
+    assert nodes["billing/invoice"]["depth"] == 0
+    assert nodes["billing/tax"]["depth"] == 1
+    assert nodes["billing/report"]["depth"] == 2
+
+
+def test_approval_state_flows_into_nodes(store):
+    two_changes(store)
+    approve(store.root, "billing")
+    nodes = by_key(validate(store.root, show=no_openspec).graph)
+    assert nodes["billing"]["approval"] == "approved"
+    assert nodes["billing/report"]["approval"] == "approved"
+    assert nodes["accounts-api"]["approval"] == "draft"
+
+
+def test_source_digest_changes_with_files(store):
+    two_changes(store)
+    first = validate(store.root, show=no_openspec).graph["source_digest"]
+    assert validate(store.root, show=no_openspec).graph["source_digest"] == first
+    store.change("accounts-api", breakdown(deliverable("accounts-close", title="Close accounts")))
+    assert validate(store.root, show=no_openspec).graph["source_digest"] != first
+
+
+def test_invalid_store_outputs_no_graph(store):
+    store.plan([("billing", [])])
+    store.change("billing", breakdown(deliverable("a", ["b"]), deliverable("b", ["a"])))
+    r = validate(store.root, show=no_openspec)
+    assert r.graph is None and r.errors
+
+
+def test_cli_validate_ok(store, capsys):
+    two_changes(store)
+    assert main(["validate", "--store", str(store.root)]) == 0
+    assert "plan is valid: 3 epic(s), 4 story(ies)" in capsys.readouterr().out
+
+
+def test_cli_lists_every_error_and_exits_non_zero(store, capsys):
+    store.plan([("billing", [])])
+    store.change("billing", breakdown(deliverable("a"), deliverable("a"), deliverable("b", ["zzz"])))
+    assert main(["validate", "--store", str(store.root)]) == 1
+    out = capsys.readouterr().out
+    assert "duplicate_id" in out and "dangling_ref" in out
+
+
+def test_cli_graph_prints_nothing_but_errors_when_invalid(store, capsys):
+    store.plan([("billing", [])])
+    store.change("billing", breakdown(deliverable("a", ["a"])))
+    assert main(["graph", "--store", str(store.root), "--json"]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False and payload["errors"][0]["code"] == "cycle"
+    assert "nodes" not in payload
+
+
+def test_cli_graph_writes_schema_valid_json(store, tmp_path):
+    two_changes(store)
+    out = tmp_path / "graph.json"
+    assert main(["graph", "--store", str(store.root), "-o", str(out)]) == 0
+    g = json.loads(out.read_text())
+    assert Schemas.load(store.root).check("plan-graph", g, file="g") == []
+
+
+def test_cli_unusable_store_exits_2(tmp_path, capsys):
+    assert main(["validate", "--store", str(tmp_path)]) == 2
+    assert "not found" in capsys.readouterr().err
+
+
+def test_console_script_runs(store):
+    two_changes(store)
+    proc = subprocess.run(
+        [sys.executable, "-m", "planlib.cli", "validate", "--store", str(store.root)],
+        capture_output=True, text=True,
+    )
+    assert proc.returncode == 0, proc.stderr
