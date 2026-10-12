@@ -24,7 +24,7 @@ The work spans three repositories:
   Every error is collected. Verify with one test for each scenario in the plan-validator spec, including several problems in one run.
 - [x] 2.4 Implement approval reading (`approved_digest` over the canonical JSON of `deliverables`) and an `approve` function that writes both fields. Verify with tests: approve, then edit, reads as draft; approve again reads as approved.
 - [x] 2.5 Output the plan-graph document (nodes, parents, blocking edges, source digest) and the column depth from `topological_generations`. Add the CLI commands `planlib validate` and `planlib graph`. Verify that the output matches `plan-graph.schema.json`, and that the CLI exits non-zero with the errors listed when the plan is invalid.
-- [ ] 2.6 Write `openspec/plan.yaml` and a `breakdown.yaml` for this change (`plan-to-tracker-dag`) in the store, as the first real plan. Verify that `planlib validate` passes on the store.
+- [x] 2.6 Write `openspec/plan.yaml` and a `breakdown.yaml` for this change (`plan-to-tracker-dag`) in the store, as the first real plan. Verify that `planlib validate` passes on the store.
 
 ## 3. Sortie: tracker write capabilities
 
