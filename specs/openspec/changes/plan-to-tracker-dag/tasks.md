@@ -51,7 +51,7 @@ The work spans three repositories:
 - [x] 5.3 Add the CLI command `sortie plan sync --graph <file> [--dry-run]`. Verify with a CLI test against the file tracker fake, and a live dry run against Huly.
 - [x] 5.4 Add `POST /api/v1/plan/sync`, `GET /api/v1/plan/graph` (with runtime state joined in and `include_unkeyed`), and `GET /api/v1/plan/capabilities`, behind the control-API authentication from change `sortie-session-control`. Verify with handler tests for each scenario in the plan-graph-api and plan-sync specs, including an error with no partial graph when the tracker is down.
 - [x] 5.5 Add `create_issue`, `update_issue`, `set_parent`, and `link_dependency` to the `tracker_api` tool. Advertise and accept each only when its capability is declared, and keep the project scope check. Verify with tool tests for each scenario in the tracker-api-planning-operations spec.
-- [ ] 5.6 Update the docs: the workflow reference (the `plan` subcommand and the Huly config keys), the HTTP API reference, the Huly adapter notes (the kind mapping and the plan-key attribute), and `CHANGELOG.md`. Verify with `make lint-docs`.
+- [x] 5.6 Update the docs: the workflow reference (the `plan` subcommand and the Huly config keys), the HTTP API reference, the Huly adapter notes (the kind mapping and the plan-key attribute), and `CHANGELOG.md`. Verify with `make lint-docs`.
 
 ## 6. Workbench backend (FastAPI)
 
