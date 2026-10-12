@@ -14,8 +14,9 @@
   const unplanned = $derived(node.has_spec === false);
   const badge = $derived(model.badge(node));
   const progress = $derived(node.kind === "epic" ? model.progress(node) : null);
-  const pct = $derived(progress ? (progress.total ? (progress.done / progress.total) * 100 : 0) : cls === "done" ? 100 : 0);
+  const pct = $derived(progress && progress.total ? (progress.done / progress.total) * 100 : cls === "done" ? 100 : 0);
   const meta = $derived.by(() => {
+    if (progress && progress.total === 0) return node.status === "draft" && node.approval === "unplanned" ? "no breakdown" : "no stories";
     if (progress) return `${progress.done}/${progress.total} done`;
     if (cls === "done") return "complete";
     if (cls === "prog") return "in progress";

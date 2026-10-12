@@ -5,6 +5,7 @@
   import type { SessionClient } from "../lib/session";
   import type { MergedGraph, ViewState } from "../lib/types";
   import ContextCard from "./ContextCard.svelte";
+  import Icon from "./Icon.svelte";
 
   let {
     doc, view, session, onselect, onapprove,
@@ -167,7 +168,7 @@
   {#if attachedNodes.length}
     <div class="attached" aria-label="Attached to the next message">
       {#each attachedNodes as n (n.plan_key)}
-        <span class="att" data-attached={n.plan_key}>{n.plan_key}<button type="button" aria-label="Remove {n.plan_key}" onclick={() => (attached = attached.filter((k) => k !== n.plan_key))}>×</button></span>
+        <span class="att" data-attached={n.plan_key}>{n.plan_key}<button type="button" aria-label="Remove {n.plan_key}" onclick={() => (attached = attached.filter((k) => k !== n.plan_key))}><Icon name="close" size={12} /></button></span>
       {/each}
     </div>
   {/if}
@@ -181,7 +182,7 @@
   .state i { width: 8px; height: 8px; border-radius: 50%; background: var(--slate); }
   .state.on { color: var(--ink); }
   .state.on i { background: var(--amber); box-shadow: var(--shadow-pulse); }
-  .primary, .ghost { height: 34px; padding: 0 14px; border-radius: var(--r-button); font-weight: 700; font-size: 13px; }
+  .primary, .ghost { height: 42px; padding: 0 16px; border-radius: var(--r-button); font-weight: 700; font-size: 13px; }
   .primary { background: var(--ink); color: #fff; }
   .primary:hover:not(:disabled) { background: #000; }
   .primary:disabled { opacity: 0.45; cursor: default; }
@@ -206,11 +207,12 @@
   .options { display: flex; gap: 8px; flex-wrap: wrap; }
   .notice { font-size: 12px; color: var(--mute); }
   .error { flex: none; padding: 6px var(--s-panel); color: var(--alert); font-size: 12px; }
-  .composer { flex: none; display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; padding: var(--s-md) var(--s-panel) var(--s-panel); border-top: 1px solid var(--line); }
+  .composer button[type="submit"] { align-self: end; }
+  .composer { flex: none; display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: stretch; padding: var(--s-md) var(--s-panel) var(--s-panel); border-top: 1px solid var(--line); }
   .attached { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
-  .att { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 4px 0 9px; border: 1px solid var(--amber); border-radius: var(--r-pill); background: var(--amber-tint); font: 500 11.5px var(--font-mono); }
-  .att button { width: 18px; height: 18px; border-radius: 50%; font-size: 14px; line-height: 1; color: var(--amber-ink); }
+  .att { display: inline-flex; align-items: center; gap: 2px; height: 28px; padding: 0 2px 0 10px; border: 1px solid var(--amber); border-radius: var(--r-pill); background: var(--amber-tint); font: 500 11.5px var(--font-mono); }
+  .att button { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; color: var(--amber-ink); }
   .att button:hover { background: rgba(201, 138, 26, 0.2); }
-  textarea { width: 100%; resize: vertical; min-height: 64px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-button); background: #fff; line-height: 1.45; }
+  textarea { width: 100%; resize: none; min-height: 64px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-button); background: #fff; line-height: 1.45; }
   textarea:disabled { background: var(--strip); }
 </style>

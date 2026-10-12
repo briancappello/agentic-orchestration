@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { GraphModel } from "../lib/model";
   import type { GraphNode, ViewState } from "../lib/types";
+  import Icon from "./Icon.svelte";
 
   let {
     model, view, attached, onattach, onselect, onapprove,
@@ -43,7 +44,11 @@
 
 <section class="context" aria-label="Context">
   <header>
-    <span class="label">{node ? (node.kind === "epic" ? "Selected change" : "Selected deliverable") : "Plan at a glance"}</span>
+    {#if node}
+      <p class="meta">{node.kind === "epic" ? "Change" : node.deliverable_kind === "enabler" ? "Enabler" : "Story"} · <span class="mono">{model.identifier(node)}</span>{#if node.tracker}<span class="mono"> · {node.plan_key}</span>{/if}</p>
+    {:else}
+      <h2 class="glance">{view.epic ? (model.node(view.epic)?.title ?? "This change") : "The plan at a glance"}</h2>
+    {/if}
     <button type="button" class="fold" aria-expanded={open} onclick={() => (open = !open)}>{open ? "Hide" : "Show"}</button>
   </header>
 
@@ -52,7 +57,6 @@
       <div class="sel">
         <h2>{node.title}</h2>
         <div class="chips">
-          <span class="chip id">{node.plan_key}</span>
           <span class="chip {model.statusClass(node)}"><i></i>{model.statusLabel(node)}</span>
           {#if node.status === "orphaned"}<span class="chip">orphaned: no longer in the plan</span>{/if}
           {#if node.approval}<span class="chip">breakdown {node.approval}</span>{/if}
@@ -60,23 +64,12 @@
 
         {#if node.runtime}
           <div class="agent" class:warn={node.runtime.status !== "running"}>
-            <b>{model.badge(node)?.label}</b>
+            <b><span class="pulse" aria-hidden="true"></span>{model.badge(node)?.label}</b>
             {#if node.runtime.last_message}<p>{node.runtime.last_message}</p>{/if}
           </div>
         {/if}
 
         <dl>
-          <dt>Spec</dt>
-          <dd>
-            {#if node.covers.length}
-              <ul class="refs">{#each node.covers as c (c)}<li>{c}</li>{/each}</ul>
-            {:else if node.kind === "story"}<span class="none">No spec yet</span>
-            {:else}<span class="mono">openspec/changes/{node.change}</span>{/if}
-          </dd>
-          {#if node.acceptance_criteria.length}
-            <dt>Acceptance</dt>
-            <dd><ul class="ac">{#each node.acceptance_criteria as a, i (i)}<li>{a}</li>{/each}</ul></dd>
-          {/if}
           <dt>Depends on</dt>
           <dd>
             {#each model.blockers(node.plan_key) as k (k)}
@@ -91,7 +84,18 @@
           </dd>
           {#if node.tracker}
             <dt>Tracker</dt>
-            <dd>{#if node.tracker.url}<a href={node.tracker.url} target="_blank" rel="noopener">{node.tracker.identifier} ↗</a>{:else}{node.tracker.identifier}{/if}</dd>
+            <dd>{#if node.tracker.url}<a class="ext-link" href={node.tracker.url} target="_blank" rel="noopener">{node.tracker.identifier} <Icon name="external" size={13} /></a>{:else}{node.tracker.identifier}{/if}</dd>
+          {/if}
+          <dt>Spec</dt>
+          <dd>
+            {#if node.covers.length}
+              <ul class="refs">{#each node.covers as c (c)}<li>{c}</li>{/each}</ul>
+            {:else if node.kind === "story"}<span class="none">No spec yet</span>
+            {:else}<span class="mono">openspec/changes/{node.change}</span>{/if}
+          </dd>
+          {#if node.acceptance_criteria.length}
+            <dt>Acceptance</dt>
+            <dd><ul class="ac">{#each node.acceptance_criteria as a, i (i)}<li>{a}</li>{/each}</ul></dd>
           {/if}
         </dl>
         <div class="acts">
@@ -124,12 +128,27 @@
 </section>
 
 <style>
-  .context { flex: none; max-height: 45%; overflow-y: auto; padding: var(--s-gutter) var(--s-panel); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: var(--s-md); }
-  header { display: flex; justify-content: space-between; align-items: center; }
+  /* A shadow at the bottom edge shows only while more content sits below it:
+     the white cover scrolls with the content and hides it at the end. */
+  .context {
+    background:
+      linear-gradient(rgba(255, 255, 255, 0), #fff 70%) 0 100% / 100% 40px no-repeat local,
+      radial-gradient(farthest-side at 50% 100%, rgba(20, 22, 26, 0.14), rgba(20, 22, 26, 0)) 0 100% / 100% 12px no-repeat scroll,
+      #fff;
+  }
+  .context { flex: none; max-height: 60%; overflow-y: auto; padding: var(--s-gutter) var(--s-panel); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: var(--s-md); }
+  header { display: flex; justify-content: space-between; align-items: center; gap: var(--s-md); }
+  .meta { font-size: 12px; color: var(--mute); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta .mono { font: 500 12px var(--font-mono); }
+  .glance { font-size: 15px; font-weight: 600; letter-spacing: -0.005em; }
+  .ext-link { display: inline-flex; align-items: center; gap: 4px; }
+  .pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--amber); box-shadow: var(--shadow-pulse); }
+  .agent.warn .pulse { background: var(--alert); box-shadow: none; }
   .label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); }
-  .fold { font-size: 12px; font-weight: 600; color: var(--mute); }
+  .fold { flex: none; min-height: 32px; padding: 0 8px; margin-right: -8px; font-size: 12px; font-weight: 600; color: var(--mute); }
+  @media (max-width: 900px) { .fold { min-height: 44px; min-width: 44px; } }
   .fold:hover { color: var(--ink); }
-  h2 { font-size: 20px; font-weight: 700; line-height: 1.15; letter-spacing: -0.015em; text-wrap: balance; }
+  h2:not(.glance) { font-size: 26px; font-weight: 700; line-height: 1.12; letter-spacing: -0.02em; text-wrap: balance; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
   .chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border: 1px solid var(--line); border-radius: var(--r-pill); font-size: 12px; font-weight: 600; }
   .chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
@@ -138,6 +157,7 @@
   .chip.todo { --c: var(--slate); background: var(--slate-tint); color: var(--slate-ink); }
   .chip.id { font: 500 11.5px var(--font-mono); color: var(--mute); }
   .agent { margin-top: var(--s-md); padding: 12px 14px; border-radius: var(--r-well); background: var(--ink); color: #fff; }
+  .agent b { display: flex; align-items: center; gap: 8px; font-size: 14px; }
   .agent.warn { background: #fff; color: var(--ink); border: 1px solid var(--alert); }
   .agent p { margin-top: 6px; font: 500 12px/1.5 var(--font-mono); color: #c7c7cc; }
   .agent.warn p { color: var(--mute); }
@@ -155,7 +175,7 @@
   .approve { background: var(--ink); color: #fff; border-color: var(--ink); }
   .approve:hover:not(:disabled) { background: #000; }
   .err { color: var(--alert); font-size: 12px; margin-top: 6px; }
-  .attach { height: 34px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-button); background: #fff; font-weight: 600; }
+  .attach { height: 42px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-button); background: #fff; font-weight: 600; }
   .attach:hover { border-color: var(--ink); }
   .lists { display: flex; flex-direction: column; gap: var(--s-md); }
   .list { list-style: none; display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }

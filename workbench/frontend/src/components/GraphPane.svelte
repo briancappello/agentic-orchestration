@@ -4,6 +4,7 @@
   import { GraphModel } from "../lib/model";
   import type { MergedGraph, ViewState } from "../lib/types";
   import Card from "./Card.svelte";
+  import Icon from "./Icon.svelte";
   import ValidationPanel from "./ValidationPanel.svelte";
 
   let {
@@ -113,6 +114,7 @@
     <li><i class="sw planned"></i>Spec</li>
     <li><i class="sw unplanned"></i>No spec</li>
     <li><i class="sw draft"></i>Draft</li>
+    <li><i class="sw orphan"></i>Orphaned</li>
     <li class="rule" aria-hidden="true"></li>
     <li><i class="agent-mark"></i>Agent</li>
   </ul>
@@ -213,7 +215,7 @@
             style:left="{p.x + g.cardW - 132}px"
             style:top="{p.y + g.cardH - 1}px"
             onclick={() => onopen(n.plan_key)}
-          >Open change →</button>
+          >Open change <Icon name="arrow" /></button>
         {/if}
       {/each}
     </div>
@@ -246,6 +248,7 @@
   .sw.planned { border-color: var(--ink); background: #ecece6; }
   .sw.unplanned { border-color: var(--ink); background: repeating-linear-gradient(135deg, #8a8f98 0 1px, #fff 1px 4px); }
   .sw.draft { border-color: var(--ink); border-style: dashed; background: #fff; }
+  .sw.orphan { border-color: var(--slate); background: var(--slate-tint); opacity: 0.8; outline: 1px dashed var(--mute); outline-offset: 1px; }
   .agent-mark { width: 14px; height: 14px; border-radius: 3px; background: radial-gradient(circle, var(--amber) 0 2.5px, var(--ink) 3px); }
   .toggle { display: flex; align-items: center; gap: 7px; color: var(--ink); font-weight: 500; cursor: pointer; }
   .toggle input { accent-color: var(--ink); }
