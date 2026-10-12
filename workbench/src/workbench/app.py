@@ -16,6 +16,8 @@ from .config import Config
 from .hub import Hub, sse
 from .plan_state import PlanState, watch
 from .sortie import SortieClient
+from .session_routes import session_router
+from .sessions import SessionManager
 from .sync import sync_router
 
 
@@ -32,6 +34,9 @@ def create_app(config: Config, **services) -> FastAPI:
     plan_state = PlanState(config.store, **({"validate": services["validate"]} if "validate" in services else {}))
     sortie = services.get("sortie") or SortieClient(config.sortie_url, config.sortie_token)
     hub = Hub(plan_state, sortie)
+    planning = services.get("sessions") or SessionManager(
+        config.store, config.broker_command, config.agent_command, config.prompt_file
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -50,11 +55,13 @@ def create_app(config: Config, **services) -> FastAPI:
                 t.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
             await sortie.aclose()
+            await planning.aclose()
 
     app = FastAPI(title="plan workbench", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.plan = plan_state
     app.state.hub = hub
     app.state.sortie = sortie
+    app.state.planning = planning
     sessions = Sessions(config.secret_key, config.session_max_age)
     app.state.config = config
     app.state.sessions = sessions
@@ -119,6 +126,7 @@ def create_app(config: Config, **services) -> FastAPI:
         return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-store"})
 
     app.include_router(sync_router(hub, require_operator))
+    app.include_router(session_router(planning, require_operator))
 
     @app.exception_handler(HTTPException)
     async def http_error(_request: Request, exc: HTTPException) -> JSONResponse:
