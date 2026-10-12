@@ -18,7 +18,7 @@ def test_unauthenticated_requests_get_401(config):
     client = TestClient(create_app(config))
     r = client.get("/api/me")
     assert r.status_code == 401
-    assert r.json() == {"error": "sign in first"}
+    assert r.json() == {"error": {"code": "unauthorized", "message": "sign in first"}}
 
 
 def test_sign_in_sets_signed_httponly_cookie(config):

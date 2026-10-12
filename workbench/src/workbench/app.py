@@ -16,6 +16,10 @@ from .config import Config
 from .hub import Hub, sse
 from .plan_state import PlanState, watch
 from .sortie import SortieClient
+from .sync import sync_router
+
+
+_CODES = {401: "unauthorized", 404: "not_found"}
 
 
 class LoginBody(BaseModel):
@@ -114,9 +118,12 @@ def create_app(config: Config, **services) -> FastAPI:
 
         return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-store"})
 
+    app.include_router(sync_router(hub, require_operator))
+
     @app.exception_handler(HTTPException)
     async def http_error(_request: Request, exc: HTTPException) -> JSONResponse:
-        return JSONResponse({"error": exc.detail}, status_code=exc.status_code)
+        detail = exc.detail if isinstance(exc.detail, dict) else {"code": _CODES.get(exc.status_code, "error"), "message": str(exc.detail)}
+        return JSONResponse({"error": detail}, status_code=exc.status_code)
 
     _mount_frontend(app, config.frontend_dir)
     return app
