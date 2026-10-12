@@ -19,6 +19,12 @@ linters:
     - unconvert
     - unparam
     - unused
+  settings:
+    errcheck:
+      exclude-functions:
+        # Diagnostics to stderr have nowhere to report their own failure.
+        - fmt.Fprintf
+        - fmt.Fprintln
   exclusions:
     rules:
       - path: _test\.go
