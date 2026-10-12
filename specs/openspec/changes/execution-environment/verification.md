@@ -241,3 +241,18 @@ Notes:
 
 - `git hash-object --stdin-paths` follows symlinks and stops at the first path it cannot hash, such as a dangling link. The implementation records such a path as unhashable, keeps the IDs already printed, and restarts after it, up to 64 such paths. A symlink retargeted to identical content, and a change of only the executable bit of an untracked file, no longer change the fingerprint.
 - `local` writes no `.sortie/environment` record, because `.sortie` must not exist before `after_create` in a local workspace. A missing record means `local`, as the spec says.
+
+## Task group 4: launch carrier
+
+| Task | Commit | Verified by |
+|---|---|---|
+| 4.1 | `1e6151b0` | Every SSH test in `internal/agent/...` passes with no edit. `RemoteLaunch` over SSH is byte-identical to `BuildSSHLaunch`, preamble included. A fake carrier covers the env split, `AuxiliaryCommand`, connection-failure classification and early exit. `GuestPath` is the identity for local and SSH targets and maps `<host ws>/.sortie/x` to `<guest ws>/.sortie/x` for a carrier. |
+| 4.2 | `27cd2beb` | One table test per adapter (opencode, clientprotocol, codex, claude-code, copilot) over local, SSH and carrier targets, asserting whether MCP servers are passed and which path is used. |
+| 4.3 | `b1c83814` | `TestSessionLaunch_HostPrefixLocalEqualsPrefixedAgentCommand`, `..._HostPrefixPrecedesCarrier`, `..._HostPrefixPrecedesSSH`, `TestAuxiliaryCommand_NeverRunsBehindHostPrefix`, `..._HostPrefixKeepsTheSessionTokenOnTheHost` (real processes: the prefix sees the token and API URL, the guest side sees neither), and `credentialtest.AssertHostPrefix` for all five agent kinds, both for the session and the credential check. Removing the prefix from `SessionLaunch` makes 29 tests fail. |
+
+Related commits: `9a79e456` removes host-only wrappers that only tests reached, so `make lint-no-tests` passes (eight test files moved to the `workspace.Target` signature, with no assertion change). `257de8a3` fixes a pre-existing 1.3% flake in `TestSessionToken_DoesNotTrimTruncatedText` (40 of 3000 runs failed before, 0 of 3000 after).
+
+Notes:
+
+- Under `local`, a prefix written into `agent.command` today also wraps auxiliary launches and canaries. `host_prefix` does not, as the spec requires. Session launches are byte-identical to the `agent.command` form.
+- The carrier passes the adapter's own settings (for example `OPENCODE_CONFIG_CONTENT`) into the guest with `-e`. Decision 3 does not list them. They are agent configuration, not host variables, but they appear in the host process's argv.

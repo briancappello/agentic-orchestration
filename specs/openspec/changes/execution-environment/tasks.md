@@ -24,9 +24,9 @@ The Sortie work is in the fork (`~/dev/sortie`), on a branch off `feat/session-c
 
 ## 4. Launch carrier
 
-- [ ] 4.1 Add `LaunchTarget.RemoteLaunch`, `Remote`, `MCPInGuest`, and `GuestPath`. Move the five `sshutil.BuildSSHLaunch` call sites onto `RemoteLaunch`: opencode, codex, clientprotocol, forkperturn, and `AuxiliaryCommand`. Verify that every SSH test in `internal/agent/...` passes unchanged, and that `GuestPath` is the identity for local and SSH targets.
-- [ ] 4.2 Switch the MCP conditions in opencode, clientprotocol, and codex to `Remote && !MCPInGuest`. Make claude-code and copilot pass `GuestPath(mcpConfigPath)`. Verify with one table test per adapter over three targets (local, SSH, and an environment target), asserting whether MCP servers are passed and which path is used.
-- [ ] 4.3 Apply `host_prefix` to the session launch and the credential check only. Verify with tests: the prefix precedes the carrier for both launches, it is absent from hook and auxiliary commands, and under `local` the result equals today's prefixed `agent.command`.
+- [x] 4.1 Add `LaunchTarget.RemoteLaunch`, `Remote`, `MCPInGuest`, and `GuestPath`. Move the five `sshutil.BuildSSHLaunch` call sites onto `RemoteLaunch`: opencode, codex, clientprotocol, forkperturn, and `AuxiliaryCommand`. Verify that every SSH test in `internal/agent/...` passes unchanged, and that `GuestPath` is the identity for local and SSH targets.
+- [x] 4.2 Switch the MCP conditions in opencode, clientprotocol, and codex to `Remote && !MCPInGuest`. Make claude-code and copilot pass `GuestPath(mcpConfigPath)`. Verify with one table test per adapter over three targets (local, SSH, and an environment target), asserting whether MCP servers are passed and which path is used.
+- [x] 4.3 Apply `host_prefix` to the session launch and the credential check only. Verify with tests: the prefix precedes the carrier for both launches, it is absent from hook and auxiliary commands, and under `local` the result equals today's prefixed `agent.command`.
 
 ## 5. smolvm kind
 
