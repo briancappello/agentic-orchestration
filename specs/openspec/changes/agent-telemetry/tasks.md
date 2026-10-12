@@ -17,8 +17,8 @@
 
 ## 4. End-to-end checks
 
-- [ ] 4.1 Run the broker with the fake agent against a real OpenTelemetry Collector (`otelcol-contrib` binary or container, operator tooling, not a Go dependency) with the `debug` exporter at detailed verbosity. Verify that the Collector accepts every export with no rejections, and that its output shows the D4 attributes on turn and tool spans. Record the commands and output in this change's `verification.md`.
-- [ ] 4.2 Run self-hosted Langfuse (v3.22.0 or later) behind the Collector from the example configuration. Run the live harness under Sortie with OpenCode (primary) and Claude, with a driver turn, a steer turn, and a human turn. Verify in Langfuse:
+- [x] 4.1 Run the broker with the fake agent against a real OpenTelemetry Collector (`otelcol-contrib` binary or container, operator tooling, not a Go dependency) with the `debug` exporter at detailed verbosity. Verify that the Collector accepts every export with no rejections, and that its output shows the D4 attributes on turn and tool spans. Record the commands and output in this change's `verification.md`.
+- [x] 4.2 Run self-hosted Langfuse (v3.22.0 or later) behind the Collector from the example configuration. Run the live harness under Sortie with OpenCode (primary) and Claude, with a driver turn, a steer turn, and a human turn. Verify in Langfuse:
   - each turn is a generation with its model and usage;
   - a cost appears for OpenCode's model, and for Claude once an alias model definition is added;
   - the dispatch groups the turns as a session;
