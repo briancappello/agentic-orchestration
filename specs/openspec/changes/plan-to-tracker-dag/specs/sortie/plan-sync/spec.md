@@ -4,30 +4,35 @@ Makes the tracker match the approved plan. It creates, updates, parents, and lin
 
 ## ADDED Requirements
 
-### Requirement: Sync from the spec store
-Sortie SHALL provide `sortie plan sync --store <path>` and `POST /api/v1/plan/sync`. The command SHALL read the store at the path. The endpoint SHALL take a store snapshot in its request: the plan file, each change's breakdown, and the requirement names in each change's specs. Sortie SHALL NOT need access to the store's files. Both SHALL read the plan and every approved breakdown, and SHALL make the configured tracker match the combined graph:
-- every planned change has an epic issue;
-- every deliverable has a story issue;
-- every story is parented to its change's epic;
-- the issues hold every blocking relation the graph holds.
+### Requirement: Sync from a validated plan graph
+Sortie SHALL provide `sortie plan sync --graph <file>` and `POST /api/v1/plan/sync`. Both SHALL take a plan graph document in the format the plan validator outputs. Sortie SHALL NOT read or parse the spec store's files. Using only the graph's approved nodes, Sortie SHALL make the configured tracker match it:
+- every epic has an issue;
+- every story has an issue;
+- every story issue is parented to its epic issue;
+- every blocking edge in the graph is a relation in the tracker.
 
 The command and the endpoint SHALL behave identically.
 
 #### Scenario: A first sync
-- **WHEN** the store plans `accounts-api` with 3 approved deliverables and `billing` with 2
+- **WHEN** the graph holds `accounts-api` with 3 approved deliverables and `billing` with 2
 - **AND** the tracker holds none of them
-- **THEN** after the sync the tracker holds 2 epics and 5 stories with the plan's parents and blocking relations
+- **THEN** after the sync the tracker holds 2 epics and 5 stories, with the graph's parents and blocking relations
 
-### Requirement: Parse without syncing
-Sortie SHALL provide `POST /api/v1/plan/parse`. It SHALL take a store snapshot and return the combined graph and every validation error, as the breakdown and plan-of-plans specs define them. It SHALL NOT contact the tracker. A sync SHALL use the same parsing and validation, so the two always agree.
+### Requirement: Reject a malformed graph
+Sortie SHALL reject a graph document before it contacts the tracker in any of these cases:
+- the document's schema version is not one Sortie supports;
+- the document does not match the graph schema;
+- an edge names a node that is not in the document.
 
-#### Scenario: Parse an invalid snapshot
-- **WHEN** a client posts a snapshot whose breakdown has a dependency cycle
-- **THEN** the response lists the cycle with its deliverable ids
+The rejection SHALL name the problem. Sortie SHALL NOT repeat the planning checks that the validator owns.
+
+#### Scenario: An unsupported version
+- **WHEN** a client posts a graph whose schema version Sortie does not support
+- **THEN** Sortie answers with a payload error that names both versions
 - **AND** no tracker request is made
 
 ### Requirement: Preview before apply
-A sync SHALL first compute a preview: the issues to create, the issues to update, and the parents and relations to add or remove. A sync SHALL change the tracker only when it is applied. The preview SHALL be returned by `sortie plan sync --dry-run` and by `POST /api/v1/plan/sync` with `"apply": false`. An apply SHALL carry the id of the preview it applies. Sortie SHALL refuse an apply when the store or the tracker has changed since that preview was computed.
+A sync SHALL first compute a preview: the issues to create, the issues to update, and the parents and relations to add or remove. A sync SHALL change the tracker only when it is applied. The preview SHALL be returned by `sortie plan sync --dry-run` and by `POST /api/v1/plan/sync` with `"apply": false`. An apply SHALL carry the id of the preview it applies. Sortie SHALL refuse an apply when the graph's source digest or the tracker has changed since that preview was computed.
 
 #### Scenario: A preview writes nothing
 - **WHEN** a caller requests a preview
@@ -35,26 +40,26 @@ A sync SHALL first compute a preview: the issues to create, the issues to update
 - **AND** the tracker is unchanged
 
 #### Scenario: A stale preview
-- **WHEN** a breakdown changes after a preview was computed
-- **AND** a caller applies that preview
+- **WHEN** a caller applies a preview
+- **AND** sends a graph whose source digest differs from the previewed one
 - **THEN** Sortie refuses with a conflict error and writes nothing
 
 ### Requirement: Idempotent by plan key
 A sync SHALL find existing issues by plan key. It SHALL update an issue it finds and SHALL NOT create a second issue for the same plan key. Running the same sync twice SHALL make no writes the second time.
 
 #### Scenario: A second run
-- **WHEN** a sync is applied and then applied again with no changes in the store
+- **WHEN** a sync is applied and then applied again with no changes to the graph
 - **THEN** the second preview lists no writes
 
 #### Scenario: A changed title
-- **WHEN** a deliverable's title changes in its breakdown
+- **WHEN** a deliverable's title changes in the graph
 - **THEN** the next sync updates the existing issue's title and creates no issue
 
 ### Requirement: What a sync never does
-A sync SHALL NOT change an issue's status, assignee, or labels. A sync SHALL NOT delete an issue. When a deliverable leaves the plan, the sync SHALL report its issue as orphaned and SHALL remove the blocking relations that the plan no longer holds. It SHALL NOT remove relations that people added that do not involve plan-keyed issues.
+A sync SHALL NOT change an issue's status, assignee, or labels. A sync SHALL NOT delete an issue. When a deliverable leaves the graph, the sync SHALL report its issue as orphaned and SHALL remove the blocking relations that the graph no longer holds. It SHALL NOT remove relations that people added that do not involve plan-keyed issues.
 
 #### Scenario: A deliverable removed from the plan
-- **WHEN** a deliverable that was synced is deleted from its breakdown
+- **WHEN** a deliverable that was synced is no longer in the graph
 - **THEN** the next preview lists its issue as orphaned
 - **AND** the issue still exists in the tracker after the apply
 

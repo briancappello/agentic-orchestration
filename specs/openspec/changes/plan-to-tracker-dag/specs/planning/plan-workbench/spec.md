@@ -40,7 +40,7 @@ Every node SHALL show its plan key or tracker identifier, its title, and its sta
 
 ### Requirement: One graph from three sources
 The workbench backend SHALL build the graph from three sources, matching nodes by plan key:
-- the store's plan and breakdowns;
+- the validated plan graph, from running the plan validator on the store;
 - Sortie's `/api/v1/plan/graph`;
 - Sortie's runtime state.
 

@@ -16,7 +16,7 @@ Constraints:
 ## Goals / Non-Goals
 
 **Goals:**
-- One parser and validator for the plan, in Sortie. The workbench never reimplements it.
+- One validator for the plan, run where the plan is written. Schemas, not parser code, define the format between components.
 - A deployment that runs on one host now and can split across hosts later without a redesign.
 - A first end-to-end path on Huly: chat, then breakdown, then graph, then sync, then dispatch, then live badges.
 
@@ -27,28 +27,48 @@ Constraints:
 
 ## Decisions
 
-### D1. Sortie owns the plan parser, and clients send it the files
+### D1. Plan files are data, validated where they are written
 
-A new package `internal/plan` in the Sortie fork parses `plan.md` and each `breakdown.md`, validates them, builds the combined graph, and computes a sync preview against the tracker. Nothing else parses the plan.
+The plan is YAML checked against published JSON Schemas, not markdown that one service's parser interprets.
 
-Sortie and the spec store may sit on different hosts, so the HTTP endpoints do not read a path on Sortie's disk. A client sends a **store snapshot** instead: `plan.md`, each change's `breakdown.md`, and the requirement names from each change's specs. Sortie returns the parsed graph and every validation error (`POST /api/v1/plan/parse`), or a preview for a sync. The CLI `sortie plan sync --store <path>` builds the same snapshot from a local path and calls the same code.
+- **Contract.** The spec store holds three JSON Schemas under `openspec/schemas/planning/`:
+  - `breakdown.schema.json`;
+  - `plan.schema.json`;
+  - `plan-graph.schema.json`, the validated graph that leaves the store.
 
-The snapshot has a digest. A preview records the snapshot digest and a digest of the plan-keyed tracker state it read. An apply carries the preview id, and Sortie recomputes both digests before writing. A mismatch is the conflict the plan-sync spec requires.
+  Each carries a `schema_version`. The schemas are the contract. No parser's code is.
+- **Validator.** A small Python package, `planlib`, is the plan validator. It offers a CLI (`planlib validate`, `planlib graph`) and a library API. It lives in the workbench repo and is installed into the planning session's environment. It runs in three steps:
+  1. **Schema check** with `jsonschema`, rejecting unknown fields.
+  2. **Requirement names** for `covers`, read from `openspec show <change> --type change --json`. OpenSpec stays the authority on its own spec format, and nothing scrapes spec markdown.
+  3. **Graph checks** with `networkx`. `find_cycle` reports each cycle as its member list, the plan's transitive reachability checks cross-change edges, and refs are resolved against the set of known keys.
+
+  It collects every error and outputs either the error list or the graph document.
+- **Where checks run.**
+  - The planning agent runs `planlib validate` after each write and fixes errors in the same session.
+  - The workbench backend calls the library on every file change.
+  - Sortie does not validate the plan. It checks only that the graph document is well formed: a supported version, a match with the graph schema, and edges that name nodes in the document. A minimal Go struct decode with version gating does this. Sortie needs no JSON Schema library and gains no dependency.
+- **Digest.** The graph document carries a digest of the source files. A preview records that digest and a digest of the plan-keyed tracker state. An apply recomputes both and refuses on a mismatch.
 
 *Alternatives:*
-- A Python parser in the workbench. It would be a second implementation that drifts from Sortie's, and validation results would differ between the graph and the sync.
-- Sortie reading a configured store path. This ties Sortie to the store's host.
-- The workbench calling the `sortie` binary. This ties the workbench to Sortie's host and config. The user rejected that.
+- Markdown parsed by Sortie, the first design. It was rejected as brittle: the format was defined only by Go code, and errors surfaced after the fact in another service.
+- Validation in Go inside Sortie, called by the workbench. The planning agent would then need Sortie running to check its own files.
+- A hand-written DAG check instead of `networkx`. That is about forty lines, and remains an option if the dependency is unwanted. `networkx` also gives `topological_generations`, which the workbench uses for column depth.
 
-### D2. Breakdown as a forked OpenSpec schema, with approval by digest
+### D2. Breakdown artifact in a forked OpenSpec schema
 
-The store adds schema `spec-driven-planned`, forked from `spec-driven`, with one new artifact, `breakdown` (`breakdown.md`). It requires `proposal`, `specs`, and `design`, and `tasks` now requires `breakdown`. `tasks.md` stays the implementation checklist, grouped under deliverable ids. A change opts in by setting `schema: spec-driven-planned` in its `.openspec.yaml`. The artifact's instruction text carries the deliverable format from the breakdown spec, so `openspec instructions breakdown` teaches the agent the format.
+The store adds schema `spec-driven-planned`, forked from `spec-driven`, with one new artifact, `breakdown`, which generates `breakdown.yaml`.
+- It requires `specs` and `design`.
+- `tasks` now requires `breakdown`. `tasks.md` stays the implementation checklist, grouped under deliverable ids.
+- A change opts in through `schema: spec-driven-planned` in its `.openspec.yaml`.
 
-Approval is front matter: `status: approved` plus `approved_digest`, a hash of the normalized deliverable sections. The parser treats a breakdown as `draft` whenever the digest does not match. So any edit after approval returns it to draft, and no tool has to rewrite the file. The workbench's Approve action writes both fields. The planning agent's instructions forbid it from setting them.
+A scratch test with OpenSpec 1.13 confirmed that a YAML artifact works:
+- `schema validate` accepts it;
+- `status` tracks it;
+- `instructions breakdown` serves its template.
 
-*Alternatives:*
-- YAML or JSON breakdowns. Easier to parse, worse to review in a pull request, and the user reviews plans in git.
-- Reusing `tasks.md` with dependency annotations, as spec-kit does. It mixes the build order with the coding checklist, and OpenSpec's apply flow already owns `tasks.md`.
+The artifact's instruction tells the agent to write against `breakdown.schema.json` and to run `planlib validate`.
+
+Approval uses two top-level fields: `status: approved` and `approved_digest`, a hash of the canonical JSON of `deliverables`. `planlib` reads a breakdown as `draft` whenever the digest does not match. So any edit after approval returns it to draft, and no tool has to rewrite the file. The workbench's Approve action writes both fields. The planning agent's instructions forbid it from setting them.
 
 ### D3. The plan key is stored however each adapter can store it reliably
 
@@ -92,12 +112,11 @@ It also gains a `PlanKeyFinder`. `registry.TrackerMeta` gains a `WriteCapabiliti
 
 ### D6. Sortie endpoints
 
-All four endpoints sit beside the existing API and use the control authentication from change `sortie-session-control`:
+All three endpoints sit beside the existing API and use the control authentication from change `sortie-session-control`:
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /api/v1/plan/parse` | Takes a snapshot. Returns the graph and the validation errors. Never touches the tracker. |
-| `POST /api/v1/plan/sync` | Takes a snapshot. `apply: false` returns a preview with an id. `apply: true` takes the preview id. |
+| `POST /api/v1/plan/sync` | Takes a validated graph document. `apply: false` returns a preview with an id. `apply: true` takes the preview id. |
 | `GET /api/v1/plan/graph` | Returns the plan-keyed issues, parents, and edges from the tracker, joined with runtime state from the orchestrator snapshot. |
 | `GET /api/v1/plan/capabilities` | Returns the configured adapter's declared write capabilities. |
 
@@ -129,9 +148,9 @@ A new repository, `~/dev/plan-workbench`, is seeded from the prototype's `PRODUC
 
 - **Backend.**
   - FastAPI serves the built frontend and a small JSON and SSE API. It holds the Sortie and broker tokens.
-  - It watches `openspec/` with `watchfiles`. On a change it debounces for 300 ms, builds a snapshot, calls `/plan/parse`, merges the result with `/plan/graph` by plan key (draft, synced, orphaned), and pushes the merged graph over SSE. It polls runtime state every five seconds.
+  - It watches `openspec/` with `watchfiles`. On a change it debounces for 300 ms, runs `planlib`, merges the result with `/plan/graph` by plan key (draft, synced, orphaned), and pushes the merged graph over SSE. It polls runtime state every five seconds.
   - Sign-in is one operator password from configuration, with a signed `HttpOnly` session cookie.
-  - Dependencies are FastAPI, uvicorn, httpx, watchfiles, and itsdangerous.
+  - Dependencies are FastAPI, uvicorn, httpx, watchfiles, itsdangerous, and, through `planlib`, PyYAML, jsonschema, and networkx.
 - **Frontend.**
   - Vite with TypeScript and **Svelte 5**. Svelte fits a custom SVG and absolutely positioned layout better than a component kit does, its output is small, and Huly uses Svelte, if code ever moves between the two.
   - The layout code is ported from the prototype as a framework-free TypeScript module, so it can be tested on its own.
@@ -154,8 +173,9 @@ A new repository, `~/dev/plan-workbench`, is seeded from the prototype's `PRODUC
 
 - [Huly's issue creation needs a client-side sequence and rank, the same work its UI and importer do. A mistake gives duplicate numbers or a broken order.] → Use `$inc` with `retrieve`, which the transactor applies atomically, so numbers can't collide. Port the rank function with its tests. Cover creation in the env-gated Huly integration test.
 - [Creating a custom attribute on Huly's Issue class changes the workspace model.] → Create it only on the first write. Name it clearly as Sortie's. Document how to remove it in the Huly adapter notes. Check that it doesn't need a workspace upgrade on v0.7.426.
-- [Snapshots grow with the store, and every file change sends one to Sortie.] → Snapshots hold only `plan.md`, breakdowns, and requirement names, which is kilobytes. The backend debounces. When it matters, the backend sends only changed breakdowns and Sortie caches parsed changes by digest.
-- [The agent edits files while a sync preview is open.] → The apply re-checks the snapshot digest and refuses when it is stale. The workbench then offers a fresh preview.
+- [`openspec show --json` output changes between OpenSpec versions, and `covers` checks break.] → `planlib` reads only requirement names from it, pins the OpenSpec version it was tested against, and reports a clear error instead of a false pass.
+- [The schemas and `planlib` drift, or two clients run different schema versions.] → The schemas live in the store and `planlib` loads them from there. Each document carries `schema_version`, and every reader refuses versions it doesn't support.
+- [The agent edits files while a sync preview is open.] → The apply re-checks the graph's source digest and refuses when it is stale. The workbench then offers a fresh preview.
 - [People edit synced issues in the tracker (titles, parents, dependencies) and the next sync reverts them.] → The preview lists every revert, so nothing changes silently. Syncing back into the breakdown is out of scope and recorded as follow-up work.
 - [Dependency support differs across trackers.] → A tracker without it does not declare **link dependency**, and sync refuses up front. GitHub has issue dependencies and sub-issues, Jira has issue links, and Linear has relations. Each maps to the four capabilities without changing the model.
 - [Svelte is a new frontend stack for this platform.] → It is limited to the workbench. The layout logic is framework-free TypeScript, so changing UI frameworks later costs only the components.
@@ -163,18 +183,18 @@ A new repository, `~/dev/plan-workbench`, is seeded from the prototype's `PRODUC
 
 ## Migration Plan
 
-1. In the store, fork the schema and write `openspec/plan.md` covering the active changes. Existing changes switch to the planning schema one at a time. A change that hasn't switched is unplanned and the workbench marks it that way.
+1. In the store, fork the schema and add the planning JSON Schemas, and write `openspec/plan.yaml` covering the active changes. Existing changes switch to the planning schema one at a time. A change that hasn't switched is unplanned and the workbench marks it that way.
 2. In the Sortie fork, build on `prototype/huly-tracker`:
    1. capability interfaces and the registry check;
-   2. `internal/plan`;
+   2. `internal/plan`, which decodes and version-checks the graph document and computes the preview and apply;
    3. the CLI and the endpoints;
    4. the Huly write path.
 
    Other adapters are untouched.
-3. Create the workbench repo. Point it at a local Sortie, the broker, and the store.
+3. Create the workbench repo with `planlib` first, so the planning session can validate before the UI exists. Point it at a local Sortie, the broker, and the store.
 4. Rollback: stop the workbench and stop running syncs. Issues already created stay as ordinary tracker issues that Sortie dispatches like any other. The custom attribute stays and is harmless.
 
 ## Open Questions
 
-- Should the epic-level graph also show changes that are not in `plan.md` yet, as unplaced drafts? It is a display choice, settled in live mode.
+- Should the epic-level graph also show changes that are not in `plan.yaml` yet, as unplaced drafts? It is a display choice, settled in live mode.
 - Should the workbench ever become a Sortie-served page once the design settles? Nothing in this design depends on the answer.

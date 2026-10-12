@@ -18,11 +18,11 @@ The workbench SHALL run each planning session as an ACP session through `acp-bro
 - **AND** the person's answer reaches the agent
 
 ### Requirement: The spec store is the workspace
-A planning session SHALL use the spec store as its working directory. The session's instructions SHALL limit its writes to the store's `openspec/` tree: change artifacts, breakdowns, and `plan.md`. A planning session SHALL NOT write to tracker issues. Writing to the tracker happens only through a sync that a person approves.
+A planning session SHALL use the spec store as its working directory. The session's instructions SHALL limit its writes to the store's `openspec/` tree: change artifacts, breakdowns, and `plan.yaml`. The instructions SHALL require the agent to run the plan validator after each change to a breakdown or the plan, and to fix every error it reports before handing back to the person. A planning session SHALL NOT write to tracker issues. Writing to the tracker happens only through a sync that a person approves.
 
 #### Scenario: The agent writes a breakdown
 - **WHEN** the person asks the agent to break the `billing` change into deliverables
-- **THEN** the agent writes `openspec/changes/billing/breakdown.md` in the store
+- **THEN** the agent writes `openspec/changes/billing/breakdown.yaml` in the store and runs the validator
 - **AND** no tracker issue changes
 
 ### Requirement: Sessions survive a reload
