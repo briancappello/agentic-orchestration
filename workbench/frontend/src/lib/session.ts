@@ -1,0 +1,28 @@
+/** The planning session as the chat pane uses it; tests substitute a fake. */
+import { api, type SessionStatus } from "./api";
+import type { BrokerEvent } from "./chat";
+
+export interface SessionClient {
+  status(): Promise<SessionStatus & { messages?: { time: number; text: string }[] }>;
+  start(): Promise<SessionStatus>;
+  stop(): Promise<SessionStatus>;
+  command(cmd: Record<string, unknown>): Promise<unknown>;
+  subscribe(onEvent: (e: BrokerEvent) => void, onDown: () => void): () => void;
+}
+
+export const httpSession: SessionClient = {
+  status: () => api.session(),
+  start: () => api.startSession(),
+  stop: () => api.stopSession(),
+  command: (cmd) => api.command(cmd),
+  subscribe(onEvent, onDown) {
+    // EventSource sends Last-Event-ID itself when it reconnects, so the
+    // broker replays only what this tab missed.
+    const es = new EventSource("/api/session/events", { withCredentials: true });
+    es.onmessage = (e) => onEvent(JSON.parse(e.data));
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) onDown();
+    };
+    return () => es.close();
+  },
+};

@@ -1,9 +1,11 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
+  import ChatPane from "./components/ChatPane.svelte";
   import GraphPane from "./components/GraphPane.svelte";
   import Login from "./components/Login.svelte";
   import Shell from "./components/Shell.svelte";
   import { api, subscribeGraph } from "./lib/api";
+  import { httpSession } from "./lib/session";
   import { emptyGraph, type MergedGraph, type ViewState } from "./lib/types";
 
   let signedIn: boolean | null = $state(null);
@@ -24,6 +26,13 @@
     const next = p.toString();
     if (location.hash.slice(1) !== next) history.replaceState(null, "", next ? `#${next}` : location.pathname);
   });
+
+  /** Select a node from outside the graph, moving to the level that shows it. */
+  function selectAnywhere(key: string | null) {
+    const n = key ? doc.nodes.find((x) => x.plan_key === key) : undefined;
+    if (n) view.epic = n.kind === "story" ? (doc.parents.find((p) => p.child === key)?.parent ?? n.change) : null;
+    view.selected = key;
+  }
 
   async function start() {
     try {
@@ -53,10 +62,8 @@
         ontogglecross={(b) => (view.showCross = b)}
       />
     {/snippet}
-    {#snippet chat()}<p class="placeholder">Planning chat</p>{/snippet}
+    {#snippet chat()}
+      <ChatPane {doc} {view} session={httpSession} onselect={(k) => selectAnywhere(k)} />
+    {/snippet}
   </Shell>
 {/if}
-
-<style>
-  .placeholder { padding: var(--s-panel); color: var(--mute); }
-</style>

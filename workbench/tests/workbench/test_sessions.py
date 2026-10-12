@@ -106,6 +106,8 @@ def test_round_trip_permission_and_reattach(session_app):
             assert not any("echo: hello agent" in flat(e) for _, e in seen)
 
         assert client.post("/api/session/commands", json={"op": "rm -rf"}).status_code == 400
+        texts = [m["text"] for m in client.get("/api/session").json()["messages"]]
+        assert texts == ["hello agent", "ASK-PERMISSION please"]
 
         assert client.delete("/api/session").json() == {"active": False}
         deadline = time.monotonic() + 5

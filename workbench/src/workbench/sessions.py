@@ -49,6 +49,7 @@ class PlanningSession:
     acp_session_id: str | None = None
     driver: asyncio.Task | None = None
     driver_error: str | None = None
+    messages: list[dict[str, Any]] = field(default_factory=list)
     _next_id: int = 0
     _waiting: dict[int, asyncio.Future] = field(default_factory=dict)
 
@@ -59,6 +60,7 @@ class PlanningSession:
             "acp_session_id": self.acp_session_id,
             "started_at": self.started_at,
             "error": self.driver_error,
+            "messages": list(self.messages),
         }
 
 
@@ -243,8 +245,13 @@ class SessionManager:
     # The viewer side, relayed to the browser.
 
     async def command(self, cmd: dict[str, Any]) -> tuple[int, Any]:
+        """Send one viewer command. The broker's events carry no human
+        messages, so the text of accepted steers and prompts is kept here
+        for a reloaded chat to show."""
         s = self._require()
         r = await self._http.post(f"{s.http_url}/commands", json=cmd, headers={"Authorization": f"Bearer {s.token}"})
+        if r.status_code == 200 and cmd.get("op") in ("steer", "prompt") and isinstance(cmd.get("text"), str):
+            s.messages.append({"time": time.time(), "op": cmd["op"], "text": cmd["text"]})
         try:
             body = r.json()
         except ValueError:
