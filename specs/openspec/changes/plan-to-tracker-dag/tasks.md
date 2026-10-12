@@ -7,7 +7,7 @@ The work spans three repositories:
 ## 1. Planning formats in the spec store
 
 - [x] 1.1 Add `openspec/schemas/planning/breakdown.schema.json`, `plan.schema.json`, and `plan-graph.schema.json` at `schema_version` 1, as the breakdown, plan-of-plans, and plan-validator specs define them. Verify with sample documents: a valid one passes, and one with an unknown field, a bad `kind`, or a missing `acceptance_criteria` fails.
-- [ ] 1.2 Fork `spec-driven` into `spec-driven-planned`. Add the `breakdown` artifact (generates `breakdown.yaml`, requires `specs` and `design`), make `tasks` require it, and write the artifact's template and its instruction, which points to the schema and to `planlib validate`. Verify that `openspec schema validate spec-driven-planned` passes, and that a scratch change shows `breakdown` in `openspec status`.
+- [x] 1.2 Fork `spec-driven` into `spec-driven-planned`. Add the `breakdown` artifact (generates `breakdown.yaml`, requires `specs` and `design`), make `tasks` require it, and write the artifact's template and its instruction, which points to the schema and to `planlib validate`. Verify that `openspec schema validate spec-driven-planned` passes, and that a scratch change shows `breakdown` in `openspec status`.
 
 ## 2. planlib validator (workbench repo)
 
