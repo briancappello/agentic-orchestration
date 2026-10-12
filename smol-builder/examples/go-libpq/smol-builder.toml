@@ -1,0 +1,2 @@
+layers = ["go"]
+project_layer = "ci/agent.Dockerfile"

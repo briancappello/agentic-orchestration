@@ -265,3 +265,21 @@ func TestLoad(t *testing.T) {
 		t.Fatalf("err = %v, want one naming the file and the layer", err)
 	}
 }
+
+func TestExampleRepository(t *testing.T) {
+	dir := t.TempDir()
+	if err := ExtractLibrary(layers.FS, dir); err != nil {
+		t.Fatal(err)
+	}
+	lib, err := OpenLibrary(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	def, err := Load(filepath.Join("..", "..", "examples", "go-libpq"), lib)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(def.Layers, []string{"go"}) || def.ProjectLayer != "ci/agent.Dockerfile" {
+		t.Fatalf("definition %+v", def)
+	}
+}
