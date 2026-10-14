@@ -87,8 +87,10 @@ start vite "$ROOT/frontend" npm run dev -- --host 127.0.0.1 --strictPort
 
 ready=
 for _ in $(seq 90); do
-  # 401 from /api/me through Vite means Vite, its proxy, and the backend all answer.
-  [[ $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5173/api/me) == 401 ]] && { ready=1; break; }
+  # The backend first (asking through Vite before it is up logs proxy errors),
+  # then Vite and its proxy: 401 from /api/me means both answer.
+  [[ $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8790/api/me) == 401 ]] &&
+    [[ $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5173/api/me) == 401 ]] && { ready=1; break; }
   sleep 1
 done
 [[ -n $ready ]] || die "the workbench did not come up; see the [backend] and [vite] lines above"
