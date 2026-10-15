@@ -21,7 +21,7 @@ The tracker here is a local Huly. Any tracker whose Sortie adapter declares the 
 
 Ports used below: Sortie `7678`, workbench `8790`. Each broker picks a free localhost port.
 
-**For development, skip the steps below and run `scripts/dev.sh`.** It creates the token and password files the first time, clones a scratch spec store, builds Sortie and the broker, starts Huly when it is down, and runs Sortie, the backend (`--reload`), and Vite in one terminal. Open the URL it prints; Ctrl-C stops all three. Its settings are at the top of the script.
+**For development, skip the steps below and run `scripts/dev.sh`.** It runs Sortie, the backend (`--reload`), and Vite (hot reload) in one terminal against a blank environment of its own: an empty spec store, an empty Huly project `DEV`, and a Sortie that watches only that project. Nothing runs until you plan, sync, and move stories to `Todo`. Work persists across runs; `scripts/dev.sh --reset` wipes it back to empty. Ctrl-C stops the three services.
 
 ## 1. Build Sortie and the broker
 
