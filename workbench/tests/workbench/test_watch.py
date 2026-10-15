@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from workbench.app import create_app
 from tests.conftest import breakdown, deliverable
-from tests.workbench.conftest import make_config, sign_in
+from tests.workbench.conftest import P, make_config, project, sign_in
 
 
 def no_openspec(*_):
@@ -39,7 +39,7 @@ def test_valid_edit_updates_graph_and_cycle_keeps_it(store):
 
     with TestClient(app) as client:
         sign_in(client)
-        state = app.state.plan
+        state = project(app).plan
         assert keys(state.graph) == {"billing", "billing/invoice"}
 
         start = time.monotonic()
@@ -53,7 +53,7 @@ def test_valid_edit_updates_graph_and_cycle_keeps_it(store):
         cycle = next(e for e in state.errors if e["code"] == "cycle")
         assert set(cycle["members"]) == {"billing/invoice", "billing/tax"}
 
-        body = client.get("/api/validation").json()
+        body = client.get(f"{P}/validation").json()
         assert body["valid"] is False and body["has_graph"] is True
 
 
@@ -61,5 +61,5 @@ def test_broken_store_reports_without_graph(store):
     app = create_app(make_config(store.root), validate=validate_offline)
     with TestClient(app) as client:
         sign_in(client)
-        body = client.get("/api/validation").json()
+        body = client.get(f"{P}/validation").json()
         assert body["has_graph"] is False and body["errors"][0]["code"] == "missing_plan"

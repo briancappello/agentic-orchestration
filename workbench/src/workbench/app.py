@@ -1,4 +1,4 @@
-"""The FastAPI application: sign-in, the plan graph, sync, approval, and planning sessions."""
+"""The FastAPI application: sign-in, projects, and each project's plan graph, sync, approval, and planning session."""
 
 from __future__ import annotations
 
@@ -13,11 +13,12 @@ from pydantic import BaseModel
 
 from .auth import COOKIE_NAME, Sessions, verify_password
 from .config import Config
-from .hub import Hub, sse
-from .plan_state import PlanState, watch
+from .hub import sse
+from .project_routes import project_router
+from .projects import ProjectManager
+from .registry import Registry, RegistryError
 from .sortie import SortieClient
 from .session_routes import session_router
-from .sessions import SessionManager
 from .sync import sync_router
 
 
@@ -30,39 +31,26 @@ class LoginBody(BaseModel):
 
 def create_app(config: Config, **services) -> FastAPI:
     """Build the app. ``services`` lets tests inject collaborators:
-    ``validate`` replaces planlib.validate and ``sortie`` the Sortie client."""
-    plan_state = PlanState(config.store, **({"validate": services["validate"]} if "validate" in services else {}))
+    ``validate`` replaces planlib.validate, ``sortie`` the Sortie client, and
+    ``sessions`` builds each project's session manager from
+    ``(project, store, runtime_dir)``."""
     sortie = services.get("sortie") or SortieClient(config.sortie_url, config.sortie_token)
-    hub = Hub(plan_state, sortie)
-    planning = services.get("sessions") or SessionManager(
-        config.store, config.broker_command, config.agent_command, config.prompt_file,
-        runtime_dir=config.runtime_dir, agent_model=config.agent_model,
-    )
+    registry = Registry(config.home / "workbench.db")
+    projects = ProjectManager(config, registry, sortie, services.get("sessions"), services.get("validate"))
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        stop = asyncio.Event()
-        hub.bind(asyncio.get_running_loop())
-        await asyncio.to_thread(plan_state.refresh)
-        tasks = [
-            asyncio.create_task(watch(plan_state, config.debounce_ms, stop)),
-            asyncio.create_task(hub.poll_loop(config.poll_seconds, stop)),
-        ]
+        await projects.start()
         try:
             yield
         finally:
-            stop.set()
-            for t in tasks:
-                t.cancel()
-            await asyncio.gather(*tasks, return_exceptions=True)
+            await projects.stop()
             await sortie.aclose()
-            await planning.aclose()
+            registry.close()
 
     app = FastAPI(title="plan workbench", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
-    app.state.plan = plan_state
-    app.state.hub = hub
+    app.state.projects = projects
     app.state.sortie = sortie
-    app.state.planning = planning
     sessions = Sessions(config.secret_key, config.session_max_age)
     app.state.config = config
     app.state.sessions = sessions
@@ -91,19 +79,22 @@ def create_app(config: Config, **services) -> FastAPI:
 
     @app.get("/api/me", dependencies=[Depends(require_operator)])
     def me() -> dict:
-        return {"signed_in": True, "store": config.store.name}
+        return {"signed_in": True}
 
-    @app.get("/api/validation", dependencies=[Depends(require_operator)])
-    def validation() -> dict:
-        snap = plan_state.snapshot()
+    app.include_router(project_router(projects, require_operator))
+
+    @app.get("/api/projects/{slug}/validation", dependencies=[Depends(require_operator)])
+    def validation(slug: str) -> dict:
+        snap = projects.get(slug).plan.snapshot()
         return {"version": snap["version"], "valid": snap["valid"], "errors": snap["errors"], "has_graph": snap["graph"] is not None}
 
-    @app.get("/api/graph", dependencies=[Depends(require_operator)])
-    def graph() -> dict:
-        return hub.doc
+    @app.get("/api/projects/{slug}/graph", dependencies=[Depends(require_operator)])
+    def graph(slug: str) -> dict:
+        return projects.get(slug).hub.doc
 
-    @app.get("/api/events", dependencies=[Depends(require_operator)])
-    async def events(request: Request) -> StreamingResponse:
+    @app.get("/api/projects/{slug}/events", dependencies=[Depends(require_operator)])
+    async def events(slug: str, request: Request) -> StreamingResponse:
+        hub = projects.get(slug).hub
         queue = hub.subscribe()
 
         async def stream():
@@ -111,6 +102,9 @@ def create_app(config: Config, **services) -> FastAPI:
                 yield sse("graph", hub.doc)
                 idle = 0.0
                 while not await request.is_disconnected():
+                    if projects.runtimes.get(slug) is None:
+                        yield sse("deleted", {"slug": slug})
+                        return
                     try:
                         doc = await asyncio.wait_for(queue.get(), timeout=1)
                     except TimeoutError:
@@ -126,8 +120,13 @@ def create_app(config: Config, **services) -> FastAPI:
 
         return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-store"})
 
-    app.include_router(sync_router(hub, require_operator))
-    app.include_router(session_router(planning, require_operator))
+    app.include_router(sync_router(projects, require_operator))
+    app.include_router(session_router(projects, require_operator))
+
+    @app.exception_handler(RegistryError)
+    async def registry_error(_request: Request, exc: RegistryError) -> JSONResponse:
+        detail = {"code": exc.code, "message": exc.message, **({"field": exc.field} if exc.field else {})}
+        return JSONResponse({"error": detail}, status_code=exc.status)
 
     @app.exception_handler(HTTPException)
     async def http_error(_request: Request, exc: HTTPException) -> JSONResponse:

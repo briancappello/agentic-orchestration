@@ -12,7 +12,7 @@ from pydantic import BaseModel
 import planlib
 from planlib import PlanLoadError
 
-from .hub import Hub
+from .projects import ProjectManager
 from .sortie import SortieError
 
 
@@ -25,16 +25,17 @@ class ApproveBody(BaseModel):
     change: str
 
 
-def sync_router(hub: Hub, require_operator) -> APIRouter:
-    router = APIRouter(prefix="/api", dependencies=[Depends(require_operator)])
-    pending: dict[str, dict[str, Any]] = {}
+def sync_router(projects: ProjectManager, require_operator) -> APIRouter:
+    router = APIRouter(prefix="/api/projects/{slug}", dependencies=[Depends(require_operator)])
 
     def sortie_failure(exc: SortieError) -> HTTPException:
         status = exc.status if exc.status >= 400 else 502
         return HTTPException(status_code=status, detail={"code": exc.code, "message": exc.message, **({"result": exc.body["result"]} if "result" in exc.body else {})})
 
     @router.post("/sync/preview")
-    async def preview() -> dict:
+    async def preview(slug: str) -> dict:
+        rt = projects.get(slug)
+        hub, pending = rt.hub, rt.pending
         snap = hub.plan.snapshot()
         if snap["errors"] or snap["graph"] is None:
             raise HTTPException(status_code=409, detail={"code": "plan_invalid", "message": "fix the plan's validation errors before syncing"})
@@ -49,7 +50,9 @@ def sync_router(hub: Hub, require_operator) -> APIRouter:
         return {**body, "can_apply": not missing}
 
     @router.post("/sync/apply")
-    async def apply(body: ApplyBody) -> dict:
+    async def apply(slug: str, body: ApplyBody) -> dict:
+        rt = projects.get(slug)
+        hub, pending = rt.hub, rt.pending
         if not body.confirm:
             raise HTTPException(status_code=400, detail={"code": "not_confirmed", "message": "confirm the preview to apply it"})
         held = pending.get(body.preview_id)
@@ -70,7 +73,8 @@ def sync_router(hub: Hub, require_operator) -> APIRouter:
         return result
 
     @router.post("/approve")
-    async def approve(body: ApproveBody) -> dict:
+    async def approve(slug: str, body: ApproveBody) -> dict:
+        hub = projects.get(slug).hub
         snap = hub.plan.snapshot()
         blocking = [e for e in snap["errors"] if e.get("change") == body.change or e.get("change") is None]
         if blocking:

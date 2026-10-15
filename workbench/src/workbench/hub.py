@@ -10,13 +10,13 @@ from typing import Any
 
 from .merge import merge
 from .plan_state import PlanState
-from .sortie import SortieClient, SortieError
+from .sortie import ProjectSortie, SortieError
 
 log = logging.getLogger(__name__)
 
 
 class Hub:
-    def __init__(self, plan: PlanState, sortie: SortieClient):
+    def __init__(self, plan: PlanState, sortie: ProjectSortie):
         self.plan = plan
         self.sortie = sortie
         self.tracker: dict[str, Any] | None = None
@@ -63,6 +63,9 @@ class Hub:
                 "reachable": self.sortie_error is None and self.tracker is not None,
                 "error": self.sortie_error,
                 "capabilities": self.capabilities,
+                "project": self.sortie.project,
+                # Sortie runs agents for its configured project only.
+                "dispatched": bool((self.tracker or {}).get("dispatched", False)),
                 "generated_at": (self.tracker or {}).get("generated_at"),
             },
         )

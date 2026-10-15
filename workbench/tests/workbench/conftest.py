@@ -14,9 +14,17 @@ BROKER_TOKEN = "broker-viewer-token-9876543210"
 _HASH = hash_password(PASSWORD)
 
 
-def make_config(store: Path, **overrides) -> Config:
+# A store built by the ``store`` fixture registers as this project.
+SLUG = "store"
+P = f"/api/projects/{SLUG}"
+TRACKER_KEY = "T"
+
+
+def make_config(store: Path | None, **overrides) -> Config:
+    """A config that imports ``store`` as project ``store``, syncing into T."""
+    home = overrides.pop("home", None) or ((store.parent if store else Path.cwd()) / "wb-home")
     values = dict(
-        store=store, sortie_url="http://sortie.test", sortie_token=SORTIE_TOKEN,
+        home=home, store=store, huly_project=TRACKER_KEY if store else "", sortie_url="http://sortie.test", sortie_token=SORTIE_TOKEN,
         password_hash=_HASH, secret_key="test-secret", frontend_dir=None, debounce_ms=50, poll_seconds=0.2,
     )
     values.update(overrides)
@@ -32,3 +40,8 @@ def sign_in(client: TestClient) -> None:
 def config(store) -> Config:
     store.plan([])
     return make_config(store.root)
+
+
+def project(app, slug: str = SLUG):
+    """The project's runtime: its plan, hub, sessions and pending syncs."""
+    return app.state.projects.runtimes[slug]

@@ -19,7 +19,8 @@ class ConfigError(Exception):
 class Config:
     """Everything the backend needs. Tokens stay server-side: no response carries them."""
 
-    store: Path
+    # Where the registry database and the stores of created projects live.
+    home: Path
     sortie_url: str
     sortie_token: str
     password_hash: str
@@ -28,8 +29,12 @@ class Config:
     agent_command: list[str] = field(default_factory=lambda: ["opencode", "acp"])
     # Selected through the agent's ACP "model" config option; empty keeps the agent's default.
     agent_model: str = ""
+    # A store to register as a project at startup, once, with its tracker project.
+    store: Path | None = None
+    huly_project: str = ""
     prompt_file: Path | None = None
     frontend_dir: Path | None = None
+    # The parent of each project's session runtime directory.
     runtime_dir: Path | None = None
     session_max_age: int = 12 * 3600
     debounce_ms: int = 300
@@ -46,14 +51,23 @@ class Config:
                 raise ConfigError(f"{key} is required")
             return value
 
-        store = Path(need("WORKBENCH_STORE")).expanduser().resolve()
-        if not (store / "openspec").is_dir():
-            raise ConfigError(f"WORKBENCH_STORE {store} has no openspec/ directory")
+        default_home = Path(env.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "plan-workbench"
+        home = Path(env.get("WORKBENCH_HOME") or default_home).expanduser().resolve()
+        store = None
+        huly_project = env.get("WORKBENCH_HULY_PROJECT", "").strip()
+        if env.get("WORKBENCH_STORE", "").strip():
+            store = Path(env["WORKBENCH_STORE"].strip()).expanduser().resolve()
+            if not (store / "openspec").is_dir():
+                raise ConfigError(f"WORKBENCH_STORE {store} has no openspec/ directory")
+            if not huly_project:
+                raise ConfigError("WORKBENCH_HULY_PROJECT is required with WORKBENCH_STORE: the Huly project the store syncs into")
         here = Path(__file__).resolve().parents[2]
         prompt = env.get("WORKBENCH_PROMPT_FILE") or str(here / "prompts" / "planning-session.md")
         frontend = env.get("WORKBENCH_FRONTEND_DIR") or str(here / "frontend" / "dist")
         return cls(
+            home=home,
             store=store,
+            huly_project=huly_project,
             sortie_url=need("WORKBENCH_SORTIE_URL").rstrip("/"),
             sortie_token=env.get("WORKBENCH_SORTIE_TOKEN", ""),
             password_hash=need("WORKBENCH_PASSWORD_HASH"),

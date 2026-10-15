@@ -3,7 +3,7 @@
 Each session is one ``acp-broker`` driven by a detached
 ``workbench.session_driver`` process (see that module for why it is a
 separate process). The backend keeps nothing about the session in memory:
-the session's state lives in a runtime directory, one per spec store, so a
+the session's state lives in a runtime directory, one per project, so a
 restarted or reloaded backend finds the running session again and relays
 it. Only "End session" stops it.
 
@@ -47,6 +47,12 @@ class SessionError(Exception):
         self.status = status
         self.code = code
         self.message = message
+
+
+def runtime_base() -> Path:
+    """The parent of the projects' runtime directories when none is configured:
+    under ``$XDG_RUNTIME_DIR`` when set, else under ``~/.cache``."""
+    return Path(os.environ.get("XDG_RUNTIME_DIR") or str(Path.home() / ".cache")) / "plan-workbench"
 
 
 def default_runtime_dir(store: Path) -> Path:
