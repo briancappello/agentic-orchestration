@@ -112,6 +112,69 @@ export function withUserMessages(items: ChatItem[], messages: { time: number; te
   return [...items, ...users].sort((a, b) => a.time - b.time);
 }
 
+export type WorkStep = Extract<ChatItem, { kind: "agent" | "thought" | "tool" }>;
+export type ChatBlock =
+  | Exclude<ChatItem, WorkStep>
+  | Extract<ChatItem, { kind: "agent" }>
+  | { kind: "work"; key: string; steps: WorkStep[]; time: number; live: boolean };
+
+const isStep = (i: ChatItem): i is WorkStep => i.kind === "agent" || i.kind === "thought" || i.kind === "tool";
+
+/**
+ * Some models stream their reasoning inside the message itself, between
+ * `<think>` tags, or leave a stray `</think>` before the reply. The part
+ * before the closing tag is reasoning, not the reply.
+ */
+function splitThink(item: WorkStep): WorkStep[] {
+  if (item.kind !== "agent") return [item];
+  const close = item.text.lastIndexOf("</think>");
+  const opened = item.text.trimStart().startsWith("<think>");
+  if (close < 0 && !opened) return [item];
+  const reasoning = (close < 0 ? item.text : item.text.slice(0, close)).replace(/<\/?think>/g, "").trim();
+  const reply = close < 0 ? "" : item.text.slice(close + "</think>".length).trimStart();
+  const out: WorkStep[] = [];
+  if (reasoning) out.push({ kind: "thought", key: `${item.key}-think`, text: reasoning, time: item.time });
+  if (reply) out.push({ ...item, text: reply });
+  return out;
+}
+
+/**
+ * One turn's working steps (reasoning, tool calls, interim messages) fold into
+ * one block; the turn's closing message stays in the open. A person's message,
+ * a permission request, or a notice ends the run.
+ */
+export function groupTurns(items: ChatItem[], busy: boolean): ChatBlock[] {
+  const out: ChatBlock[] = [];
+  let run: WorkStep[] = [];
+  const flush = (trailing: boolean) => {
+    const steps = run.flatMap(splitThink);
+    run = [];
+    const last = steps[steps.length - 1];
+    const reply = last?.kind === "agent" ? (steps.pop() as Extract<ChatItem, { kind: "agent" }>) : undefined;
+    if (steps.length) out.push({ kind: "work", key: `work-${steps[0].key}`, steps, time: steps[0].time, live: trailing && busy });
+    if (reply) out.push(reply);
+  };
+  for (const it of items) {
+    if (isStep(it)) run.push(it);
+    else {
+      flush(false);
+      out.push(it);
+    }
+  }
+  flush(true);
+  return out;
+}
+
+/** The one-line summary of a folded block. */
+export function workSummary(steps: WorkStep[], live: boolean): string {
+  const tools = steps.filter((s) => s.kind === "tool");
+  if (live) {
+    const current = steps[steps.length - 1];
+    return current.kind === "tool" ? `Working: ${current.title}` : "Thinking";
+  }
+  return tools.length ? `Worked through ${tools.length} tool call${tools.length === 1 ? "" : "s"}` : "Reasoning";
+}
+
 const SELECTION_HEADER = "[Selected in the plan graph]";
 
 /** The structured block that tells the agent which nodes the person points at. */

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, tick } from "svelte";
-  import { applyEvent, composeMessage, emptyTranscript, withUserMessages, type ChatItem, type Transcript } from "../lib/chat";
+  import { applyEvent, composeMessage, emptyTranscript, groupTurns, withUserMessages, workSummary, type ChatBlock, type Transcript } from "../lib/chat";
   import { GraphModel } from "../lib/model";
   import type { SessionClient } from "../lib/session";
   import type { MergedGraph, ViewState } from "../lib/types";
@@ -28,7 +28,7 @@
   let log: HTMLElement | undefined = $state();
   let unsubscribe: (() => void) | null = null;
 
-  const items: ChatItem[] = $derived(withUserMessages(transcript.items, messages));
+  const items: ChatBlock[] = $derived(groupTurns(withUserMessages(transcript.items, messages), transcript.busy));
   const attachedNodes = $derived(attached.map((k) => model.node(k)).filter((n) => n !== undefined));
 
   // A newly selected node is offered to the chat as context.
@@ -138,10 +138,19 @@
       <div class="msg user">{item.text}</div>
     {:else if item.kind === "agent"}
       <div class="msg agent">{item.text}</div>
-    {:else if item.kind === "thought"}
-      <div class="msg thought">{item.text}</div>
-    {:else if item.kind === "tool"}
-      <div class="tool" data-status={item.status}><span class="dot"></span>{item.title}<em>{item.status}</em></div>
+    {:else if item.kind === "work"}
+      <details class="work" class:live={item.live}>
+        <summary><Icon name="chevron" size={12} /><span>{workSummary(item.steps, item.live)}</span></summary>
+        <div class="steps">
+          {#each item.steps as step (step.key)}
+            {#if step.kind === "tool"}
+              <div class="tool" data-status={step.status}><span class="dot"></span><span class="title">{step.title}</span><em>{step.status}</em></div>
+            {:else}
+              <div class="msg step {step.kind}">{step.text}</div>
+            {/if}
+          {/each}
+        </div>
+      </details>
     {:else if item.kind === "permission"}
       <div class="permission" data-permission={item.id}>
         <b>Permission</b>
@@ -193,8 +202,20 @@
   .msg { white-space: pre-wrap; word-break: break-word; line-height: 1.5; max-width: 92%; }
   .msg.user { align-self: flex-end; padding: 8px 12px; border-radius: 12px 12px 4px 12px; background: var(--strip); }
   .msg.agent { align-self: flex-start; }
-  .msg.thought { color: var(--mute); font-size: 12px; font-style: italic; }
+  .work { align-self: stretch; color: var(--mute); }
+  .work summary { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; font-size: 12px; font-weight: 600; cursor: pointer; list-style: none; border-radius: var(--r-button); }
+  .work summary::-webkit-details-marker { display: none; }
+  .work summary:hover { color: var(--ink); }
+  .work summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .work summary span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 52ch; }
+  .work summary :global(.ico) { transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1); }
+  .work[open] summary :global(.ico) { transform: rotate(90deg); }
+  .work.live summary span { color: var(--amber-ink); }
+  .steps { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 2px 5px; padding-left: 13px; border-left: 1px solid var(--hair); }
+  .msg.step { max-width: none; font-size: 12px; }
+  .msg.thought { font-style: italic; }
   .tool { display: flex; align-items: center; gap: 8px; font: 500 11.5px var(--font-mono); color: var(--mute); }
+  .tool .title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tool .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--slate); }
   .tool[data-status="completed"] .dot { background: var(--done); }
   .tool[data-status="in_progress"] .dot, .tool[data-status="pending"] .dot { background: var(--amber); }

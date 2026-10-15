@@ -1,9 +1,11 @@
 <script lang="ts">
-  let { name, size = 14 }: { name: "arrow" | "external" | "close"; size?: number } = $props();
+  let { name, size = 14 }: { name: "arrow" | "external" | "close" | "chevron"; size?: number } = $props();
 </script>
 
 <svg class="ico" width={size} height={size} viewBox="0 0 14 14" aria-hidden="true">
-  {#if name === "arrow"}
+  {#if name === "chevron"}
+    <path d="M5.5 3.5L9 7l-3.5 3.5" />
+  {:else if name === "arrow"}
     <path d="M2.5 7h8.5M7.5 3.5L11 7l-3.5 3.5" />
   {:else if name === "external"}
     <path d="M5 3H3v8h8V9M8 3h3v3M11 3L6.5 7.5" />

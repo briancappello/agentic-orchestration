@@ -2,8 +2,8 @@ import { flushSync, mount, tick, unmount } from "svelte";
 import { afterEach, describe, expect, it } from "vitest";
 import Harness from "./ChatHarness.svelte";
 import { planDoc } from "./fixtures";
-import type { BrokerEvent } from "../src/lib/chat";
-import { applyEvent, displayText, emptyTranscript } from "../src/lib/chat";
+import type { BrokerEvent, ChatBlock, ChatItem } from "../src/lib/chat";
+import { applyEvent, displayText, emptyTranscript, groupTurns, workSummary } from "../src/lib/chat";
 import type { SessionClient } from "../src/lib/session";
 
 class FakeSession implements SessionClient {
@@ -111,6 +111,25 @@ describe("chat pane: conversation", () => {
     expect($(".tool")!.dataset.status).toBe("completed");
   });
 
+  it("folds a turn's reasoning and tool calls, and shows only its reply", async () => {
+    const { session } = await render();
+    const upd = (seq: number, update: Record<string, unknown>) => session.emit({ seq, type: "update", update: { update } });
+    upd(1, { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "Let me read the plan." } });
+    upd(2, { sessionUpdate: "tool_call", toolCallId: "t1", title: "openspec/plan.yaml", status: "completed" });
+    upd(3, { sessionUpdate: "tool_call", toolCallId: "t2", title: "planlib validate", status: "completed" });
+    upd(4, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "</thi" } });
+    upd(5, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "nk>The plan is empty." } });
+    session.emit({ seq: 6, type: "result" });
+    await settle();
+    const work = $<HTMLDetailsElement>("details.work")!;
+    expect(work.open).toBe(false);
+    expect(work.querySelector("summary")!.textContent).toBe("Worked through 2 tool calls");
+    expect(work.querySelectorAll(".tool")).toHaveLength(2);
+    expect(work.querySelector(".thought")!.textContent).toBe("Let me read the plan.");
+    const replies = [...document.querySelectorAll(".log > .msg.agent")];
+    expect(replies.map((r) => r.textContent)).toEqual(["The plan is empty."]);
+  });
+
   it("sends a permission answer to the relay", async () => {
     const { session } = await render();
     session.emit({
@@ -151,5 +170,25 @@ describe("transcript", () => {
     tr = applyEvent(tr, ev);
     expect(tr.items).toHaveLength(1);
     expect(displayText('[Selected in the plan graph]\n- billing/tax — "Tax" (story)\n\nsplit it')).toBe("(about billing/tax) split it");
+  });
+
+  it("groups each turn separately and keeps interim messages in the fold", () => {
+    const at = (n: number) => n;
+    const items: ChatItem[] = [
+      { kind: "agent", key: "a1", text: "Let me check.", time: at(1) },
+      { kind: "tool", key: "t1", title: "ls", status: "completed", time: at(2) },
+      { kind: "agent", key: "a2", text: "Done.", time: at(3) },
+      { kind: "user", key: "u1", text: "now plan billing", time: at(4) },
+      { kind: "agent", key: "a3", text: "<think>which change?</think>Planning billing.", time: at(5) },
+    ];
+    const blocks = groupTurns(items, true);
+    expect(blocks.map((b) => b.kind)).toEqual(["work", "agent", "user", "work", "agent"]);
+    const [first, , , second, last] = blocks as [Extract<ChatBlock, { kind: "work" }>, ChatBlock, ChatBlock, Extract<ChatBlock, { kind: "work" }>, ChatBlock];
+    expect(first.steps.map((s) => s.key)).toEqual(["a1", "t1"]);
+    expect(first.live).toBe(false);
+    expect(second.steps).toMatchObject([{ kind: "thought", text: "which change?" }]);
+    expect(second.live).toBe(true);
+    expect(last).toMatchObject({ kind: "agent", text: "Planning billing." });
+    expect(workSummary(second.steps, true)).toBe("Thinking");
   });
 });
