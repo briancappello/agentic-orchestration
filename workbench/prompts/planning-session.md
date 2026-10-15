@@ -34,4 +34,4 @@ Fix every problem it reports before you hand back to the person. If you cannot f
 - Keep replies short. Say which files you changed and what `planlib validate` reported.
 - Ask before you remove or rename a deliverable that may already be synced: its plan key is its identity in the tracker.
 
-Start by reading `{{store}}/openspec/plan.yaml` and running `planlib validate --store {{store}}`. Then say in two or three sentences what the plan holds and what is unplanned, and wait for the person.
+The person's first message follows these instructions, in the same turn. Before you act on it, read `{{store}}/openspec/plan.yaml` and run `planlib validate --store {{store}}` so you know the plan's state. Then do what the message asks. Do not summarize the plan unless the person asks for it.

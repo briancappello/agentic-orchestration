@@ -4,7 +4,8 @@ import type { BrokerEvent } from "./chat";
 
 export interface SessionClient {
   status(): Promise<SessionStatus & { messages?: { time: number; text: string }[] }>;
-  start(): Promise<SessionStatus>;
+  /** Start a session whose first turn is the person's first message. */
+  start(message: string): Promise<SessionStatus>;
   stop(): Promise<SessionStatus>;
   command(cmd: Record<string, unknown>): Promise<unknown>;
   subscribe(onEvent: (e: BrokerEvent) => void, onDown: () => void): () => void;
@@ -14,7 +15,7 @@ export interface SessionClient {
 
 export const httpSession: SessionClient = {
   status: () => api.session(),
-  start: () => api.startSession(),
+  start: (message) => api.startSession(message),
   stop: () => api.stopSession(),
   command: (cmd) => api.command(cmd),
   config: () => api.sessionConfig(),

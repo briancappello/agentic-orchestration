@@ -153,10 +153,17 @@ class SessionManager:
 
     # Lifecycle.
 
-    async def start(self) -> dict[str, Any]:
+    async def start(self, message: str) -> dict[str, Any]:
+        """Start a session whose first turn is the person's first message.
+
+        The agent does nothing before the person says what to plan: the
+        planning instructions travel with that message, in the same turn.
+        """
+        if not isinstance(message, str) or not message.strip():
+            raise SessionError(400, "message_required", "a session starts with the person's first message")
         async with self._lock:
             if self._live_state():
-                return self.status()
+                raise SessionError(409, "session_running", "a planning session is already running; send the message to it")
             self._cleanup_ended()
             key = "planning-" + secrets.token_hex(4)
             spec = {
@@ -167,8 +174,12 @@ class SessionManager:
                 "model": self.agent_model,
                 "preferred": self._preferences(),
                 "prompt": self._planning_prompt(),
+                "message": message,
             }
             (self.runtime_dir / "spec.json").write_text(json.dumps(spec))
+            # The broker's events carry no human messages: keep this one for the chat to show.
+            with self._messages_path(key).open("a") as f:
+                f.write(json.dumps({"time": time.time(), "op": "prompt", "text": message}) + "\n")
             self._state_path.unlink(missing_ok=True)
             env = {k: v for k, v in os.environ.items() if not k.startswith(("SORTIE_", "WORKBENCH_"))}
             src = Path(__file__).resolve().parents[1]

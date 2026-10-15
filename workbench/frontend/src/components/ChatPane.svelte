@@ -110,13 +110,18 @@
     );
   }
 
-  async function start() {
+  /** The first message starts the session; it is also the agent's first turn. */
+  async function start(message: string, typed: string) {
     starting = true;
     error = "";
+    messages = [{ time: Date.now() / 1000, text: message }];
     try {
-      await session.start();
+      await session.start(message);
+      attached = [];
       await refresh();
     } catch (err) {
+      messages = [];
+      draft = typed;
       error = err instanceof Error ? err.message : "Could not start the session.";
     } finally {
       starting = false;
@@ -137,9 +142,10 @@
   async function send(e?: Event) {
     e?.preventDefault();
     const text = draft.trim();
-    if (!text || !active) return;
+    if (!text || starting) return;
     const message = composeMessage(text, attachedNodes);
     draft = "";
+    if (!active) return start(message, text);
     try {
       await session.command({ op: "steer", text: message });
       messages = [...messages, { time: Date.now() / 1000, text: message }];
@@ -172,17 +178,15 @@
 <ContextCard {model} {view} {attached} {onapprove} onattach={(k) => (attached = [...attached, k])} onselect={(k) => onselect(k)} />
 
 <div class="session-bar">
-  <span class="state" class:on={active}><i></i>{active ? (transcript.busy ? "Agent working" : "Planning session") : "No session"}</span>
+  <span class="state" class:on={active || starting}><i></i>{starting ? "Starting session" : active ? (transcript.busy ? "Agent working" : "Planning session") : "No session"}</span>
   {#if active}
     <button type="button" class="ghost" onclick={stop}>End session</button>
-  {:else}
-    <button type="button" class="primary" onclick={start} disabled={starting}>{starting ? "Starting…" : "Start planning session"}</button>
   {/if}
 </div>
 
 <div class="log" bind:this={log} aria-live="polite" aria-label="Conversation">
   {#if !items.length}
-    <p class="empty">{active ? "The agent is reading the store. Ask it to plan a change, or select a node and point at it." : "Start a session to plan with the agent. It works in the spec store and writes only under openspec/."}</p>
+    <p class="empty">Say what to plan, or select a node in the graph and point at it. Your first message starts a session with the planning agent. It works in the spec store and writes only under openspec/.</p>
   {/if}
   {#each items as item (item.key)}
     {#if item.kind === "user"}
@@ -232,7 +236,7 @@
       {/each}
     </div>
   {/if}
-  <textarea bind:value={draft} onkeydown={onkey} rows="3" placeholder={active ? "Message the planning agent" : "Start a session first"} disabled={!active} aria-label="Message"></textarea>
+  <textarea bind:value={draft} onkeydown={onkey} rows="3" placeholder={active ? "Message the planning agent" : "What should we plan?"} disabled={starting} aria-label="Message"></textarea>
   <div class="settings" aria-label="Agent settings">
     {#if modelOption}
       <ModelPicker option={modelOption} disabled={!configReady || configBusy} onpick={(v) => choose("model", v)} />
@@ -251,7 +255,7 @@
       </label>
     {/if}
   </div>
-  <button type="submit" class="primary" disabled={!active || !draft.trim()}>Send</button>
+  <button type="submit" class="primary" disabled={starting || !draft.trim()}>{starting ? "Starting…" : "Send"}</button>
 </form>
 
 <style>

@@ -13,7 +13,13 @@ class FakeSession implements SessionClient {
   messages: { time: number; text: string }[] = [];
   constructor(public active = true) {}
   async status() { return { active: this.active, messages: this.messages }; }
-  async start() { this.active = true; return { active: true }; }
+  started: string[] = [];
+  async start(message: string) {
+    this.started.push(message);
+    this.messages = [{ time: Date.now() / 1000, text: message }];
+    this.active = true;
+    return { active: true };
+  }
   async stop() { this.active = false; return { active: false }; }
   async command(cmd: Record<string, unknown>) { this.commands.push(cmd); return {}; }
   subscribe(onEvent: (e: BrokerEvent) => void) { this.listener = onEvent; return () => (this.listener = null); }
@@ -172,14 +178,24 @@ describe("chat pane: conversation", () => {
     expect($(".permission button")).toBeNull();
   });
 
-  it("offers to start a session when none runs", async () => {
+  it("starts the session with the first message, selection included", async () => {
     const session = new FakeSession(false);
-    await render(session);
-    const start = [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.includes("Start planning session"))!;
-    start.click();
-    await settle();
-    expect(session.active).toBe(true);
+    const { h } = await render(session);
     expect($("textarea")!.hasAttribute("disabled")).toBe(false);
+    expect([...document.querySelectorAll("button")].some((b) => b.textContent?.includes("Start"))).toBe(false);
+
+    h.select("billing/invoice");
+    await settle();
+    await type("plan this epic");
+    await submit();
+    expect(session.started).toHaveLength(1);
+    expect(session.started[0]).toContain("billing/invoice");
+    expect(session.started[0].endsWith("plan this epic")).toBe(true);
+    expect(session.commands).toEqual([]); // not sent a second time as a steer
+    expect(session.active).toBe(true);
+    expect($(".msg.user")!.textContent).toBe("(about billing/invoice) plan this epic");
+    expect($("[data-attached]")).toBeNull();
+    expect($(".session-bar")!.textContent).toContain("End session");
   });
 });
 

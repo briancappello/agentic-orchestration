@@ -95,7 +95,7 @@ describe("approve action", () => {
     const doc = planDoc();
     doc.nodes.find((n) => n.plan_key === "billing")!.approval = "draft";
     const session: SessionClient = {
-      status: async () => ({ active: false }), start: async () => ({ active: true }), stop: async () => ({ active: false }),
+      status: async () => ({ active: false }), start: async (_message: string) => ({ active: true }), stop: async () => ({ active: false }),
       command: async () => ({}), subscribe: () => () => {},
       config: async () => ({ options: [], ready: true }), setConfig: async () => ({ options: [], ready: true }),
     };

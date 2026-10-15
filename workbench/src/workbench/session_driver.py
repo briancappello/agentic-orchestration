@@ -9,7 +9,7 @@ through the broker's HTTP viewer transport.
 The driver starts the broker, opens one ACP session in the spec store,
 selects the model and thinking level through the session's ACP config
 options (and ends the session if the configured model is not offered),
-sends the planning prompt as the first turn, and then answers what reaches
+sends the planning prompt with the person's first message as the first turn, and then answers what reaches
 the driver: a permission request no viewer answered is cancelled, never
 granted on a person's behalf. It records its state in ``state.json`` and
 the choosable config options in ``config.json`` in the runtime directory,
@@ -205,9 +205,10 @@ class Driver:
             return
         self.ready.set()
         self.note_options(self.options)  # now marked ready
-        prompt = self.spec.get("prompt") or ""
-        if prompt:
-            await self.call("session/prompt", {"sessionId": self.session_id, "prompt": [{"type": "text", "text": prompt}]})
+        # The first turn: the planning instructions, then the person's first message.
+        blocks = [{"type": "text", "text": t} for t in (self.spec.get("prompt"), self.spec.get("message")) if t]
+        if blocks:
+            await self.call("session/prompt", {"sessionId": self.session_id, "prompt": blocks})
 
     async def apply_choices(self) -> None:
         """Select the model and thinking level before the first turn.

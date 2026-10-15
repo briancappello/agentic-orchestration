@@ -98,16 +98,22 @@ def test_round_trip_permission_and_reattach(session_app):
         assert client.get("/api/session").status_code == 401
         assert client.post("/api/login", json={"password": PASSWORD}).status_code == 200
 
-        started = client.post("/api/session").json()
+        # A session starts only with the person's first message.
+        assert client.post("/api/session").status_code == 400
+        assert client.post("/api/session", json={"message": "  "}).status_code == 400
+        assert client.get("/api/session").json()["active"] is False
+
+        started = client.post("/api/session", json={"message": "plan billing"}).json()
         assert started["active"] is True
+        assert client.post("/api/session", json={"message": "again"}).status_code == 409
         pid = broker_pid(manager)
         rec = next((manager.runtime_dir / "registry").glob(f"{started['key']}.*.json"))
         assert json.loads(rec.read_text())["pid"] == pid
 
         with client.stream("GET", "/api/session/events") as r:
             gen = events(r.iter_lines())
-            # The planning prompt went out as the first turn, with the store path.
-            until(gen, lambda e: "echo: You plan in " in flat(e))
+            # One first turn: the planning prompt, with the store path, then the person's message.
+            until(gen, lambda e: f"echo: You plan in {manager.store}. plan billing" in flat(e))
 
             assert client.post("/api/session/commands", json={"op": "steer", "text": "hello agent"}).status_code == 200
             (last_id, _), _ = until(gen, lambda e: "echo: hello agent" in flat(e))
@@ -130,7 +136,7 @@ def test_round_trip_permission_and_reattach(session_app):
 
         assert client.post("/api/session/commands", json={"op": "rm -rf"}).status_code == 400
         texts = [m["text"] for m in client.get("/api/session").json()["messages"]]
-        assert texts == ["hello agent", "ASK-PERMISSION please"]
+        assert texts == ["plan billing", "hello agent", "ASK-PERMISSION please"]
 
         assert client.delete("/api/session").json() == {"active": False}
         assert wait_dead(pid), "broker still running after the session ended"
@@ -143,7 +149,7 @@ def test_session_survives_a_backend_restart(store, tmp_path):
     try:
         with live_server(app) as base, httpx.Client(base_url=base, timeout=20) as client:
             client.post("/api/login", json={"password": PASSWORD})
-            client.post("/api/session")
+            client.post("/api/session", json={"message": "plan billing"})
             pid = broker_pid(manager)
             with client.stream("GET", "/api/session/events") as r:
                 gen = events(r.iter_lines())
@@ -157,7 +163,7 @@ def test_session_survives_a_backend_restart(store, tmp_path):
             client.post("/api/login", json={"password": PASSWORD})
             status = client.get("/api/session").json()
             assert status["active"] is True and broker_pid(manager2) == pid
-            assert [m["text"] for m in status["messages"]] == ["before restart"]
+            assert [m["text"] for m in status["messages"]] == ["plan billing", "before restart"]
             with client.stream("GET", "/api/session/events") as r:
                 gen = events(r.iter_lines())
                 until(gen, lambda e: "echo: before restart" in flat(e))  # replayed history
@@ -175,7 +181,7 @@ def test_a_dead_session_reads_as_ended_and_restarts(store, tmp_path):
     try:
         with live_server(app) as base, httpx.Client(base_url=base, timeout=20) as client:
             client.post("/api/login", json={"password": PASSWORD})
-            client.post("/api/session")
+            client.post("/api/session", json={"message": "plan billing"})
             pid = broker_pid(manager)
             os.kill(pid, 9)
             assert wait_dead(pid)
@@ -184,7 +190,7 @@ def test_a_dead_session_reads_as_ended_and_restarts(store, tmp_path):
                 time.sleep(0.05)
             assert client.get("/api/session").json()["active"] is False
             assert client.post("/api/session/commands", json={"op": "state"}).status_code == 409
-            assert client.post("/api/session").json()["active"] is True
+            assert client.post("/api/session", json={"message": "plan billing"}).json()["active"] is True
             assert broker_pid(manager) != pid
     finally:
         asyncio.run(manager.stop())
@@ -205,7 +211,7 @@ def test_the_configured_model_is_selected_through_acp_before_the_first_turn(stor
     try:
         with live_server(app) as base, httpx.Client(base_url=base, timeout=20) as client:
             client.post("/api/login", json={"password": PASSWORD})
-            client.post("/api/session")
+            client.post("/api/session", json={"message": "plan billing"})
             status = wait_status(client, lambda s: s.get("model"))
             assert status["active"] is True and status["model"] == "fake/planner"
             with client.stream("GET", "/api/session/events") as r:
@@ -220,7 +226,7 @@ def test_a_model_the_agent_does_not_offer_ends_the_session_with_the_reason(store
     try:
         with live_server(app) as base, httpx.Client(base_url=base, timeout=20) as client:
             client.post("/api/login", json={"password": PASSWORD})
-            client.post("/api/session")
+            client.post("/api/session", json={"message": "plan billing"})
             pid = broker_pid(manager)
             status = wait_status(client, lambda s: not s["active"])
             assert status["active"] is False
@@ -237,7 +243,7 @@ def test_a_person_chooses_model_and_thinking_and_the_next_session_keeps_them(sto
         with live_server(app) as base, httpx.Client(base_url=base, timeout=20) as client:
             client.post("/api/login", json={"password": PASSWORD})
             assert client.get("/api/session/config").status_code == 409  # no session yet
-            client.post("/api/session")
+            client.post("/api/session", json={"message": "plan billing"})
             wait_status(client, lambda s: s.get("model"))
             with client.stream("GET", "/api/session/events") as r:
                 until(events(r.iter_lines()), lambda e: "echo: You plan in " in flat(e))
@@ -263,7 +269,7 @@ def test_a_person_chooses_model_and_thinking_and_the_next_session_keeps_them(sto
             assert client.put("/api/session/config", json={"category": "mode", "value": "plan"}).status_code == 400
 
             assert client.delete("/api/session").json() == {"active": False}
-            client.post("/api/session")
+            client.post("/api/session", json={"message": "plan billing"})
             status = wait_status(client, lambda s: s.get("thought_level"))
             assert (status["model"], status["thought_level"]) == ("fake/planner", "high")
     finally:

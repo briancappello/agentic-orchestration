@@ -24,9 +24,9 @@ def session_router(manager: SessionManager, require_operator) -> APIRouter:
         return manager.status()
 
     @router.post("")
-    async def start() -> dict:
+    async def start(body: dict[str, Any] | None = None) -> dict:
         try:
-            return await manager.start()
+            return await manager.start((body or {}).get("message"))
         except SessionError as exc:
             raise fail(exc) from exc
 
