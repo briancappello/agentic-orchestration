@@ -144,6 +144,7 @@ class SessionManager:
             "active": True,
             "key": st["key"],
             "acp_session_id": st.get("acp_session_id"),
+            "can_configure": bool(st.get("can_configure")),
             "model": st.get("model"),
             "thought_level": st.get("thought_level"),
             "started_at": st.get("started_at"),
@@ -263,9 +264,15 @@ class SessionManager:
             return {}
         return {k: v for k, v in prefs.items() if k in CONFIG_CATEGORIES and isinstance(v, str)} if isinstance(prefs, dict) else {}
 
+    def _require_configurable(self) -> None:
+        st, _ = self._require()
+        if not st.get("can_configure"):
+            raise SessionError(409, "not_configurable",
+                               "this session was started before model choice existed; end it to choose a model")
+
     def config(self) -> dict[str, Any]:
         """The running session's choosable config options, with their current values."""
-        self._require()
+        self._require_configurable()
         try:
             return json.loads((self.runtime_dir / "config.json").read_text())
         except (OSError, ValueError):
@@ -275,7 +282,7 @@ class SessionManager:
         """Change the model or thinking level, and remember it for the next session."""
         if category not in CONFIG_CATEGORIES or not isinstance(value, str) or not value:
             raise SessionError(400, "invalid_config", "category must be model or thought_level, with a value")
-        self._require()
+        self._require_configurable()
         try:
             reader, writer = await asyncio.open_unix_connection(str(self.runtime_dir / "ctl.sock"))
         except OSError as exc:

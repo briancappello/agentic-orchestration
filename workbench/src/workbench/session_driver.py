@@ -90,6 +90,8 @@ class Driver:
         self.state: dict[str, Any] = {
             "key": self.key, "store": self.spec["store"], "driver_pid": os.getpid(), "broker_pid": None,
             "http_url": None, "token_file": None, "acp_session_id": None,
+            # Drivers from before ctl.sock existed write no such flag: their sessions cannot change model.
+            "can_configure": True,
             "model": None, "thought_level": None, "started_at": time.time(), "ended_at": None, "error": None,
         }
         self.stop = asyncio.Event()

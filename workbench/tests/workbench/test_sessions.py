@@ -274,3 +274,24 @@ def test_a_person_chooses_model_and_thinking_and_the_next_session_keeps_them(sto
             assert (status["model"], status["thought_level"]) == ("fake/planner", "high")
     finally:
         asyncio.run(manager.stop())
+
+
+def test_a_session_from_an_older_driver_says_it_cannot_change_model(store, tmp_path):
+    store.plan([])
+    app, manager = make_app(store, tmp_path)
+    try:
+        with live_server(app) as base, httpx.Client(base_url=base, timeout=20) as client:
+            client.post("/api/login", json={"password": PASSWORD})
+            client.post("/api/session", json={"message": "plan billing"})
+            assert client.get("/api/session").json()["can_configure"] is True
+            # A driver from before model choice wrote no can_configure flag.
+            path = manager.runtime_dir / "state.json"
+            state = json.loads(path.read_text())
+            del state["can_configure"]
+            path.write_text(json.dumps(state))
+            assert client.get("/api/session").json()["can_configure"] is False
+            r = client.get("/api/session/config")
+            assert r.status_code == 409 and "end it" in r.json()["error"]["message"]
+            assert client.put("/api/session/config", json={"category": "model", "value": "fake/planner"}).status_code == 409
+    finally:
+        asyncio.run(manager.stop())

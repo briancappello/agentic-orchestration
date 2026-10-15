@@ -42,6 +42,8 @@ export interface SessionStatus {
   active: boolean;
   key?: string;
   acp_session_id?: string | null;
+  /** False for a session whose driver predates model choice: it cannot change model. */
+  can_configure?: boolean;
   model?: string | null;
   thought_level?: string | null;
   error?: string | null;

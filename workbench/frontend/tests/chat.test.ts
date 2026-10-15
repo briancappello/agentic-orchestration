@@ -229,6 +229,17 @@ describe("chat pane: model and thinking level", () => {
     expect($("[data-config='thought_level']")).toBeNull();
   });
 
+  it("says at once that a session from an older driver cannot change model, and does not wait for it", async () => {
+    const session = new FakeSession();
+    let asked = 0;
+    session.status = async () => ({ active: true, can_configure: false, messages: [] });
+    session.config = async () => { asked++; return { options: [], ready: false }; };
+    await render(session);
+    expect($("[data-note='not-configurable']")!.textContent).toContain("End it");
+    expect($(".trigger")).toBeNull();
+    expect(asked).toBe(0);
+  });
+
   it("shows no agent settings without a session", async () => {
     await render(new FakeSession(false));
     expect($(".trigger")).toBeNull();

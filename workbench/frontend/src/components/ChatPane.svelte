@@ -33,6 +33,7 @@
   let configReady = $state(false);
   let configBusy = $state(false);
   let configUnavailable = $state(false);
+  let canConfigure = $state(true);
   let configTimer: ReturnType<typeof setTimeout> | undefined;
 
   const modelOption = $derived(config.find((o) => o.category === "model"));
@@ -84,7 +85,8 @@
       messages = status.messages ?? [];
       error = status.error ?? "";
       if (active && !unsubscribe) connect();
-      if (active && !configReady) loadConfig();
+      canConfigure = status.can_configure !== false;
+      if (active && canConfigure && !configReady) loadConfig();
       if (!active) {
         config = [];
         configReady = false;
@@ -238,10 +240,12 @@
   {/if}
   <textarea bind:value={draft} onkeydown={onkey} rows="3" placeholder={active ? "Message the planning agent" : "What should we plan?"} disabled={starting} aria-label="Message"></textarea>
   <div class="settings" aria-label="Agent settings">
-    {#if modelOption}
+    {#if active && !canConfigure}
+      <p class="note" data-note="not-configurable">This session started before model choice existed, so its model can't change. End it; your next message starts a session where you can choose.</p>
+    {:else if modelOption}
       <ModelPicker option={modelOption} disabled={!configReady || configBusy} onpick={(v) => choose("model", v)} />
     {:else if active}
-      <span class="pending">{configReady ? "The agent offers no model choice" : configUnavailable ? "Model choice unavailable in this session" : "Selecting the model…"}</span>
+      <p class="note">{configReady ? "The agent offers no model choice." : configUnavailable ? "The model choice did not load. End the session and start a new one to choose a model." : "Model: selecting…"}</p>
     {/if}
     {#if levelOption}
       <label class="level">
@@ -307,7 +311,7 @@
   .att button { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; color: var(--amber-ink); }
   .att button:hover { background: rgba(201, 138, 26, 0.2); }
   .settings { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-  .pending { font-size: 12px; color: var(--mute); }
+  .note { margin: 0; font-size: 12px; line-height: 1.4; color: var(--mute); max-width: 52ch; }
   .level { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 4px 0 10px; border: 1px solid var(--line); border-radius: var(--r-button); background: #fff; font-size: 12px; color: var(--mute); }
   .level:hover:has(select:not(:disabled)) { border-color: var(--ink); }
   .level select { height: 30px; border: 0; background: transparent; font: 600 12px var(--font-sans); color: var(--ink); cursor: pointer; }
