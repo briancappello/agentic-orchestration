@@ -1,5 +1,5 @@
 /** The planning session as the chat pane uses it; tests substitute a fake. */
-import { api, type SessionStatus } from "./api";
+import { api, type ConfigCategory, type SessionConfig, type SessionStatus } from "./api";
 import type { BrokerEvent } from "./chat";
 
 export interface SessionClient {
@@ -8,6 +8,8 @@ export interface SessionClient {
   stop(): Promise<SessionStatus>;
   command(cmd: Record<string, unknown>): Promise<unknown>;
   subscribe(onEvent: (e: BrokerEvent) => void, onDown: () => void): () => void;
+  config(): Promise<SessionConfig>;
+  setConfig(category: ConfigCategory, value: string): Promise<SessionConfig>;
 }
 
 export const httpSession: SessionClient = {
@@ -15,6 +17,8 @@ export const httpSession: SessionClient = {
   start: () => api.startSession(),
   stop: () => api.stopSession(),
   command: (cmd) => api.command(cmd),
+  config: () => api.sessionConfig(),
+  setConfig: (category, value) => api.setSessionConfig(category, value),
   subscribe(onEvent, onDown) {
     // EventSource sends Last-Event-ID itself when it reconnects, so the
     // broker replays only what this tab missed.

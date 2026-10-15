@@ -97,6 +97,7 @@ describe("approve action", () => {
     const session: SessionClient = {
       status: async () => ({ active: false }), start: async () => ({ active: true }), stop: async () => ({ active: false }),
       command: async () => ({}), subscribe: () => () => {},
+      config: async () => ({ options: [], ready: true }), setConfig: async () => ({ options: [], ready: true }),
     };
     const sync = new FakeSync();
     const h = mount(ChatHarness, { target: document.body, props: { initial: doc, session, onapprove: (c: string) => sync.approve(c) } }) as ReturnType<typeof mount> & { select: (k: string) => void };

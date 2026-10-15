@@ -6,14 +6,35 @@ import threading
 
 lock = threading.Lock()
 pending = {}
-MODELS = ["fake/default", "fake/planner"]
-model = MODELS[0]
+# Like opencode: each model has its own thinking levels (or none), and a new
+# model starts at its own default level.
+MODELS = {"fake/default": [], "fake/planner": ["low", "medium", "high"]}
+DEFAULT_LEVEL = {"fake/planner": "medium"}
+model = "fake/default"
+level = None
 
 
 def config_options():
     """The session's ACP config options: a model select, in groups as ACP allows."""
-    return [{"id": "model", "name": "Model", "category": "model", "type": "select", "currentValue": model,
-             "options": [{"group": "fake", "name": "Fake", "options": [{"value": m, "name": m} for m in MODELS]}]}]
+    opts = [{"id": "model", "name": "Model", "category": "model", "type": "select", "currentValue": model,
+             "options": [{"group": "fake", "name": "Fake", "options": [{"value": m, "name": m.title()} for m in MODELS]}]},
+            {"id": "mode", "name": "Mode", "category": "mode", "type": "select", "currentValue": "build",
+             "options": [{"value": "build", "name": "build"}]}]
+    if MODELS[model]:
+        opts.insert(1, {"id": "effort", "name": "Effort", "category": "thought_level", "type": "select", "currentValue": level,
+                        "options": [{"value": v, "name": v.title()} for v in MODELS[model]]})
+    return opts
+
+
+def set_option(config_id, value):
+    global model, level
+    if config_id == "model" and value in MODELS:
+        model, level = value, DEFAULT_LEVEL.get(value)
+        return True
+    if config_id == "effort" and value in MODELS[model]:
+        level = value
+        return True
+    return False
 
 
 def send(msg):
@@ -67,10 +88,9 @@ for line in sys.stdin:
         send({"jsonrpc": "2.0", "id": msg["id"], "result": {"sessionId": "sess-1", "configOptions": config_options()}})
     elif method == "session/set_config_option":
         p = msg["params"]
-        if p.get("configId") != "model" or p.get("value") not in MODELS:
+        if not set_option(p.get("configId"), p.get("value")):
             send({"jsonrpc": "2.0", "id": msg["id"], "error": {"code": -32602, "message": "invalid value"}})
         else:
-            model = p["value"]
             send({"jsonrpc": "2.0", "id": msg["id"], "result": {"configOptions": config_options()}})
     elif method == "session/prompt":
         threading.Thread(target=handle_prompt, args=(msg,), daemon=True).start()

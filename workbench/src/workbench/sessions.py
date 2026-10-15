@@ -31,6 +31,15 @@ import httpx
 
 log = logging.getLogger(__name__)
 
+MODEL_CATEGORY = "model"
+CONFIG_CATEGORIES = (MODEL_CATEGORY, "thought_level")
+
+
+def write_json_atomic(path: Path, data: dict[str, Any]) -> None:
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data))
+    os.replace(tmp, path)
+
 
 class SessionError(Exception):
     def __init__(self, status: int, code: str, message: str):
@@ -136,6 +145,7 @@ class SessionManager:
             "key": st["key"],
             "acp_session_id": st.get("acp_session_id"),
             "model": st.get("model"),
+            "thought_level": st.get("thought_level"),
             "started_at": st.get("started_at"),
             "error": st.get("error"),
             "messages": self._messages(st["key"]),
@@ -155,6 +165,7 @@ class SessionManager:
                 "broker_command": self.broker_command,
                 "agent_command": self.agent_command,
                 "model": self.agent_model,
+                "preferred": self._preferences(),
                 "prompt": self._planning_prompt(),
             }
             (self.runtime_dir / "spec.json").write_text(json.dumps(spec))
@@ -223,12 +234,55 @@ class SessionManager:
             return
         for suffix in (".token", ".messages.jsonl", ".stderr"):
             (self.runtime_dir / f"{st['key']}{suffix}").unlink(missing_ok=True)
+        (self.runtime_dir / "config.json").unlink(missing_ok=True)
         shutil.rmtree(self.runtime_dir / "registry", ignore_errors=True)
 
     def _planning_prompt(self) -> str:
         if self.prompt_file is None or not self.prompt_file.is_file():
             return ""
         return self.prompt_file.read_text().replace("{{store}}", str(self.store))
+
+    # Model and thinking level. ACP lets only the client set config options,
+    # so the change goes to the driver, which holds the client side.
+
+    def _preferences(self) -> dict[str, str]:
+        try:
+            prefs = json.loads((self.runtime_dir / "preferences.json").read_text())
+        except (OSError, ValueError):
+            return {}
+        return {k: v for k, v in prefs.items() if k in CONFIG_CATEGORIES and isinstance(v, str)} if isinstance(prefs, dict) else {}
+
+    def config(self) -> dict[str, Any]:
+        """The running session's choosable config options, with their current values."""
+        self._require()
+        try:
+            return json.loads((self.runtime_dir / "config.json").read_text())
+        except (OSError, ValueError):
+            return {"options": [], "ready": False}
+
+    async def set_config(self, category: str, value: str) -> dict[str, Any]:
+        """Change the model or thinking level, and remember it for the next session."""
+        if category not in CONFIG_CATEGORIES or not isinstance(value, str) or not value:
+            raise SessionError(400, "invalid_config", "category must be model or thought_level, with a value")
+        self._require()
+        try:
+            reader, writer = await asyncio.open_unix_connection(str(self.runtime_dir / "ctl.sock"))
+        except OSError as exc:
+            raise SessionError(502, "driver_unavailable", "the session driver does not answer") from exc
+        try:
+            writer.write((json.dumps({"category": category, "value": value}) + "\n").encode())
+            await writer.drain()
+            reply = json.loads(await asyncio.wait_for(reader.readline(), timeout=30) or b"{}")
+        except (TimeoutError, ValueError) as exc:
+            raise SessionError(504, "driver_timeout", "the agent did not answer the config change") from exc
+        finally:
+            writer.close()
+        if not reply.get("ok"):
+            raise SessionError(409, "config_rejected", reply.get("error") or "the agent refused the change")
+        # A new model resets the thinking level to that model's default.
+        prefs = {MODEL_CATEGORY: value} if category == MODEL_CATEGORY else {**self._preferences(), category: value}
+        write_json_atomic(self.runtime_dir / "preferences.json", prefs)
+        return {"options": reply["options"], "ready": True}
 
     # The viewer side, relayed to the browser.
 

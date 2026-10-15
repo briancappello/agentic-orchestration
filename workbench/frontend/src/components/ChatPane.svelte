@@ -4,8 +4,10 @@
   import { GraphModel } from "../lib/model";
   import type { SessionClient } from "../lib/session";
   import type { MergedGraph, ViewState } from "../lib/types";
+  import type { ConfigCategory, ConfigOption } from "../lib/api";
   import ContextCard from "./ContextCard.svelte";
   import Icon from "./Icon.svelte";
+  import ModelPicker from "./ModelPicker.svelte";
 
   let {
     doc, view, session, onselect, onapprove,
@@ -27,6 +29,42 @@
   let attached: string[] = $state([]);
   let log: HTMLElement | undefined = $state();
   let unsubscribe: (() => void) | null = null;
+  let config: ConfigOption[] = $state([]);
+  let configReady = $state(false);
+  let configBusy = $state(false);
+  let configUnavailable = $state(false);
+  let configTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const modelOption = $derived(config.find((o) => o.category === "model"));
+  const levelOption = $derived(config.find((o) => o.category === "thought_level"));
+
+  // The agent reports its options once the session is open and its model
+  // selected; until then, ask again shortly.
+  async function loadConfig(tries = 60) {
+    clearTimeout(configTimer);
+    try {
+      const c = await session.config();
+      config = c.options;
+      configReady = c.ready;
+      if (c.ready) return;
+    } catch {
+      // the session is still starting, or has ended
+    }
+    if (active && tries > 0) configTimer = setTimeout(() => loadConfig(tries - 1), 500);
+    else configUnavailable = true;
+  }
+
+  async function choose(category: ConfigCategory, value: string) {
+    configBusy = true;
+    error = "";
+    try {
+      config = (await session.setConfig(category, value)).options;
+    } catch (err) {
+      error = err instanceof Error ? err.message : "The agent did not take the change.";
+    } finally {
+      configBusy = false;
+    }
+  }
 
   const items: ChatBlock[] = $derived(groupTurns(withUserMessages(transcript.items, messages), transcript.busy));
   const attachedNodes = $derived(attached.map((k) => model.node(k)).filter((n) => n !== undefined));
@@ -46,6 +84,12 @@
       messages = status.messages ?? [];
       error = status.error ?? "";
       if (active && !unsubscribe) connect();
+      if (active && !configReady) loadConfig();
+      if (!active) {
+        config = [];
+        configReady = false;
+        configUnavailable = false;
+      }
     } catch {
       error = "The planning session is unavailable.";
     }
@@ -82,8 +126,12 @@
   async function stop() {
     unsubscribe?.();
     unsubscribe = null;
+    clearTimeout(configTimer);
     await session.stop();
     active = false;
+    config = [];
+    configReady = false;
+    configUnavailable = false;
   }
 
   async function send(e?: Event) {
@@ -115,7 +163,10 @@
   }
 
   refresh();
-  onDestroy(() => unsubscribe?.());
+  onDestroy(() => {
+    unsubscribe?.();
+    clearTimeout(configTimer);
+  });
 </script>
 
 <ContextCard {model} {view} {attached} {onapprove} onattach={(k) => (attached = [...attached, k])} onselect={(k) => onselect(k)} />
@@ -182,6 +233,24 @@
     </div>
   {/if}
   <textarea bind:value={draft} onkeydown={onkey} rows="3" placeholder={active ? "Message the planning agent" : "Start a session first"} disabled={!active} aria-label="Message"></textarea>
+  <div class="settings" aria-label="Agent settings">
+    {#if modelOption}
+      <ModelPicker option={modelOption} disabled={!configReady || configBusy} onpick={(v) => choose("model", v)} />
+    {:else if active}
+      <span class="pending">{configReady ? "The agent offers no model choice" : configUnavailable ? "Model choice unavailable in this session" : "Selecting the model…"}</span>
+    {/if}
+    {#if levelOption}
+      <label class="level">
+        <span>{levelOption.category === "thought_level" ? "Thinking" : levelOption.name}</span>
+        <select
+          value={levelOption.currentValue} disabled={!configReady || configBusy} data-config="thought_level"
+          onchange={(e) => choose("thought_level", e.currentTarget.value)}
+        >
+          {#each levelOption.options as o (o.value)}<option value={o.value}>{o.name}</option>{/each}
+        </select>
+      </label>
+    {/if}
+  </div>
   <button type="submit" class="primary" disabled={!active || !draft.trim()}>Send</button>
 </form>
 
@@ -206,7 +275,6 @@
   .work summary { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; font-size: 12px; font-weight: 600; cursor: pointer; list-style: none; border-radius: var(--r-button); }
   .work summary::-webkit-details-marker { display: none; }
   .work summary:hover { color: var(--ink); }
-  .work summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
   .work summary span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 52ch; }
   .work summary :global(.ico) { transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1); }
   .work[open] summary :global(.ico) { transform: rotate(90deg); }
@@ -234,6 +302,12 @@
   .att { display: inline-flex; align-items: center; gap: 2px; height: 28px; padding: 0 2px 0 10px; border: 1px solid var(--amber); border-radius: var(--r-pill); background: var(--amber-tint); font: 500 11.5px var(--font-mono); }
   .att button { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; color: var(--amber-ink); }
   .att button:hover { background: rgba(201, 138, 26, 0.2); }
-  textarea { width: 100%; resize: none; min-height: 64px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-button); background: #fff; line-height: 1.45; }
+  .settings { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .pending { font-size: 12px; color: var(--mute); }
+  .level { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 4px 0 10px; border: 1px solid var(--line); border-radius: var(--r-button); background: #fff; font-size: 12px; color: var(--mute); }
+  .level:hover:has(select:not(:disabled)) { border-color: var(--ink); }
+  .level select { height: 30px; border: 0; background: transparent; font: 600 12px var(--font-sans); color: var(--ink); cursor: pointer; }
+  .level select:disabled { opacity: 0.55; cursor: default; }
+  textarea { grid-column: 1 / -1; width: 100%; resize: none; min-height: 64px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-button); background: #fff; line-height: 1.45; }
   textarea:disabled { background: var(--strip); }
 </style>

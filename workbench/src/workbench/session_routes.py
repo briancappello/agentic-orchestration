@@ -34,6 +34,20 @@ def session_router(manager: SessionManager, require_operator) -> APIRouter:
     async def stop() -> dict:
         return await manager.stop()
 
+    @router.get("/config")
+    def config() -> dict:
+        try:
+            return manager.config()
+        except SessionError as exc:
+            raise fail(exc) from exc
+
+    @router.put("/config")
+    async def set_config(change: dict[str, Any]) -> dict:
+        try:
+            return await manager.set_config(change.get("category"), change.get("value"))
+        except SessionError as exc:
+            raise fail(exc) from exc
+
     @router.post("/commands")
     async def command(cmd: dict[str, Any]) -> JSONResponse:
         if cmd.get("op") not in ALLOWED_OPS:

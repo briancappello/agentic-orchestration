@@ -228,3 +228,43 @@ def test_a_model_the_agent_does_not_offer_ends_the_session_with_the_reason(store
             assert wait_dead(pid)
     finally:
         asyncio.run(manager.stop())
+
+
+def test_a_person_chooses_model_and_thinking_and_the_next_session_keeps_them(store, tmp_path):
+    store.plan([])
+    app, manager = make_app(store, tmp_path, model="fake/default")
+    try:
+        with live_server(app) as base, httpx.Client(base_url=base, timeout=20) as client:
+            client.post("/api/login", json={"password": PASSWORD})
+            assert client.get("/api/session/config").status_code == 409  # no session yet
+            client.post("/api/session")
+            wait_status(client, lambda s: s.get("model"))
+            with client.stream("GET", "/api/session/events") as r:
+                until(events(r.iter_lines()), lambda e: "echo: You plan in " in flat(e))
+
+            options = client.get("/api/session/config").json()["options"]
+            assert [(o["category"], o["currentValue"]) for o in options] == [("model", "fake/default")]
+            assert [v["value"] for v in options[0]["options"]] == ["fake/default", "fake/planner"]  # groups flattened
+
+            # A new model brings its own thinking levels, at that model's default.
+            r = client.put("/api/session/config", json={"category": "model", "value": "fake/planner"})
+            assert r.status_code == 200, r.text
+            by_cat = {o["category"]: o for o in r.json()["options"]}
+            assert by_cat["thought_level"]["currentValue"] == "medium"
+            assert [v["value"] for v in by_cat["thought_level"]["options"]] == ["low", "medium", "high"]
+
+            r = client.put("/api/session/config", json={"category": "thought_level", "value": "high"})
+            assert {o["category"]: o["currentValue"] for o in r.json()["options"]} == {"model": "fake/planner", "thought_level": "high"}
+            status = client.get("/api/session").json()
+            assert (status["model"], status["thought_level"]) == ("fake/planner", "high")
+
+            # Refused: a value the agent does not offer, and an option a person may not set.
+            assert client.put("/api/session/config", json={"category": "thought_level", "value": "max"}).status_code == 409
+            assert client.put("/api/session/config", json={"category": "mode", "value": "plan"}).status_code == 400
+
+            assert client.delete("/api/session").json() == {"active": False}
+            client.post("/api/session")
+            status = wait_status(client, lambda s: s.get("thought_level"))
+            assert (status["model"], status["thought_level"]) == ("fake/planner", "high")
+    finally:
+        asyncio.run(manager.stop())

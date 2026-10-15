@@ -34,13 +34,35 @@ export const api = {
   startSession: () => request<SessionStatus>("POST", "/api/session"),
   stopSession: () => request<SessionStatus>("DELETE", "/api/session"),
   command: (cmd: Record<string, unknown>) => request<unknown>("POST", "/api/session/commands", cmd),
+  sessionConfig: () => request<SessionConfig>("GET", "/api/session/config"),
+  setSessionConfig: (category: ConfigCategory, value: string) => request<SessionConfig>("PUT", "/api/session/config", { category, value }),
 };
 
 export interface SessionStatus {
   active: boolean;
   key?: string;
   acp_session_id?: string | null;
+  model?: string | null;
+  thought_level?: string | null;
   error?: string | null;
+}
+
+/** The ACP config option categories a person may choose. */
+export type ConfigCategory = "model" | "thought_level";
+
+/** One choosable session config option, as the agent reports it over ACP. */
+export interface ConfigOption {
+  id: string;
+  category: ConfigCategory;
+  name: string;
+  currentValue: string | null;
+  options: { value: string; name: string }[];
+}
+
+export interface SessionConfig {
+  options: ConfigOption[];
+  /** False while the session starts and its model is still being selected. */
+  ready: boolean;
 }
 
 export interface SyncPreviewResponse {

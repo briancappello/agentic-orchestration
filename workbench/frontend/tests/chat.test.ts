@@ -5,6 +5,7 @@ import { planDoc } from "./fixtures";
 import type { BrokerEvent, ChatBlock, ChatItem } from "../src/lib/chat";
 import { applyEvent, displayText, emptyTranscript, groupTurns, workSummary } from "../src/lib/chat";
 import type { SessionClient } from "../src/lib/session";
+import type { ConfigCategory, ConfigOption } from "../src/lib/api";
 
 class FakeSession implements SessionClient {
   commands: Record<string, unknown>[] = [];
@@ -16,6 +17,26 @@ class FakeSession implements SessionClient {
   async stop() { this.active = false; return { active: false }; }
   async command(cmd: Record<string, unknown>) { this.commands.push(cmd); return {}; }
   subscribe(onEvent: (e: BrokerEvent) => void) { this.listener = onEvent; return () => (this.listener = null); }
+  // Like the agent: opus has thinking levels and starts at "low"; the local model has none.
+  levels: Record<string, string[]> = { "anthropic/opus": ["low", "high"], "llama/local": [] };
+  current: { model: string; thought_level: string | null } = { model: "anthropic/opus", thought_level: "low" };
+  configChanges: [string, string][] = [];
+  options(): ConfigOption[] {
+    const out: ConfigOption[] = [{
+      id: "model", category: "model", name: "Model", currentValue: this.current.model,
+      options: [{ value: "anthropic/opus", name: "Anthropic/Claude Opus" }, { value: "llama/local", name: "Local Coder" }],
+    }];
+    const levels = this.levels[this.current.model];
+    if (levels.length) out.push({ id: "effort", category: "thought_level", name: "Effort", currentValue: this.current.thought_level, options: levels.map((v) => ({ value: v, name: v })) });
+    return out;
+  }
+  async config() { return { options: this.options(), ready: true }; }
+  async setConfig(category: ConfigCategory, value: string) {
+    this.configChanges.push([category, value]);
+    if (category === "model") this.current = { model: value, thought_level: this.levels[value][0] ?? null };
+    else this.current.thought_level = value;
+    return { options: this.options(), ready: true };
+  }
   emit(e: Partial<BrokerEvent>) { this.listener!({ seq: 0, time: new Date().toISOString(), type: "state", ...e } as BrokerEvent); }
 }
 
@@ -159,6 +180,43 @@ describe("chat pane: conversation", () => {
     await settle();
     expect(session.active).toBe(true);
     expect($("textarea")!.hasAttribute("disabled")).toBe(false);
+  });
+});
+
+describe("chat pane: model and thinking level", () => {
+  it("shows the current model and thinking level, and changes them through the session", async () => {
+    const { session } = await render();
+    expect($(".trigger .value")!.textContent).toBe("Anthropic/Claude Opus");
+    expect($<HTMLSelectElement>("[data-config='thought_level']")!.value).toBe("low");
+
+    const level = $<HTMLSelectElement>("[data-config='thought_level']")!;
+    level.value = "high";
+    level.dispatchEvent(new Event("change", { bubbles: true }));
+    await settle();
+    expect(session.configChanges).toEqual([["thought_level", "high"]]);
+    expect($<HTMLSelectElement>("[data-config='thought_level']")!.value).toBe("high");
+
+    // Search the models, pick with the keyboard; the new model has no thinking levels.
+    $<HTMLButtonElement>(".trigger")!.click();
+    await settle();
+    const search = $<HTMLInputElement>(".pop input")!;
+    expect(document.activeElement).toBe(search);
+    search.value = "local";
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+    await settle();
+    expect([...document.querySelectorAll("[role='option']")].map((o) => o.textContent?.trim())).toEqual(["Local Coder"]);
+    search.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await settle();
+    expect(session.configChanges[1]).toEqual(["model", "llama/local"]);
+    expect($(".pop")).toBeNull();
+    expect($(".trigger .value")!.textContent).toBe("Local Coder");
+    expect($("[data-config='thought_level']")).toBeNull();
+  });
+
+  it("shows no agent settings without a session", async () => {
+    await render(new FakeSession(false));
+    expect($(".trigger")).toBeNull();
+    expect($("[data-config='thought_level']")).toBeNull();
   });
 });
 
