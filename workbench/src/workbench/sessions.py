@@ -69,10 +69,12 @@ class SessionManager:
         prompt_file: Path | None,
         runtime_dir: Path | None = None,
         start_timeout: float = 20.0,
+        agent_model: str = "",
     ):
         self.store = Path(store)
         self.broker_command = broker_command
         self.agent_command = agent_command
+        self.agent_model = agent_model
         self.prompt_file = prompt_file
         self.runtime_dir = runtime_dir or default_runtime_dir(self.store)
         self.runtime_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -133,6 +135,7 @@ class SessionManager:
             "active": True,
             "key": st["key"],
             "acp_session_id": st.get("acp_session_id"),
+            "model": st.get("model"),
             "started_at": st.get("started_at"),
             "error": st.get("error"),
             "messages": self._messages(st["key"]),
@@ -151,6 +154,7 @@ class SessionManager:
                 "store": str(self.store),
                 "broker_command": self.broker_command,
                 "agent_command": self.agent_command,
+                "model": self.agent_model,
                 "prompt": self._planning_prompt(),
             }
             (self.runtime_dir / "spec.json").write_text(json.dumps(spec))

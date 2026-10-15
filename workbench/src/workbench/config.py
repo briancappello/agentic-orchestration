@@ -8,6 +8,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
+DEFAULT_AGENT_MODEL = "anthropic/claude-opus-5-5"
+
+
 class ConfigError(Exception):
     """The configuration is incomplete or invalid."""
 
@@ -23,6 +26,8 @@ class Config:
     secret_key: str
     broker_command: list[str] = field(default_factory=lambda: ["acp-broker"])
     agent_command: list[str] = field(default_factory=lambda: ["opencode", "acp"])
+    # Selected through the agent's ACP "model" config option; empty keeps the agent's default.
+    agent_model: str = ""
     prompt_file: Path | None = None
     frontend_dir: Path | None = None
     runtime_dir: Path | None = None
@@ -55,6 +60,7 @@ class Config:
             secret_key=need("WORKBENCH_SECRET_KEY"),
             broker_command=shlex.split(env.get("WORKBENCH_BROKER_COMMAND", "acp-broker")),
             agent_command=shlex.split(env.get("WORKBENCH_AGENT_COMMAND", "opencode acp")),
+            agent_model=env.get("WORKBENCH_AGENT_MODEL", DEFAULT_AGENT_MODEL).strip(),
             prompt_file=Path(prompt),
             frontend_dir=Path(frontend),
             runtime_dir=Path(env["WORKBENCH_RUNTIME_DIR"]).expanduser() if env.get("WORKBENCH_RUNTIME_DIR") else None,

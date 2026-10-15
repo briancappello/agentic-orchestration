@@ -7,7 +7,8 @@ this module with ``start_new_session=True`` and talks to the session only
 through the broker's HTTP viewer transport.
 
 The driver starts the broker, opens one ACP session in the spec store,
-sends the planning prompt as the first turn, and then answers what reaches
+selects the configured model through the session's ACP config options
+(and ends the session if it cannot), sends the planning prompt as the first turn, and then answers what reaches
 the driver: a permission request no viewer answered is cancelled, never
 granted on a person's behalf. It records its state in ``state.json`` in the
 runtime directory and exits when the broker exits or on SIGTERM.
@@ -39,6 +40,27 @@ def write_json(path: Path, data: dict[str, Any]) -> None:
     os.replace(tmp, path)
 
 
+class ModelError(Exception):
+    """The configured model could not be selected."""
+
+
+def model_option(options: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """The session config option that selects the model (ACP category "model")."""
+    return next((o for o in options if o.get("category") == "model"), None) or next(
+        (o for o in options if o.get("id") == "model"), None)
+
+
+def select_values(option: dict[str, Any]) -> set[str]:
+    """The values a select option offers, flat or in groups."""
+    values: set[str] = set()
+    for entry in option.get("options") or []:
+        if "options" in entry:
+            values.update(o.get("value") for o in entry["options"])
+        else:
+            values.add(entry.get("value"))
+    return values
+
+
 class Driver:
     def __init__(self, runtime: Path):
         self.runtime = runtime
@@ -47,8 +69,9 @@ class Driver:
         self.state: dict[str, Any] = {
             "key": self.key, "store": self.spec["store"], "driver_pid": os.getpid(), "broker_pid": None,
             "http_url": None, "token_file": None, "acp_session_id": None,
-            "started_at": time.time(), "ended_at": None, "error": None,
+            "model": None, "started_at": time.time(), "ended_at": None, "error": None,
         }
+        self.stop = asyncio.Event()
         self.proc: asyncio.subprocess.Process | None = None
         self.next_id = 0
         self.waiting: dict[int, asyncio.Future] = {}
@@ -59,14 +82,13 @@ class Driver:
 
     async def run(self) -> int:
         loop = asyncio.get_running_loop()
-        stop = asyncio.Event()
         for sig in (signal.SIGTERM, signal.SIGINT):
-            loop.add_signal_handler(sig, stop.set)
+            loop.add_signal_handler(sig, self.stop.set)
         try:
             await self.start_broker()
             reader = asyncio.create_task(self.read())
             setup = asyncio.create_task(self.open_session())
-            stopper = asyncio.create_task(stop.wait())
+            stopper = asyncio.create_task(self.stop.wait())
             await asyncio.wait({reader, stopper}, return_when=asyncio.FIRST_COMPLETED)
             setup.cancel()
         except Exception as exc:  # recorded for the backend to show
@@ -142,10 +164,46 @@ class Driver:
             "clientInfo": {"name": "plan-workbench", "version": "0.1.0"},
         })
         new = await self.call("session/new", {"cwd": self.spec["store"], "mcpServers": []})
-        self.save(acp_session_id=new.get("sessionId"))
+        session_id = new.get("sessionId")
+        self.save(acp_session_id=session_id)
+        try:
+            model = await self.select_model(session_id, new.get("configOptions") or [])
+        except ModelError as exc:
+            # Planning on another model than the operator chose would go
+            # unnoticed, so the session ends and says why.
+            self.save(error=str(exc))
+            self.stop.set()
+            return
+        self.save(model=model)
         prompt = self.spec.get("prompt") or ""
         if prompt:
-            await self.call("session/prompt", {"sessionId": new.get("sessionId"), "prompt": [{"type": "text", "text": prompt}]})
+            await self.call("session/prompt", {"sessionId": session_id, "prompt": [{"type": "text", "text": prompt}]})
+
+    async def select_model(self, session_id: str, options: list[dict[str, Any]]) -> str | None:
+        """Select the configured model through the agent's ACP "model" config option.
+
+        The agent's own default reasoning level is left alone. Returns the
+        model the agent reports as current.
+        """
+        wanted = self.spec.get("model") or ""
+        option = model_option(options)
+        if not wanted:
+            return option.get("currentValue") if option else None
+        if option is None:
+            raise ModelError(f"the agent offers no model choice, so the model {wanted} cannot be selected")
+        if option.get("currentValue") == wanted:
+            return wanted
+        offered = select_values(option)
+        if wanted not in offered:
+            raise ModelError(f"the agent does not offer the model {wanted}")
+        try:
+            result = await self.call("session/set_config_option", {"sessionId": session_id, "configId": option["id"], "value": wanted})
+        except RuntimeError as exc:
+            raise ModelError(f"the agent did not select the model {wanted}: {exc}") from exc
+        current = (model_option(result.get("configOptions") or []) or {}).get("currentValue")
+        if current != wanted:
+            raise ModelError(f"the agent reports the model {current}, not {wanted}")
+        return current
 
     async def call(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
         self.next_id += 1

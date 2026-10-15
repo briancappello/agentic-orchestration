@@ -6,6 +6,14 @@ import threading
 
 lock = threading.Lock()
 pending = {}
+MODELS = ["fake/default", "fake/planner"]
+model = MODELS[0]
+
+
+def config_options():
+    """The session's ACP config options: a model select, in groups as ACP allows."""
+    return [{"id": "model", "name": "Model", "category": "model", "type": "select", "currentValue": model,
+             "options": [{"group": "fake", "name": "Fake", "options": [{"value": m, "name": m} for m in MODELS]}]}]
 
 
 def send(msg):
@@ -56,7 +64,14 @@ for line in sys.stdin:
         send({"jsonrpc": "2.0", "id": msg["id"], "result": {
             "protocolVersion": 1, "agentCapabilities": {}, "authMethods": [], "agentInfo": {"name": "fake", "version": "0"}}})
     elif method == "session/new":
-        send({"jsonrpc": "2.0", "id": msg["id"], "result": {"sessionId": "sess-1"}})
+        send({"jsonrpc": "2.0", "id": msg["id"], "result": {"sessionId": "sess-1", "configOptions": config_options()}})
+    elif method == "session/set_config_option":
+        p = msg["params"]
+        if p.get("configId") != "model" or p.get("value") not in MODELS:
+            send({"jsonrpc": "2.0", "id": msg["id"], "error": {"code": -32602, "message": "invalid value"}})
+        else:
+            model = p["value"]
+            send({"jsonrpc": "2.0", "id": msg["id"], "result": {"configOptions": config_options()}})
     elif method == "session/prompt":
         threading.Thread(target=handle_prompt, args=(msg,), daemon=True).start()
     elif method == "session/cancel":

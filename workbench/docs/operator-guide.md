@@ -119,6 +119,7 @@ uv run workbench hash-password > ~/.config/plan-workbench-password-hash   # type
 | `WORKBENCH_SECRET_KEY` | Yes | Random string that signs the session cookie. |
 | `WORKBENCH_BROKER_COMMAND` | No | Broker command, default `acp-broker`. |
 | `WORKBENCH_AGENT_COMMAND` | No | Agent command, default `opencode acp`. |
+| `WORKBENCH_AGENT_MODEL` | No | Model of the planning session, default `anthropic/claude-opus-5-5`. It is selected through the agent's ACP `model` config option, and the reasoning level stays at the agent's default. When the agent does not offer the model, the session ends and the chat shows why. Set it empty to keep the agent's own default. |
 | `WORKBENCH_PROMPT_FILE` | No | Planning prompt, default `prompts/planning-session.md`. |
 | `WORKBENCH_COOKIE_SECURE` | No | `1` behind HTTPS. |
 | `WORKBENCH_RUNTIME_DIR` | No | Where the running session's state, broker token, and logs live. Default: `$XDG_RUNTIME_DIR/plan-workbench/<store>-<hash>`, else under `~/.cache`. |

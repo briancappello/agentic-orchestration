@@ -60,10 +60,11 @@ def flat(ev):
     return json.dumps(ev)
 
 
-def make_app(store, tmp_path):
+def make_app(store, tmp_path, model=""):
     prompt = tmp_path / "prompt.md"
     prompt.write_text("You plan in {{store}}.")
-    manager = SessionManager(store.root, [BROKER], [sys.executable, str(FAKE_AGENT)], prompt, runtime_dir=tmp_path / "rt")
+    manager = SessionManager(store.root, [BROKER], [sys.executable, str(FAKE_AGENT)], prompt,
+                             runtime_dir=tmp_path / "rt", agent_model=model)
     app = create_app(make_config(store.root), validate=validate_offline, sortie=FakeSortie().client(), sessions=manager)
     return app, manager
 
@@ -185,5 +186,45 @@ def test_a_dead_session_reads_as_ended_and_restarts(store, tmp_path):
             assert client.post("/api/session/commands", json={"op": "state"}).status_code == 409
             assert client.post("/api/session").json()["active"] is True
             assert broker_pid(manager) != pid
+    finally:
+        asyncio.run(manager.stop())
+
+
+def wait_status(client, predicate, timeout=10):
+    deadline = time.monotonic() + timeout
+    status = client.get("/api/session").json()
+    while not predicate(status) and time.monotonic() < deadline:
+        time.sleep(0.05)
+        status = client.get("/api/session").json()
+    return status
+
+
+def test_the_configured_model_is_selected_through_acp_before_the_first_turn(store, tmp_path):
+    store.plan([])
+    app, manager = make_app(store, tmp_path, model="fake/planner")
+    try:
+        with live_server(app) as base, httpx.Client(base_url=base, timeout=20) as client:
+            client.post("/api/login", json={"password": PASSWORD})
+            client.post("/api/session")
+            status = wait_status(client, lambda s: s.get("model"))
+            assert status["active"] is True and status["model"] == "fake/planner"
+            with client.stream("GET", "/api/session/events") as r:
+                until(events(r.iter_lines()), lambda e: "echo: You plan in " in flat(e))
+    finally:
+        asyncio.run(manager.stop())
+
+
+def test_a_model_the_agent_does_not_offer_ends_the_session_with_the_reason(store, tmp_path):
+    store.plan([])
+    app, manager = make_app(store, tmp_path, model="fake/missing")
+    try:
+        with live_server(app) as base, httpx.Client(base_url=base, timeout=20) as client:
+            client.post("/api/login", json={"password": PASSWORD})
+            client.post("/api/session")
+            pid = broker_pid(manager)
+            status = wait_status(client, lambda s: not s["active"])
+            assert status["active"] is False
+            assert "fake/missing" in status["error"]
+            assert wait_dead(pid)
     finally:
         asyncio.run(manager.stop())
