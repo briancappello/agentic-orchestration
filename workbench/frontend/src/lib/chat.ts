@@ -32,10 +32,14 @@ export interface Transcript {
   items: ChatItem[];
   busy: boolean;
   lastSeq: number;
+  /** The driver's turn runs: the broker's state events say when it starts and ends. */
+  driverTurn: boolean;
+  /** A turn the broker runs for a person runs: it ends with a result event. */
+  ownTurn: boolean;
 }
 
 export function emptyTranscript(): Transcript {
-  return { items: [], busy: false, lastSeq: 0 };
+  return { items: [], busy: false, lastSeq: 0, driverTurn: false, ownTurn: false };
 }
 
 const t = (iso: string | number) => (typeof iso === "number" ? iso * 1000 : Date.parse(iso) || Date.now());
@@ -51,11 +55,12 @@ export function applyEvent(tr: Transcript, ev: BrokerEvent): Transcript {
   const items = [...tr.items];
   const last = items[items.length - 1];
   const at = t(ev.time);
-  let busy = tr.busy;
+  let { driverTurn, ownTurn } = tr;
 
   switch (ev.type) {
     case "state":
-      busy = ev.driverTurn === "active" || busy;
+      // "active", or "active+queued"; "none" and "held" mean the turn is over or paused.
+      if (ev.driverTurn !== undefined) driverTurn = ev.driverTurn.startsWith("active");
       break;
     case "update": {
       const u = ev.update?.update ?? {};
@@ -65,7 +70,7 @@ export function applyEvent(tr: Transcript, ev: BrokerEvent): Transcript {
         const chunk = text(u.content);
         if (last && last.kind === itemKind) items[items.length - 1] = { ...last, text: last.text + chunk };
         else items.push({ kind: itemKind, key: `e${ev.seq}`, text: chunk, time: at });
-        busy = true;
+        if (!driverTurn) ownTurn = true;
       } else if (kind === "tool_call" || kind === "tool_call_update") {
         const id = String(u.toolCallId ?? ev.seq);
         const idx = items.findIndex((i) => i.kind === "tool" && i.key === `tool-${id}`);
@@ -97,13 +102,13 @@ export function applyEvent(tr: Transcript, ev: BrokerEvent): Transcript {
       break;
     }
     case "result":
-      busy = false;
+      ownTurn = false;
       break;
     case "error":
       if (ev.message) items.push({ kind: "notice", key: `e${ev.seq}-${items.length}`, text: ev.message, time: at });
       break;
   }
-  return { items, busy, lastSeq: Math.max(tr.lastSeq, ev.seq) };
+  return { items, busy: driverTurn || ownTurn, lastSeq: Math.max(tr.lastSeq, ev.seq), driverTurn, ownTurn };
 }
 
 /** The person's own messages, which the backend keeps, placed in time order. */

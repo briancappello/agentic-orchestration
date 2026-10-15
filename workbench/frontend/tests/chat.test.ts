@@ -172,6 +172,23 @@ describe("transcript", () => {
     expect(displayText('[Selected in the plan graph]\n- billing/tax — "Tax" (story)\n\nsplit it')).toBe("(about billing/tax) split it");
   });
 
+  it("ends the driver's turn on the broker's state event, which brings no result", () => {
+    const ev = (seq: number, e: Partial<BrokerEvent>) => ({ seq, time: "2026-01-01T00:00:00Z", type: "state", ...e }) as BrokerEvent;
+    const chunk = { update: { update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "a" } } } };
+    let tr = applyEvent(emptyTranscript(), ev(1, { driverTurn: "active" }));
+    tr = applyEvent(tr, ev(2, { type: "update", ...chunk }));
+    expect(tr.busy).toBe(true);
+    tr = applyEvent(tr, ev(3, { driverTurn: "none" }));
+    expect(tr.busy).toBe(false);
+    // A person's own turn: chunks start it, its result ends it.
+    tr = applyEvent(tr, ev(4, { type: "update", ...chunk }));
+    expect(tr.busy).toBe(true);
+    tr = applyEvent(tr, ev(5, { driverTurn: "none" }));
+    expect(tr.busy).toBe(true);
+    tr = applyEvent(tr, ev(6, { type: "result", op: "steer-turn" }));
+    expect(tr.busy).toBe(false);
+  });
+
   it("groups each turn separately and keeps interim messages in the fold", () => {
     const at = (n: number) => n;
     const items: ChatItem[] = [
