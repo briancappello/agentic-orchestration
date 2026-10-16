@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { renderMarkdown } from "../lib/markdown";
   import { onDestroy, tick } from "svelte";
   import { applyEvent, composeMessage, emptyTranscript, groupTurns, withUserMessages, workSummary, type ChatBlock, type Transcript } from "../lib/chat";
   import { GraphModel } from "../lib/model";
@@ -194,7 +195,7 @@
     {#if item.kind === "user"}
       <div class="msg user">{item.text}</div>
     {:else if item.kind === "agent"}
-      <div class="msg agent">{item.text}</div>
+      <div class="msg agent md">{@html renderMarkdown(item.text)}</div>
     {:else if item.kind === "work"}
       <details class="work" class:live={item.live}>
         <summary><Icon name="chevron" size={12} /><span>{workSummary(item.steps, item.live)}</span></summary>
@@ -203,7 +204,7 @@
             {#if step.kind === "tool"}
               <div class="tool" data-status={step.status}><span class="dot"></span><span class="title">{step.title}</span><em>{step.status}</em></div>
             {:else}
-              <div class="msg step {step.kind}">{step.text}</div>
+              <div class="msg step {step.kind} md">{@html renderMarkdown(step.text)}</div>
             {/if}
           {/each}
         </div>
@@ -290,6 +291,22 @@
   .steps { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 2px 5px; padding-left: 13px; border-left: 1px solid var(--hair); }
   .msg.step { max-width: none; font-size: 12px; }
   .msg.thought { font-style: italic; }
+  .msg.md { white-space: normal; }
+  .md :global(:is(p, ul, ol, pre, blockquote, table, h1, h2, h3, h4)) { margin: 0 0 8px; }
+  .md :global(:is(p, ul, ol, pre, blockquote, table, h1, h2, h3, h4):last-child) { margin-bottom: 0; }
+  .md :global(:is(h1, h2, h3, h4)) { font-size: 14px; font-weight: 700; line-height: 1.3; margin-top: 14px; }
+  .md :global(:is(h1, h2, h3, h4):first-child) { margin-top: 0; }
+  .md :global(:is(ul, ol)) { padding-left: 20px; }
+  .md :global(li + li) { margin-top: 2px; }
+  .md :global(code) { font: 500 12px var(--font-mono); padding: 1px 4px; border-radius: var(--r-tag); background: var(--strip); }
+  .md :global(pre) { padding: 10px 12px; border-radius: var(--r-card); background: var(--strip); overflow-x: auto; white-space: pre; }
+  .md :global(pre code) { padding: 0; background: none; }
+  .md :global(blockquote) { padding-left: 10px; border-left: 1px solid var(--line); color: var(--mute); }
+  .md :global(a) { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--line); }
+  .md :global(table) { border-collapse: collapse; font-size: 12.5px; display: block; overflow-x: auto; }
+  .md :global(:is(th, td)) { word-break: normal; overflow-wrap: normal; padding: 4px 8px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+  .md :global(th) { background: var(--strip); font-weight: 600; }
+  .md :global(hr) { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
   .tool { display: flex; align-items: center; gap: 8px; font: 500 11.5px var(--font-mono); color: var(--mute); }
   .tool .title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tool .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--slate); }

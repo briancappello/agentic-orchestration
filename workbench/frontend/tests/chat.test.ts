@@ -127,6 +127,25 @@ describe("chat pane: selection as context", () => {
 });
 
 describe("chat pane: conversation", () => {
+  it("renders the agent's Markdown, without anything that could run", async () => {
+    const { session } = await render();
+    const text = "## Status\n\n- **Done:** `ufw` rules\n- Left: [audit](https://example.com)\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n<script>window.pwned = 1</script><img src=x onerror=\"window.pwned=1\"><a href=\"javascript:alert(1)\">x</a>";
+    session.emit({ seq: 1, type: "update", update: { update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text } } } });
+    await settle();
+    const msg = $(".msg.agent")!;
+    expect(msg.querySelector("h2")?.textContent).toBe("Status");
+    expect(msg.querySelector("li strong")?.textContent).toBe("Done:");
+    expect(msg.querySelector("li code")?.textContent).toBe("ufw");
+    expect(msg.querySelector("td")?.textContent).toBe("1");
+    const link = msg.querySelector<HTMLAnchorElement>("a[href='https://example.com']")!;
+    expect(link.target).toBe("_blank");
+    expect(link.rel).toBe("noopener noreferrer");
+    expect(msg.querySelector("script, img, [onerror]")).toBeNull();
+    expect(msg.querySelector("a[href^='javascript']")).toBeNull();
+    expect((window as unknown as { pwned?: number }).pwned).toBeUndefined();
+    expect(msg.textContent).not.toContain("##");
+  });
+
   it("streams agent replies and shows the person's messages", async () => {
     const { session } = await render();
     session.emit({ seq: 1, type: "update", update: { update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Hello" } } } });
