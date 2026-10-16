@@ -50,6 +50,7 @@
     drafts: nodes.filter((n) => n.status === "draft").length,
   });
   const dispatched = $derived(doc.sortie.dispatched !== false);
+  const liveText = $derived(!doc.sortie.reachable ? "Sortie unreachable" : dispatched ? `Sortie · ${agents} running` : "Sortie · agents not dispatched");
   const crumbs: Crumb[] = $derived([
     { label: "Projects", href: "#/" },
     ...(epic ? [{ label: projectName || "Epics", onclick: onback }, { label: epic.title }] : [{ label: projectName || "Epics" }]),
@@ -87,9 +88,9 @@
 
 <TopBar {crumbs}>
   <span class="live" class:down={!doc.sortie.reachable} class:idle={doc.sortie.reachable && !dispatched}
-    title={doc.sortie.reachable && !dispatched ? "Sortie plans and syncs this project but runs agents only for its configured project" : undefined}>
+    title={doc.sortie.reachable && !dispatched ? `${liveText}: Sortie plans and syncs this project but runs agents only for its configured project` : liveText}>
     <span class="pulse" aria-hidden="true"></span>
-    <span>{!doc.sortie.reachable ? "Sortie unreachable" : dispatched ? `Sortie · ${agents} running` : "Sortie · agents not dispatched"}</span>
+    <span class="live-text">{liveText}</span>
   </span>
   {#if actions}{@render actions()}{/if}
 </TopBar>
@@ -228,6 +229,8 @@
   .live.down { color: var(--ink-mute); }
   .live.down .pulse, .live.idle .pulse { background: var(--ink-mute); box-shadow: none; }
   .live.idle { color: var(--ink-mute); }
+  /* Under a narrow graph pane the status keeps its dot; the words move to the tooltip. */
+  @container (max-width: 600px) { .live-text { display: none; } }
   .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--amber); box-shadow: var(--shadow-pulse); }
 
   .strip { flex: none; min-height: 48px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px; padding: 8px var(--s-gutter); border-bottom: 1px solid var(--line); background: var(--strip); font-size: 12px; color: var(--mute); }

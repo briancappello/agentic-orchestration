@@ -19,6 +19,8 @@ function hookLinks() {
 
 export function renderMarkdown(text: string): string {
   hookLinks();
-  const html = (marked.parse(text) as string).trim();
+  // A table scrolls sideways in its own box instead of crushing its columns.
+  const html = (marked.parse(text) as string).trim()
+    .replaceAll("<table>", '<div class="table-scroll"><table>').replaceAll("</table>", "</table></div>");
   return DOMPurify.sanitize(html, { FORBID_TAGS: ["style", "form", "input", "img"], FORBID_ATTR: ["style"] });
 }

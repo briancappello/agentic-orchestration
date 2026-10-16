@@ -303,8 +303,10 @@
   .md :global(pre code) { padding: 0; background: none; }
   .md :global(blockquote) { padding-left: 10px; border-left: 1px solid var(--line); color: var(--mute); }
   .md :global(a) { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--line); }
-  .md :global(table) { border-collapse: collapse; font-size: 12.5px; display: block; overflow-x: auto; }
-  .md :global(:is(th, td)) { word-break: normal; overflow-wrap: normal; padding: 4px 8px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+  .md :global(.table-scroll) { max-width: 100%; overflow-x: auto; margin: 0 0 8px; scrollbar-color: #b9bab3 var(--hair); }
+  .md :global(.table-scroll:last-child) { margin-bottom: 0; }
+  .md :global(table) { border-collapse: collapse; font-size: 12.5px; margin: 0; }
+  .md :global(:is(th, td)) { min-width: 7em; word-break: normal; overflow-wrap: normal; padding: 4px 8px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
   .md :global(th) { background: var(--strip); font-weight: 600; }
   .md :global(hr) { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
   .tool { display: flex; align-items: center; gap: 8px; font: 500 11.5px var(--font-mono); color: var(--mute); }
