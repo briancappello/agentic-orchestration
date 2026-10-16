@@ -4,26 +4,26 @@
 #   scripts/dev.sh           start (the first run creates an empty environment)
 #   scripts/dev.sh --reset   wipe the environment back to empty, then start
 #
-# The environment is yours alone: an empty spec store (schemas, an empty
-# plan.yaml, nothing else), an empty Huly project DEV, and a Sortie that
-# watches only DEV with the mock agent. Nothing runs until you plan, sync,
-# and move stories to Todo. Work persists across runs until --reset.
+# The environment is yours alone: a workbench home with one project, "store",
+# whose empty spec store syncs into the Huly project DEV, and a Sortie that
+# dispatches only DEV with the mock agent. Projects you create in the
+# workbench live in the same home and get Huly projects of their own; Sortie
+# plans and syncs them but runs agents for DEV only. Nothing runs until you
+# plan, sync, and move stories to Todo. Work persists across runs until --reset.
 #
 # Runs Sortie, the backend (reloads on Python edits), and Vite (hot reload)
 # in this terminal; Ctrl-C stops them. A planning session keeps running
 # across restarts; end it from the chat pane, or with --reset.
 #
-# Optional settings (environment): SORTIE_SRC (~/dev/sortie), SPECS
-# (~/dev/agent-platform-specs, where the planning schemas come from),
-# DEV_HOME (~/dev/plan-workbench-worktrees/dev), HULY_PROJECT (DEV),
+# Optional settings (environment): SORTIE_SRC (~/dev/sortie), DEV_HOME (~/dev/plan-workbench-worktrees/dev), HULY_PROJECT (DEV),
 # HULY_EMAIL / HULY_PASSWORD.
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 SORTIE_SRC=${SORTIE_SRC:-$HOME/dev/sortie}
-SPECS=${SPECS:-$HOME/dev/agent-platform-specs}
 DEV_HOME=${DEV_HOME:-$HOME/dev/plan-workbench-worktrees/dev}
 STORE=$DEV_HOME/store
+WB_HOME=$DEV_HOME/home
 RUN_DIR=$DEV_HOME/sortie
 RUNTIME=$DEV_HOME/sessions
 HULY_URL=${HULY_URL:-http://localhost:8087}
@@ -52,22 +52,34 @@ if [[ ! -s $HASH_FILE ]]; then
   chmod 600 "$HASH_FILE"
 fi
 
+end_sessions() { # end the planning sessions still running under $RUNTIME
+  local f pid
+  for f in "$RUNTIME"/state.json "$RUNTIME"/*/state.json; do
+    [[ -f $f ]] || continue
+    pid=$(jq -r '.driver_pid // empty' "$f")
+    [[ -n $pid ]] && kill -TERM "$pid" 2>/dev/null && sleep 2 || true
+  done
+}
+
 if [[ -n $RESET ]]; then
   say "Resetting the dev environment"
-  if [[ -f $RUNTIME/state.json ]]; then  # end a planning session that is still running
-    pid=$(jq -r '.driver_pid // empty' "$RUNTIME/state.json")
-    [[ -n $pid ]] && kill -TERM "$pid" 2>/dev/null && sleep 2 || true
-  fi
-  rm -rf "$STORE" "$RUN_DIR" "$RUNTIME"
+  end_sessions
+  rm -rf "$STORE" "$RUN_DIR" "$RUNTIME" "$WB_HOME"
+elif [[ -f $RUNTIME/state.json ]]; then
+  # Sessions now live in one runtime directory per project, under $RUNTIME.
+  say "Ending the planning session from before projects (its runtime layout changed)"
+  end_sessions
+  find "$RUNTIME" -maxdepth 1 -type f -delete
+  rm -rf "$RUNTIME/registry"
 fi
+
+say "Installing workbench dependencies"
+(cd "$ROOT" && uv sync -q)
+[[ -d $ROOT/frontend/node_modules ]] || (cd "$ROOT/frontend" && npm install --silent)
 
 if [[ ! -d $STORE/openspec ]]; then
   say "Creating an empty spec store in $STORE"
-  mkdir -p "$STORE/openspec/changes" "$STORE/openspec/specs" "$STORE/openspec/schemas"
-  cp -r "$SPECS/openspec/schemas/planning" "$SPECS/openspec/schemas/spec-driven-planned" "$STORE/openspec/schemas/"
-  printf 'schema: spec-driven-planned\n' > "$STORE/openspec/config.yaml"
-  printf '# The order between changes. Format: openspec/schemas/planning/plan.schema.json\nschema_version: 1\nchanges: []\n' > "$STORE/openspec/plan.yaml"
-  (cd "$STORE" && git init -q && git add -A && git -c user.name=dev -c user.email=dev@localhost commit -qm "empty spec store")
+  (cd "$ROOT" && uv run python -c 'import sys; from workbench.scaffold import scaffold_store; scaffold_store(sys.argv[1], "dev")' "$STORE")
 fi
 mkdir -p "$RUN_DIR"
 cp "$ROOT/scripts/dev/WORKFLOW.md" "$RUN_DIR/WORKFLOW.md"
@@ -76,10 +88,6 @@ say "Building sortie and acp-broker"
 mkdir -p "$HOME/.local/bin"
 (cd "$SORTIE_SRC" && go build -o "$HOME/.local/bin/sortie" ./cmd/sortie) && (cd "$BROKER_SRC" && go build -o "$HOME/.local/bin/acp-broker" ./cmd/acp-broker)
 export PATH=$HOME/.local/bin:$PATH
-
-say "Installing workbench dependencies"
-(cd "$ROOT" && uv sync -q)
-[[ -d $ROOT/frontend/node_modules ]] || (cd "$ROOT/frontend" && npm install --silent)
 
 if ! curl -sf -o /dev/null "$HULY_URL/config.json"; then
   say "Starting Huly"
@@ -108,7 +116,7 @@ SORTIE_HULY_URL=$HULY_URL SORTIE_HULY_WORKSPACE=$HULY_WORKSPACE SORTIE_HULY_PROJ
 SORTIE_HULY_TOKEN=$HULY_TOKEN SORTIE_CONTROL_TOKEN=$(cat "$TOKEN_FILE") \
   start sortie "$RUN_DIR" sortie WORKFLOW.md
 
-WORKBENCH_STORE=$STORE WORKBENCH_SORTIE_URL=http://127.0.0.1:7678 \
+WORKBENCH_HOME=$WB_HOME WORKBENCH_STORE=$STORE WORKBENCH_HULY_PROJECT=$HULY_PROJECT WORKBENCH_SORTIE_URL=http://127.0.0.1:7678 \
 WORKBENCH_SORTIE_TOKEN=$(cat "$TOKEN_FILE") WORKBENCH_PASSWORD_HASH=$(cat "$HASH_FILE") \
 WORKBENCH_SECRET_KEY=dev-secret WORKBENCH_RUNTIME_DIR=$RUNTIME \
   start backend "$ROOT" uv run workbench serve --port 8790 --reload
