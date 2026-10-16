@@ -32,7 +32,7 @@ import socket
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncIterator
 
 ACP_PROTOCOL_VERSION = 1
 REGISTRY_TIMEOUT = 15.0
@@ -118,6 +118,9 @@ class Driver:
             setup = asyncio.create_task(self.open_session())
             stopper = asyncio.create_task(self.stop.wait())
             await asyncio.wait({reader, stopper}, return_when=asyncio.FIRST_COMPLETED)
+            if reader.done() and not reader.cancelled() and reader.exception() is not None:
+                exc = reader.exception()
+                self.save(error=f"lost the agent's output: {type(exc).__name__}: {exc}")
             setup.cancel()
             control.close()
             (self.runtime / CONTROL_SOCKET).unlink(missing_ok=True)
@@ -304,7 +307,7 @@ class Driver:
 
     async def read(self) -> None:
         assert self.proc and self.proc.stdout
-        while line := await self.proc.stdout.readline():
+        async for line in read_lines(self.proc.stdout):
             try:
                 msg = json.loads(line)
             except ValueError:
@@ -317,6 +320,22 @@ class Driver:
                 else:
                     await self.send({"jsonrpc": "2.0", "id": msg["id"],
                                      "error": {"code": -32601, "message": f"{msg['method']} is not supported by the workbench"}})
+
+
+async def read_lines(stream: asyncio.StreamReader, chunk: int = 1 << 16) -> AsyncIterator[bytes]:
+    """Yield newline-terminated lines of any length. ``StreamReader.readline``
+    fails on a line longer than its buffer limit (64 KiB by default), and an
+    ACP message carrying a long tool result is easily longer."""
+    buf = bytearray()
+    while data := await stream.read(chunk):
+        buf += data
+        start = 0
+        while (end := buf.find(b"\n", start)) != -1:
+            yield bytes(buf[start:end + 1])
+            start = end + 1
+        del buf[:start]
+    if buf:
+        yield bytes(buf)
 
 
 def main() -> int:

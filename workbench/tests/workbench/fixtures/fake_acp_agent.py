@@ -53,6 +53,12 @@ def handle_prompt(msg):
     session = p["sessionId"]
     text = " ".join(b.get("text", "") for b in p["prompt"] if b.get("type") == "text")
     say(session, "echo: " + text)
+    if "BIG-OUTPUT" in text:
+        # A tool result larger than a default 64 KiB line buffer, as when the agent reads a long file.
+        send({"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": session, "update": {
+            "sessionUpdate": "tool_call_update", "toolCallId": "read-1", "status": "completed",
+            "content": [{"type": "content", "content": {"type": "text", "text": "x" * 300_000}}]}}})
+        say(session, "after big output")
     if "ASK-PERMISSION" in text:
         ev = threading.Event()
         pending["perm-1"] = {"event": ev}

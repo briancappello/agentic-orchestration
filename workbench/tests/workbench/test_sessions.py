@@ -295,3 +295,21 @@ def test_a_session_from_an_older_driver_says_it_cannot_change_model(store, tmp_p
             assert client.put(f"{P}/session/config", json={"category": "model", "value": "fake/planner"}).status_code == 409
     finally:
         asyncio.run(manager.stop())
+
+
+def test_an_agent_message_larger_than_a_line_buffer_keeps_the_session(store, tmp_path):
+    store.plan([])
+    app, manager = make_app(store, tmp_path)
+    try:
+        with live_server(app) as base, httpx.Client(base_url=base, timeout=20) as client:
+            client.post("/api/login", json={"password": PASSWORD})
+            # The first turn is the driver's own prompt, so its updates reach the driver's reader.
+            client.post(f"{P}/session", json={"message": "BIG-OUTPUT please"})
+            with client.stream("GET", f"{P}/session/events") as r:
+                until(events(r.iter_lines()), lambda e: "after big output" in flat(e))
+            # The driver read the broker's oversized line and kept going.
+            time.sleep(0.5)
+            assert client.get(f"{P}/session").json()["active"] is True
+            assert client.post(f"{P}/session/commands", json={"op": "state"}).status_code == 200
+    finally:
+        asyncio.run(manager.stop())
