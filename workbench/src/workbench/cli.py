@@ -51,6 +51,10 @@ def main(argv: list[str] | None = None) -> int:
         port=args.port,
         log_level="info",
         reload=args.reload,
+        # Event streams never end by themselves, and uvicorn otherwise waits
+        # for every open response before it stops: a --reload would leave the
+        # old worker waiting forever, accepting nothing.
+        timeout_graceful_shutdown=3,
         reload_dirs=[str(src / "workbench"), str(src / "planlib")] if args.reload else None,
     )
     return 0
