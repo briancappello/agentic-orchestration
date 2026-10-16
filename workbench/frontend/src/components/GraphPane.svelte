@@ -5,18 +5,23 @@
   import type { MergedGraph, ViewState } from "../lib/types";
   import Card from "./Card.svelte";
   import Icon from "./Icon.svelte";
+  import TopBar, { type Crumb } from "./TopBar.svelte";
   import ValidationPanel from "./ValidationPanel.svelte";
 
   let {
-    doc, view, onselect, onopen, onback, ontogglecross, actions,
+    doc, view, onselect, onopen, onback, ontogglecross, actions, notice, projectName = "",
   }: {
     doc: MergedGraph;
+    /** The project's name, shown in the breadcrumb under "Projects". */
+    projectName?: string;
     view: ViewState;
     onselect: (key: string | null) => void;
     onopen: (epicKey: string) => void;
     onback: () => void;
     ontogglecross: (show: boolean) => void;
     actions?: Snippet;
+    /** A band under the strip for facts about the project as a whole. */
+    notice?: Snippet;
   } = $props();
 
   const g = GEOMETRY;
@@ -44,6 +49,11 @@
     nospec: nodes.filter((n) => n.has_spec === false).length,
     drafts: nodes.filter((n) => n.status === "draft").length,
   });
+  const dispatched = $derived(doc.sortie.dispatched !== false);
+  const crumbs: Crumb[] = $derived([
+    { label: "Projects", href: "#/" },
+    ...(epic ? [{ label: projectName || "Epics", onclick: onback }, { label: epic.title }] : [{ label: projectName || "Epics" }]),
+  ]);
   const letter = (d: number) => String.fromCharCode(65 + d);
   const singular = (u: string) => u.replace(/ies$/, "y").replace(/s$/, "");
 
@@ -75,24 +85,14 @@
 
 <svelte:window {onkeydown} />
 
-<header class="top">
-  <span class="logo">Plan workbench</span>
-  <nav class="crumbs" aria-label="Level">
-    {#if epic}
-      <button type="button" class="home" onclick={onback}>Epics</button>
-      <span class="sep" aria-hidden="true">›</span>
-      <span class="on" aria-current="page">{epic.title}</span>
-    {:else}
-      <span class="on" aria-current="page">Epics</span>
-    {/if}
-  </nav>
-  <span class="spacer"></span>
-  <span class="live" class:down={!doc.sortie.reachable}>
+<TopBar {crumbs}>
+  <span class="live" class:down={!doc.sortie.reachable} class:idle={doc.sortie.reachable && !dispatched}
+    title={doc.sortie.reachable && !dispatched ? "Sortie plans and syncs this project but runs agents only for its configured project" : undefined}>
     <span class="pulse" aria-hidden="true"></span>
-    <span>{doc.sortie.reachable ? `Sortie · ${agents} running` : "Sortie unreachable"}</span>
+    <span>{!doc.sortie.reachable ? "Sortie unreachable" : dispatched ? `Sortie · ${agents} running` : "Sortie · agents not dispatched"}</span>
   </span>
   {#if actions}{@render actions()}{/if}
-</header>
+</TopBar>
 
 <div class="strip">
   <p class="summary">
@@ -120,6 +120,7 @@
   </ul>
 </div>
 
+{#if notice}{@render notice()}{/if}
 <ValidationPanel errors={doc.validation.errors} has={(k) => model.byKey.has(k)} onselect={selectStub} />
 
 <section class="canvas" aria-label="Dependency graph" data-level={view.epic ?? "project"}>
@@ -223,17 +224,10 @@
 </section>
 
 <style>
-  .top { flex: none; height: 56px; display: flex; align-items: center; gap: 18px; padding: 0 var(--s-gutter); background: var(--ink); color: #fff; }
-  .logo { font-weight: 700; font-size: 16px; letter-spacing: -0.01em; white-space: nowrap; }
-  .crumbs { display: flex; align-items: center; gap: 2px; background: var(--ink-raised); padding: 3px; border-radius: 7px; min-width: 0; }
-  .crumbs button, .crumbs span { padding: 5px 14px; border-radius: var(--r-tab); font-size: 13px; font-weight: 600; color: #b8b8bd; white-space: nowrap; }
-  .crumbs .on { background: #fff; color: var(--ink); overflow: hidden; text-overflow: ellipsis; }
-  .crumbs button:hover { color: #fff; }
-  .crumbs .sep { padding: 0 2px; color: #6e6e73; }
-  .spacer { flex: 1; }
   .live { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #d1d1d6; white-space: nowrap; }
   .live.down { color: var(--ink-mute); }
-  .live.down .pulse { background: var(--ink-mute); box-shadow: none; }
+  .live.down .pulse, .live.idle .pulse { background: var(--ink-mute); box-shadow: none; }
+  .live.idle { color: var(--ink-mute); }
   .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--amber); box-shadow: var(--shadow-pulse); }
 
   .strip { flex: none; min-height: 48px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px; padding: 8px var(--s-gutter); border-bottom: 1px solid var(--line); background: var(--strip); font-size: 12px; color: var(--mute); }
@@ -281,8 +275,4 @@
   .open-tab:hover { background: #000; }
   .empty { position: absolute; left: 40px; top: 120px; max-width: 40ch; color: var(--mute); }
   .empty b { display: block; margin-bottom: 4px; font: italic 400 20px var(--font-serif); color: var(--ink); }
-  @media (max-width: 900px) {
-    .top { gap: 10px; padding: 0 12px; }
-    .logo { display: none; }
-  }
 </style>

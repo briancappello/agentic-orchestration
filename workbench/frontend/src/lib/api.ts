@@ -1,5 +1,5 @@
 /** The workbench backend: the browser's only server. */
-import type { MergedGraph } from "./types";
+import type { MergedGraph, ProjectSummary, TrackerProject } from "./types";
 
 export class ApiError extends Error {
   constructor(readonly status: number, readonly code: string, message: string, readonly body: unknown = null) {
@@ -23,20 +23,38 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export const api = {
-  me: () => request<{ signed_in: boolean; store: string }>("GET", "/api/me"),
+  me: () => request<{ signed_in: boolean }>("GET", "/api/me"),
   login: (password: string) => request<{ signed_in: boolean }>("POST", "/api/login", { password }),
   logout: () => request("POST", "/api/logout"),
-  graph: () => request<MergedGraph>("GET", "/api/graph"),
-  preview: () => request<SyncPreviewResponse>("POST", "/api/sync/preview"),
-  apply: (previewId: string) => request<{ result: unknown }>("POST", "/api/sync/apply", { preview_id: previewId, confirm: true }),
-  approve: (change: string) => request<{ change: string; approved_digest: string }>("POST", "/api/approve", { change }),
-  session: () => request<SessionStatus>("GET", "/api/session"),
-  startSession: (message: string) => request<SessionStatus>("POST", "/api/session", { message }),
-  stopSession: () => request<SessionStatus>("DELETE", "/api/session"),
-  command: (cmd: Record<string, unknown>) => request<unknown>("POST", "/api/session/commands", cmd),
-  sessionConfig: () => request<SessionConfig>("GET", "/api/session/config"),
-  setSessionConfig: (category: ConfigCategory, value: string) => request<SessionConfig>("PUT", "/api/session/config", { category, value }),
+  projects: () => request<{ projects: ProjectSummary[] }>("GET", "/api/projects"),
+  createProject: (body: { name: string; slug: string; huly_project: string }) =>
+    request<{ project: ProjectSummary; tracker: TrackerProject }>("POST", "/api/projects", body),
+  project: (slug: string) =>
+    request<{ project: ProjectSummary; tracker: TrackerProject | null; tracker_error: string | null }>("GET", projectPath(slug)),
+  renameProject: (slug: string, name: string) => request<{ project: ProjectSummary }>("PATCH", projectPath(slug), { name }),
+  deleteProject: (slug: string) => request<{ deleted: string; store_path: string; huly_project: string }>("DELETE", projectPath(slug)),
 };
+
+export const projectPath = (slug: string) => `/api/projects/${encodeURIComponent(slug)}`;
+
+/** The routes of one project: its graph, sync, approval, and planning session. */
+export function projectApi(slug: string) {
+  const p = projectPath(slug);
+  return {
+    graph: () => request<MergedGraph>("GET", `${p}/graph`),
+    preview: () => request<SyncPreviewResponse>("POST", `${p}/sync/preview`),
+    apply: (previewId: string) => request<{ result: unknown }>("POST", `${p}/sync/apply`, { preview_id: previewId, confirm: true }),
+    approve: (change: string) => request<{ change: string; approved_digest: string }>("POST", `${p}/approve`, { change }),
+    session: () => request<SessionStatus>("GET", `${p}/session`),
+    startSession: (message: string) => request<SessionStatus>("POST", `${p}/session`, { message }),
+    stopSession: () => request<SessionStatus>("DELETE", `${p}/session`),
+    command: (cmd: Record<string, unknown>) => request<unknown>("POST", `${p}/session/commands`, cmd),
+    sessionConfig: () => request<SessionConfig>("GET", `${p}/session/config`),
+    setSessionConfig: (category: ConfigCategory, value: string) => request<SessionConfig>("PUT", `${p}/session/config`, { category, value }),
+    sessionEvents: `${p}/session/events`,
+    events: `${p}/events`,
+  };
+}
 
 export interface SessionStatus {
   active: boolean;
@@ -80,8 +98,8 @@ export interface SyncPreviewResponse {
 }
 
 /** Subscribe to graph updates; the browser's EventSource reconnects by itself. */
-export function subscribeGraph(onGraph: (g: MergedGraph) => void, onError?: () => void): () => void {
-  const es = new EventSource("/api/events", { withCredentials: true });
+export function subscribeGraph(slug: string, onGraph: (g: MergedGraph) => void, onError?: () => void): () => void {
+  const es = new EventSource(projectApi(slug).events, { withCredentials: true });
   es.addEventListener("graph", (e) => onGraph(JSON.parse((e as MessageEvent).data)));
   if (onError) es.onerror = onError;
   return () => es.close();

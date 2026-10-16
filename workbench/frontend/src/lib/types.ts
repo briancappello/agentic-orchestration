@@ -53,7 +53,39 @@ export interface MergedGraph {
   blocks: { blocker: string; blocked: string }[];
   unplanned_changes: string[];
   validation: { valid: boolean; errors: PlanError[]; version: number };
-  sortie: { reachable: boolean; error: string | null; capabilities: string[]; generated_at: string | null };
+  sortie: {
+    reachable: boolean; error: string | null; capabilities: string[]; generated_at: string | null;
+    /** The tracker project, and whether Sortie runs agents for it (it does for its configured project only). */
+    project?: string; dispatched?: boolean;
+  };
+}
+
+/** A project as the projects list shows it. */
+export interface ProjectSummary {
+  id: number;
+  slug: string;
+  name: string;
+  huly_project: string;
+  store_path: string;
+  created_at: number;
+  valid: boolean;
+  errors: number;
+  epics: number;
+  stories: number;
+  session_active: boolean;
+  sortie: { reachable: boolean; dispatched: boolean };
+}
+
+/** A tracker project as Sortie reports it. */
+export interface TrackerProject {
+  key: string;
+  name: string | null;
+  url: string | null;
+  exists: boolean;
+  created: boolean;
+  ready: boolean;
+  dispatched: boolean;
+  problems: string[];
 }
 
 export function emptyGraph(): MergedGraph {

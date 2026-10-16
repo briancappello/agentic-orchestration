@@ -1,5 +1,5 @@
 /** The planning session as the chat pane uses it; tests substitute a fake. */
-import { api, type ConfigCategory, type SessionConfig, type SessionStatus } from "./api";
+import { projectApi, type ConfigCategory, type SessionConfig, type SessionStatus } from "./api";
 import type { BrokerEvent } from "./chat";
 
 export interface SessionClient {
@@ -13,21 +13,25 @@ export interface SessionClient {
   setConfig(category: ConfigCategory, value: string): Promise<SessionConfig>;
 }
 
-export const httpSession: SessionClient = {
-  status: () => api.session(),
-  start: (message) => api.startSession(message),
-  stop: () => api.stopSession(),
-  command: (cmd) => api.command(cmd),
-  config: () => api.sessionConfig(),
-  setConfig: (category, value) => api.setSessionConfig(category, value),
-  subscribe(onEvent, onDown) {
-    // EventSource sends Last-Event-ID itself when it reconnects, so the
-    // broker replays only what this tab missed.
-    const es = new EventSource("/api/session/events", { withCredentials: true });
-    es.onmessage = (e) => onEvent(JSON.parse(e.data));
-    es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) onDown();
-    };
-    return () => es.close();
-  },
-};
+/** The planning session of one project. */
+export function httpSession(slug: string): SessionClient {
+  const api = projectApi(slug);
+  return {
+    status: () => api.session(),
+    start: (message) => api.startSession(message),
+    stop: () => api.stopSession(),
+    command: (cmd) => api.command(cmd),
+    config: () => api.sessionConfig(),
+    setConfig: (category, value) => api.setSessionConfig(category, value),
+    subscribe(onEvent, onDown) {
+      // EventSource sends Last-Event-ID itself when it reconnects, so the
+      // broker replays only what this tab missed.
+      const es = new EventSource(api.sessionEvents, { withCredentials: true });
+      es.onmessage = (e) => onEvent(JSON.parse(e.data));
+      es.onerror = () => {
+        if (es.readyState === EventSource.CLOSED) onDown();
+      };
+      return () => es.close();
+    },
+  };
+}

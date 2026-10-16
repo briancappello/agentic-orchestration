@@ -43,7 +43,7 @@ describe("graph pane: levels", () => {
     flushSync();
     expect(document.querySelector("[data-stub]")).toBeNull();
 
-    click(document.querySelector(".crumbs .home"));
+    click(document.querySelector(".crumbs button.up"));
     expect(h.getView().epic).toBeNull();
     expect([...document.querySelectorAll<HTMLElement>(".card")].map((c) => c.dataset.key)).toEqual(["accounts-api", "billing"]);
   });
