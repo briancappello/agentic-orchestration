@@ -63,7 +63,7 @@ Both requests take one shape:
    - Cancel cancels the worker and calls `releaseIssueRuntimeState`, as the terminal path of reconcile does.
 4. On the loop, Sortie sets a **dispatch block** for the issue: `state.DispatchBlocks[id] = {want: <target state>}`.
 5. On the loop, Sortie calls `TransitionIssue` to `backlog_state` or `cancel_state`. When the write fails, Sortie removes the block for a pull-back and replies with the error. For a cancel, Sortie keeps the block and reports the failed write, so the worker it stopped is not dispatched again before a retry of the cancel.
-6. `EvaluateCandidate` refuses every issue that has a block. A poll that reads the issue in its target state clears the block. A block also expires after 10 minutes, so it is never permanent. After it expires, Sortie only logs that the tracker still disagrees.
+6. `EvaluateCandidate` and the retry lane refuse every issue that has a block. A candidate read that no longer reports the issue clears the block: candidate reads hold only active states, so the tracker then shows the move. A block also expires after 10 minutes, so it is never permanent. After it expires, Sortie only logs that the tracker still disagrees.
 
 The tracker write happens on the loop because the claim check and the write must not have a dispatch between them. Exit handling already writes the tracker on the loop (`exit.go:811`), and the 5 s control bound limits the stall.
 
@@ -76,7 +76,8 @@ Cancel records the run as `cancelled` through the existing `WorkerExitCancelled`
 
 A new table holds what satisfies a blocker: `plan_satisfaction(issue_id, kind, ref, pr_url, recorded_at)`, with the primary key `(issue_id, kind)`.
 
-- `kind = merged`: `ref` is the merge commit. Merge completion writes it at the same point where it latches the fingerprint.
+- `kind = merged`: `ref` is the merge commit and `pr` is `owner/repo#number`. Merge completion writes it before the transition, so a failed write keeps the entry pending.
+- `kind = unverified_no_change`: `ref` is the reason. It satisfies nothing and only explains why dependents wait.
 - `kind = no_change`: `ref` is `commit:<sha>` or `plan:<key>` (D6).
 
 Sortie never deletes from this table. A migration fills it from the existing `merge-completion` fingerprints, so issues that merged before the upgrade still count.
@@ -106,7 +107,8 @@ The criteria session reports through the existing exit protocol:
 On a fail, the rule's `on_fail` decides what happens: the name of a rule to hop back to, or `escalate`, the default, which raises `session.escalated`. Sortie posts the session's summary, which names the failed criteria, as the tracker comment.
 
 - *Alternative:* a custom tracker field for the gate. Rejected: dispatch rules can already match labels, and other adapters have labels too.
-- *Constraint:* auto-merge still respects the forge. A repository whose branch protection requires an approving review cannot auto-merge `criteria` stories. The startup preflight warns about it, and the smolvm environment guide says so.
+- *Constraint:* auto-merge still respects the forge. A repository whose branch protection requires an approving review cannot auto-merge `criteria` stories. No SCM adapter reads branch protection, so instead of a startup preflight, auto-merge warns once per criteria story that waits on `REVIEW_REQUIRED`. The smolvm environment guide says so.
+- Auto-merge is gated at the one place that merges, through `ReconcileParams.ReviewGate`, which reads the story's labels and the rule of the run that seeded the entry. A failed criteria check seeds no reaction at all.
 
 ### D6. Evidence is checked on the host at exit
 
@@ -115,7 +117,7 @@ When a run's standing declaration at exit is `no-change-needed` and plan control
 - **Commit:** Sortie runs `git merge-base --is-ancestor <sha> <base>` in the host-owned mirror (`internal/gitsync`), with hooks and fsmonitor off. The commit must be a full 40-character hexadecimal id. Without `environment.smolvm.repository` there is no mirror, and the claim is unverified with `no_mirror`. Sortie never runs `git` in a workspace the agent controls.
 - **Plan key:** Sortie looks up the key in the same project. A key that is found records `no_change` with `plan:<key>`. The judge then treats the claiming story as satisfied exactly while the cited story is satisfied, one level deep. A plan key that cites itself, or a story that cites it back, is unverified with `cycle`.
 
-An unverified claim is recorded in run history with its reason, and never in `plan_satisfaction`.
+The worker goroutine, which already holds the repository, makes these checks off the event loop and reports the verdict in its result; the exit only records it. An unverified claim is recorded as `unverified_no_change` with its reason.
 
 ### D7. Graph schema version 2
 

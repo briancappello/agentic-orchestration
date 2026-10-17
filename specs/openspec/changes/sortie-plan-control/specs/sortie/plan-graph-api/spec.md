@@ -14,7 +14,7 @@ With plan control on, each story node SHALL also carry:
 - its review gate, from its review label;
 - its approver and approval time, when the adapter declares **approval fields**;
 - its satisfaction: `merged`, `no_change_confirmed`, `unverified_no_change`, `canceled`, or `null`;
-- its merge commit and its pull request URL, when Sortie holds them;
+- its merge commit and its pull request (as `owner/repo#number`), when Sortie holds them;
 - for each of its blockers that is not satisfied, the blocker's id and the reason (`sortie/blocker-satisfaction`);
 - a proposed supersede, when its no-change claim cites a plan key (`sortie/no-change-evidence`).
 
@@ -32,7 +32,7 @@ Each edge SHALL carry the blocking issue's id and the blocked issue's id. Issues
 
 #### Scenario: A merged story
 - **WHEN** Sortie latched the merge commit of story `billing/a3`
-- **THEN** its node carries satisfaction `merged`, the merge commit, and the pull request URL
+- **THEN** its node carries satisfaction `merged`, the merge commit, and the pull request
 
 #### Scenario: A story that waits
 - **WHEN** story `billing/b1` is blocked by `billing/a3`, which is in `Canceled`

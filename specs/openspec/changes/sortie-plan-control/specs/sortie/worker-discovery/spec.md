@@ -5,7 +5,7 @@ Lets a client find the broker of each running worker through Sortie, and get the
 ## ADDED Requirements
 
 ### Requirement: The broker reports its address
-Sortie SHALL provide `POST /api/v1/{identifier}/broker`, which takes the broker's HTTP URL and its viewer token. Sortie SHALL accept it only with the session token minted for that issue's current run (`sortie/control-api-auth`). Sortie SHALL keep the URL and the token only in memory, with the running entry, and SHALL forget both when the run ends. Sortie SHALL register the viewer token for masking and SHALL NOT write it to run history or logs. A report for an issue that has no running worker SHALL get `404`.
+Sortie SHALL provide `POST /api/v1/{identifier}/broker`, which takes the broker's HTTP URL and its viewer token. Sortie SHALL accept it with the session token minted for that issue's current run (`sortie/control-api-auth`), or with the control token, and SHALL refuse another issue's session token. Sortie SHALL keep the URL and the token only in memory, with the running entry, and SHALL forget both when the run ends. Sortie SHALL register the viewer token for masking and SHALL NOT write it to run history or logs. A report for an issue that has no running worker SHALL get `404`.
 
 #### Scenario: A broker reports
 - **WHEN** the broker of `LIVE-1` posts its URL and viewer token with the session token of the current run
