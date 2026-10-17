@@ -16,7 +16,7 @@ The tracker here is a local Huly. Any tracker whose Sortie adapter declares the 
 - A local Huly at `http://localhost:8087` (see `docs/huly-adapter-notes.md` in the Sortie repository), with:
   - an account and a login token;
   - a project, for example `HULY`, that Sortie dispatches agents for;
-  - the task types `Epic` and `Story` in that project's space type (see "Plan task types" in the Huly adapter notes). Projects the workbench creates get the same space type, so they have them too.
+  - the task types `Epic` and `Story` in that project's space type (see "Plan task types" in the Huly adapter notes), and, for plan control, a status `In Review` in each of its task types: Sortie's `handoff_state`, which must be neither active, terminal, nor the backlog state. Projects the workbench creates get the same space type, so they have them too. `scripts/dev/huly_project.py <front-url> <workspace> <email> <password> <project-key>` sets all three up, and changes nothing when they are there; `scripts/dev.sh` runs it on every start. `scripts/dev/huly_clean_check.py` proves it from a clean slate, in a throwaway workspace it deletes afterwards.
 - A Sortie built with plan projects (ADR 0034), so one Sortie serves the plan of every workbench project.
 
 Ports used below: Sortie `7678`, workbench `8790`. Each broker picks a free localhost port.
@@ -224,3 +224,7 @@ Choose **End session** in the chat pane first: stopping the backend leaves the p
 - **A story stays Ready after a sync.** Sortie is not under plan control, or its `release_state` is not a state of the tracker project. Sortie's plan graph reports `plan_states`; with none, nothing is released.
 - **A running story has no Watch.** Its broker has not reported its address to Sortie yet, or it runs in a version of `acp-broker` that does not report. Sortie's `GET /api/v1/state` shows `broker: null` for it.
 - **`frozen` in the red panel.** The agent edited or removed a started story. Undo the edit, and amend or supersede instead.
+
+## Check the UI without Huly
+
+`scripts/check/ui.sh planner|approver|local` starts the workbench on `http://127.0.0.1:8799` against a fake Sortie with fake worker brokers (`scripts/check/fake_sortie.py`), with a small seeded plan whose story `billing/b1` runs as `HLAB-1`. `planner` and `approver` sign in through Dex (`scripts/check/dex.yaml`, in a container), as one person with the planner role, or with both roles; `local` uses local mode with the password `check`. Each run starts from a blank state in `~/.cache/plan-workbench-check`, and Ctrl-C stops everything. Drive the worker with `curl -X POST 127.0.0.1:7690/admin/next` (its next run) and `/admin/end` (no more runs). With it running, `scripts/check/roles_api.sh planner|approver` checks, through the API, what that role may and may not do.
