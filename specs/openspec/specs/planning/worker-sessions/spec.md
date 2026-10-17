@@ -1,7 +1,7 @@
 # planning/worker-sessions Specification
 
 ## Purpose
-TBD - created by archiving change workbench-worker-sessions. Update Purpose after archive.
+Lets people watch the workers Sortie runs for a project's stories from the plan workbench, follow a story from run to run, and, with the approver role, steer or cancel them. The workbench relays each worker's broker, so no broker token reaches the browser.
 
 ## Requirements
 
