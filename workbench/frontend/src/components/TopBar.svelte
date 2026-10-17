@@ -10,6 +10,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import Icon from "./Icon.svelte";
+  import UserMenu from "./UserMenu.svelte";
 
   let { crumbs, children }: { crumbs: Crumb[]; children?: Snippet } = $props();
 </script>
@@ -35,6 +36,7 @@
   </nav>
   <span class="spacer"></span>
   {#if children}{@render children()}{/if}
+  <UserMenu />
 </header>
 </div>
 

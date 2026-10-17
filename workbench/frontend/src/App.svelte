@@ -4,9 +4,13 @@
   import ProjectsPage from "./components/ProjectsPage.svelte";
   import ProjectView from "./components/ProjectView.svelte";
   import { api } from "./lib/api";
+  import { session } from "./lib/identity.svelte";
   import { formatRoute, parseRoute, projectHref, type Route } from "./lib/router";
 
   let signedIn: boolean | null = $state(null);
+  // A sign-in the provider sent back with an error lands on #/signin?error=…
+  let signInError = $state(new URLSearchParams(location.hash.split("?")[1] ?? "").get("error") ?? "");
+  if (location.hash.startsWith("#/signin")) history.replaceState(null, "", "#/");
   let route: Route = $state(parseRoute(location.hash));
 
   function onhashchange() {
@@ -23,9 +27,17 @@
 
   async function start() {
     try {
-      await api.me();
+      const me = await api.me();
+      session.identity = me.identity;
+      session.mode = me.mode;
       signedIn = true;
     } catch {
+      session.identity = null;
+      try {
+        session.mode = (await api.authMode()).mode;
+      } catch {
+        session.mode = "local";
+      }
       signedIn = false;
     }
   }
@@ -35,7 +47,7 @@
 <svelte:window {onhashchange} />
 
 {#if signedIn === false}
-  <Login onsignedin={start} />
+  <Login mode={session.mode} error={signInError} onsignedin={start} />
 {:else if signedIn}
   {#if route.name === "projects"}
     <ProjectsPage />
