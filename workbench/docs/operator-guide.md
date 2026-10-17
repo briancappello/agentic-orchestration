@@ -127,7 +127,7 @@ uv run workbench hash-password > ~/.config/plan-workbench-password-hash   # type
 | `WORKBENCH_RUNTIME_DIR` | No | The parent of each project's session runtime directory, `<dir>/<slug>`, which holds the running session's state, broker token, and logs. Default: `$XDG_RUNTIME_DIR/plan-workbench`, else `~/.cache/plan-workbench`. |
 
 ```sh
-export WORKBENCH_STORE=~/dev/agent-platform-specs WORKBENCH_HULY_PROJECT=HULY   # optional: bring in an existing store
+export WORKBENCH_STORE=~/dev/billing-specs WORKBENCH_HULY_PROJECT=HULY   # optional: bring in an existing store
 export WORKBENCH_SORTIE_URL=http://127.0.0.1:7678
 export WORKBENCH_SORTIE_TOKEN=$(cat ~/.config/plan-workbench-sortie-token)
 export WORKBENCH_PASSWORD_HASH=$(cat ~/.config/plan-workbench-password-hash)

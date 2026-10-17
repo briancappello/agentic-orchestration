@@ -56,7 +56,7 @@ Open (deliberately undecided):
 
 ## Evidence on Hand
 
-- The real spec store, `~/dev/agent-platform-specs`, whose first plan is the plan of this workbench's own change.
+- Project spec stores that the workbench creates from `src/workbench/store_template/`. `~/dev/agent-platform-specs` holds the platform's own design as stock OpenSpec changes, and it is not a workbench plan.
 - A working local Huly (v0.7.426), and Sortie's Huly adapter with plan writes on the Sortie branch `feat/plan-to-tracker-dag`.
 
 ## Product Principles

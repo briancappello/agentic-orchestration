@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -9,9 +8,8 @@ import pytest
 from planlib import PlanLoadError, Schemas, load_store
 from tests.conftest import FIXTURES, breakdown, deliverable
 
-STORE_SCHEMAS = Path(os.environ.get("PLANLIB_STORE", Path.home() / "dev" / "agent-platform-specs")) / (
-    "openspec/schemas/planning"
-)
+# The schemas every new project store is created with.
+STORE_SCHEMAS = Path(__file__).resolve().parents[2] / "src/workbench/store_template/openspec/schemas/planning"
 
 
 def test_loads_plan_and_breakdowns(store):
@@ -111,7 +109,8 @@ def test_invalid_yaml_is_reported(store):
     assert [e.code for e in load_store(store.root).errors] == ["yaml"]
 
 
-@pytest.mark.skipif(not STORE_SCHEMAS.is_dir(), reason="spec store not checked out")
-def test_fixture_schemas_match_the_store():
-    for f in (FIXTURES / "schemas").glob("*.schema.json"):
+def test_fixture_schemas_match_the_store_template():
+    fixtures = sorted((FIXTURES / "schemas").glob("*.schema.json"))
+    assert fixtures
+    for f in fixtures:
         assert json.loads(f.read_text()) == json.loads((STORE_SCHEMAS / f.name).read_text()), f.name
