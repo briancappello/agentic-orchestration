@@ -12,6 +12,7 @@ from .merge import merge
 from .plan_overlay import frozen_set, overlay
 from .plan_state import PlanState
 from .sortie import ProjectSortie, SortieError
+from .workers import worker_fields
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +27,8 @@ class Hub:
         self.fields: dict[str, dict[str, Any]] = {}
         self._pulled_back: set[str] = set()
         self.tracker: dict[str, Any] | None = None
+        # Worker fields by tracker identifier, from Sortie's state.
+        self.workers: dict[str, dict[str, Any]] = {}
         self.sortie_error: str | None = None
         self.capabilities: list[str] = []
         self.version = 0
@@ -47,6 +50,7 @@ class Hub:
             self.tracker = graph
             self.capabilities = list(graph.get("capabilities") or [])
             self.sortie_error = None
+            self.workers = await self._workers(graph)
             approvals, _ = self.records()
             frozen = frozen_set(self.plan.stories, approvals, graph)
             if frozen != self.frozen:
@@ -56,6 +60,15 @@ class Hub:
                 return
         self.rebuild()
         await self.pull_back_stale()
+
+    async def _workers(self, graph: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        if not graph.get("dispatched") or not any(n.get("runtime") for n in graph.get("nodes") or []):
+            return {}
+        try:
+            return worker_fields(await self.sortie.state())
+        except SortieError as exc:
+            log.warning("sortie state unavailable: %s", exc)
+            return {}
 
     async def pull_back_stale(self) -> None:
         """Pull back each released story whose content changed since its
@@ -87,6 +100,9 @@ class Hub:
         self.fields = overlay(snap["graph"], self.plan.stories, approvals, rereviews, self.tracker)
         for n in doc["nodes"]:
             n.update(self.fields.get(n["plan_key"], {}))
+            if n.get("runtime") and n.get("tracker"):
+                n["runtime"] = {"stage": None, "session_id": None, "held": False, "holder": None, "watchable": False,
+                                **n["runtime"], **self.workers.get(n["tracker"]["identifier"], {})}
         self.version += 1
         doc.update(
             version=self.version,

@@ -33,6 +33,29 @@ class FakeSortie:
         self.pulled_back: list[str] = []
         self.cancelled: list[str] = []
         self.claimed: set[str] = set()
+        # Workers, by tracker identifier: running entries (as /api/v1/state
+        # lists them), retry entries, and the brokers that reported.
+        self.running: dict[str, dict[str, Any]] = {}
+        self.retrying: dict[str, dict[str, Any]] = {}
+        self.brokers: dict[str, dict[str, str]] = {}
+        self.state_down = False
+
+    def run(self, identifier: str, session_id: str, stage: str = "implement", broker: str | None = None, token: str = "viewer-secret", **extra):
+        """Start a run of the issue; with ``broker``, its broker has reported."""
+        self.retrying.pop(identifier, None)
+        self.running[identifier] = {"issue_identifier": identifier, "session_id": session_id, "rule_name": stage,
+                                    "turn_count": 1, "last_message": "working", "held": False, "holder": "",
+                                    "broker": {"http_url": broker} if broker else None, **extra}
+        if broker:
+            self.brokers[identifier] = {"http_url": broker, "viewer_token": token}
+        else:
+            self.brokers.pop(identifier, None)
+
+    def end(self, identifier: str, retry_attempt: int | None = None) -> None:
+        self.running.pop(identifier, None)
+        self.brokers.pop(identifier, None)
+        if retry_attempt is not None:
+            self.retrying[identifier] = {"issue_identifier": identifier, "attempt": retry_attempt}
 
     def issue(self, plan_key, kind="story", state="Todo", parent=None, runtime=None, terminal=False, **extra):
         node = {
@@ -97,6 +120,22 @@ class FakeSortie:
                 return httpx.Response(409, json={"error": {"code": "stale_preview", "message": "unknown preview"}})
             self.applied.append({**body, "project": project})
             return httpx.Response(200, json={"result": {"created": [], "failed": None}})
+        if path == "/api/v1/state":
+            if self.state_down:
+                return httpx.Response(503, json={"error": {"code": "unavailable", "message": "state"}})
+            return httpx.Response(200, json={"running": list(self.running.values()), "retrying": list(self.retrying.values()),
+                                             "budget_exhausted": []})
+        if path.startswith("/api/v1/") and path.endswith("/broker"):
+            ident = path.removeprefix("/api/v1/").removesuffix("/broker")
+            if ident not in self.brokers:
+                return httpx.Response(404, json={"error": {"code": "broker_not_found", "message": ident}})
+            return httpx.Response(200, json=self.brokers[ident])
+        if path.startswith("/api/v1/") and path.count("/") == 3:
+            ident = path.removeprefix("/api/v1/")
+            if ident not in self.running and ident not in self.retrying:
+                return httpx.Response(404, json={"error": {"code": "issue_not_found", "message": ident}})
+            return httpx.Response(200, json={"issue_identifier": ident, "running": self.running.get(ident),
+                                             "retry": self.retrying.get(ident)})
         return httpx.Response(404, json={"error": {"code": "not_found", "message": path}})
 
     def handle_project(self, method: str, key: str, body: Any) -> httpx.Response:

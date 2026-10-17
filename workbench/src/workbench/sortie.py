@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -75,6 +76,20 @@ class SortieClient:
     async def cancel(self, plan_key: str) -> dict[str, Any]:
         return await self._request("POST", "/api/v1/plan/cancel", json={"plan_key": plan_key})
 
+    # Workers. Sortie runs agents for its configured project only.
+
+    async def state(self) -> dict[str, Any]:
+        """The running, retrying, and budget-held issues."""
+        return await self._request("GET", "/api/v1/state")
+
+    async def issue(self, identifier: str) -> dict[str, Any]:
+        """One issue's runtime: its running entry or its retry entry."""
+        return await self._request("GET", f"/api/v1/{quote(identifier, safe='')}")
+
+    async def broker(self, identifier: str) -> dict[str, Any]:
+        """The address and viewer token of the broker of the issue's run."""
+        return await self._request("GET", f"/api/v1/{quote(identifier, safe='')}/broker")
+
     def bind(self, project: str) -> "ProjectSortie":
         return ProjectSortie(self, project)
 
@@ -104,3 +119,12 @@ class ProjectSortie:
 
     async def cancel(self, plan_key: str) -> dict[str, Any]:
         return await self.client.cancel(plan_key)
+
+    async def state(self) -> dict[str, Any]:
+        return await self.client.state()
+
+    async def issue(self, identifier: str) -> dict[str, Any]:
+        return await self.client.issue(identifier)
+
+    async def broker(self, identifier: str) -> dict[str, Any]:
+        return await self.client.broker(identifier)
