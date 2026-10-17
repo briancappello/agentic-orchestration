@@ -28,12 +28,17 @@ class FakeSortie:
         self.requests: list[tuple[str, str, Any]] = []
         self.previews: dict[str, dict[str, Any]] = {}
         self.applied: list[dict[str, Any]] = []
+        # Plan control: the state names, and the plan keys pulled back or cancelled.
+        self.plan_states: dict[str, str] | None = None
+        self.pulled_back: list[str] = []
+        self.cancelled: list[str] = []
+        self.claimed: set[str] = set()
 
-    def issue(self, plan_key, kind="story", state="Todo", parent=None, runtime=None, terminal=False):
+    def issue(self, plan_key, kind="story", state="Todo", parent=None, runtime=None, terminal=False, **extra):
         node = {
             "id": f"id-{len(self.nodes) + 1}", "identifier": f"T-{len(self.nodes) + 1}", "plan_key": plan_key,
             "kind": kind, "title": f"tracker {plan_key}", "state": state, "terminal": terminal,
-            "url": f"https://tracker/{len(self.nodes) + 1}", "parent_id": parent, "runtime": runtime,
+            "url": f"https://tracker/{len(self.nodes) + 1}", "parent_id": parent, "runtime": runtime, **extra,
         }
         self.nodes.append(node)
         return node
@@ -59,7 +64,22 @@ class FakeSortie:
             return httpx.Response(200, json={
                 "project": project, "dispatched": own, "generated_at": "now", "capabilities": self.capabilities,
                 "nodes": self.nodes if own else [], "edges": self.edges if own else [],
+                "plan_states": self.plan_states,
             })
+        if path in ("/api/v1/plan/pull-back", "/api/v1/plan/cancel"):
+            key = body["plan_key"]
+            node = next((n for n in self.nodes if n["plan_key"] == key), None)
+            if node is None:
+                return httpx.Response(404, json={"error": {"code": "issue_not_found", "message": key}})
+            if path.endswith("pull-back"):
+                if key in self.claimed:
+                    return httpx.Response(409, json={"error": {"code": "already_claimed", "message": key}})
+                self.pulled_back.append(key)
+                node["state"] = (self.plan_states or {}).get("backlog", "Backlog")
+            else:
+                self.cancelled.append(key)
+                node["state"], node["terminal"] = (self.plan_states or {}).get("cancel", "Canceled"), True
+            return httpx.Response(200, json={"plan_key": key})
         if path == "/api/v1/plan/capabilities":
             return httpx.Response(200, json={"capabilities": self.capabilities, "plan_key_storage": "custom_field"})
         if path == "/api/v1/plan/sync":

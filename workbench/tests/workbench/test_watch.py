@@ -13,10 +13,10 @@ def no_openspec(*_):
     raise AssertionError("openspec should not be called")
 
 
-def validate_offline(root):
+def validate_offline(root, **kw):
     import planlib
 
-    return planlib.validate(root, show=no_openspec)
+    return planlib.validate(root, show=no_openspec, **kw)
 
 
 def wait_for(predicate, timeout=2.0):

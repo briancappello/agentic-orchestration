@@ -18,7 +18,7 @@ def test_migrates_once_and_reopens(tmp_path):
     reg.close()
     again = Registry(tmp_path / "wb.db")
     assert [p.slug for p in again.list()] == ["billing"]
-    assert sqlite3.connect(tmp_path / "wb.db").execute("PRAGMA user_version").fetchone()[0] == 1
+    assert sqlite3.connect(tmp_path / "wb.db").execute("PRAGMA user_version").fetchone()[0] == 2
 
 
 def test_slug_tracker_key_and_store_are_unique(tmp_path):

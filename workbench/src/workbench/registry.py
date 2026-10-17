@@ -146,6 +146,54 @@ class Registry:
             raise RegistryError(404, "project_not_found", f"no project {slug}")
         return self.get(slug)  # type: ignore[return-value]
 
+    # Approvals and re-reviews, per project.
+
+    def approvals(self, project_id: int) -> dict[str, dict]:
+        with self._lock:
+            rows = self._db.execute("SELECT * FROM approvals WHERE project_id = ?", (project_id,)).fetchall()
+        return {r["plan_key"]: dict(r) for r in rows}
+
+    def approve(self, project_id: int, digests: dict[str, str], approver_id: str, approver_name: str) -> None:
+        """Approve each story at its digest, and clear its re-review, in one transaction."""
+        now = int(time.time())
+        with self._lock:
+            self._db.execute("BEGIN IMMEDIATE")
+            try:
+                for key, digest in digests.items():
+                    self._db.execute(
+                        "INSERT INTO approvals (project_id, plan_key, digest, approver_id, approver_name, approved_at) "
+                        "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (project_id, plan_key) DO UPDATE SET "
+                        "digest = excluded.digest, approver_id = excluded.approver_id, "
+                        "approver_name = excluded.approver_name, approved_at = excluded.approved_at",
+                        (project_id, key, digest, approver_id, approver_name, now))
+                    self._db.execute("DELETE FROM rereviews WHERE project_id = ? AND plan_key = ?", (project_id, key))
+                self._db.execute("COMMIT")
+            except BaseException:
+                self._db.execute("ROLLBACK")
+                raise
+
+    def rereviews(self, project_id: int) -> dict[str, dict]:
+        with self._lock:
+            rows = self._db.execute("SELECT * FROM rereviews WHERE project_id = ?", (project_id,)).fetchall()
+        return {r["plan_key"]: dict(r) for r in rows}
+
+    def withdraw(self, project_id: int, keys: list[str], reason: str, ref: str) -> None:
+        """Withdraw the approvals of keys and mark them for re-review, in one transaction."""
+        now = int(time.time())
+        with self._lock:
+            self._db.execute("BEGIN IMMEDIATE")
+            try:
+                for key in keys:
+                    self._db.execute("DELETE FROM approvals WHERE project_id = ? AND plan_key = ?", (project_id, key))
+                    self._db.execute(
+                        "INSERT INTO rereviews (project_id, plan_key, reason, ref, created_at) VALUES (?, ?, ?, ?, ?) "
+                        "ON CONFLICT (project_id, plan_key) DO UPDATE SET reason = excluded.reason, ref = excluded.ref, "
+                        "created_at = excluded.created_at", (project_id, key, reason, ref, now))
+                self._db.execute("COMMIT")
+            except BaseException:
+                self._db.execute("ROLLBACK")
+                raise
+
     def delete(self, slug: str) -> None:
         with self._lock:
             self._db.execute("DELETE FROM projects WHERE slug = ?", (slug,))

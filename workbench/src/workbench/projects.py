@@ -29,12 +29,13 @@ class ProjectRuntime:
     it closes; its planning session runs apart and survives both."""
 
     def __init__(self, project: Project, store: Path, config: Config, sortie: SortieClient,
-                 sessions: SessionManager, validate=None):
+                 sessions: SessionManager, validate=None, registry: Registry | None = None):
         self.project = project
         self.store = store
         self.config = config
-        self.plan = PlanState(store, **({"validate": validate} if validate else {}))
-        self.hub = Hub(self.plan, sortie.bind(project.huly_project))
+        self.registry = registry
+        self.plan = PlanState(store, inputs=self.plan_inputs, **({"validate": validate} if validate else {}))
+        self.hub = Hub(self.plan, sortie.bind(project.huly_project), records=self.records)
         self.sessions = sessions
         # Sync previews waiting for confirmation, by preview id.
         self.pending: dict[str, dict[str, Any]] = {}
@@ -45,8 +46,40 @@ class ProjectRuntime:
     def slug(self) -> str:
         return self.project.slug
 
+    def records(self) -> tuple[dict[str, dict], dict[str, dict]]:
+        if self.registry is None:
+            return {}, {}
+        return self.registry.approvals(self.project.id), self.registry.rereviews(self.project.id)
+
+    def plan_inputs(self) -> tuple[dict[str, str], dict[str, str]]:
+        """What the validator needs: approved digests and the frozen set."""
+        approvals, _ = self.records()
+        return {k: r["digest"] for k, r in approvals.items()}, dict(self.hub.frozen)
+
+    def import_legacy_approvals(self) -> list[str]:
+        """Import approvals made in breakdown files under the old format, once:
+        each still-valid approved breakdown becomes batch 0 of its epic."""
+        if self.registry is None or not (self.store / "openspec").is_dir():
+            return []
+        import planlib
+
+        try:
+            store = planlib.load_store(self.store)
+        except planlib.PlanLoadError:
+            return []
+        approvals = self.registry.approvals(self.project.id)
+        imported = []
+        for change, bd in sorted(store.breakdowns.items()):
+            keys = {f"{change}/{d['id']}": planlib.story_digest(d) for d in bd.doc["deliverables"]}
+            if planlib.legacy_approved(bd.doc) and not any(k in approvals for k in keys):
+                self.registry.approve(self.project.id, keys, f"migration|{change}", "Imported approval")
+                imported.append(change)
+                log.info("project %s: imported the approval of %s from its breakdown", self.slug, change)
+        return imported
+
     async def start(self) -> None:
         self.hub.bind(asyncio.get_running_loop())
+        await asyncio.to_thread(self.import_legacy_approvals)
         await asyncio.to_thread(self.plan.refresh)
         if (self.store / "openspec").is_dir():
             self._tasks.append(asyncio.create_task(watch(self.plan, self.config.debounce_ms, self._stop)))
@@ -129,7 +162,7 @@ class ProjectManager:
     async def _open(self, project: Project) -> ProjectRuntime:
         store = project.store(self.config.home)
         sessions = self.session_factory(project, store, self.runtime_dir(project))
-        rt = ProjectRuntime(project, store, self.config, self.sortie, sessions, self.validate)
+        rt = ProjectRuntime(project, store, self.config, self.sortie, sessions, self.validate, self.registry)
         self.runtimes[project.slug] = rt
         await rt.start()
         return rt

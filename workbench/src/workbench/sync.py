@@ -1,17 +1,14 @@
-"""Sync through Sortie with a confirmed preview, and the per-change Approve action."""
+"""Sync through Sortie with a confirmed preview."""
 
 from __future__ import annotations
 
-import asyncio
 import copy
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-import planlib
-from planlib import PlanLoadError
-
+from .plan_overlay import sync_graph
 from .projects import ProjectManager
 from .sortie import SortieError
 
@@ -19,10 +16,6 @@ from .sortie import SortieError
 class ApplyBody(BaseModel):
     preview_id: str
     confirm: bool = False
-
-
-class ApproveBody(BaseModel):
-    change: str
 
 
 def sync_router(projects: ProjectManager, require_operator) -> APIRouter:
@@ -39,7 +32,7 @@ def sync_router(projects: ProjectManager, require_operator) -> APIRouter:
         snap = hub.plan.snapshot()
         if snap["errors"] or snap["graph"] is None:
             raise HTTPException(status_code=409, detail={"code": "plan_invalid", "message": "fix the plan's validation errors before syncing"})
-        graph = copy.deepcopy(snap["graph"])
+        graph = sync_graph(copy.deepcopy(snap["graph"]), hub.fields)
         try:
             body = await hub.sortie.preview(graph)
         except SortieError as exc:
@@ -71,19 +64,5 @@ def sync_router(projects: ProjectManager, require_operator) -> APIRouter:
             pending.pop(body.preview_id, None)
             await hub.poll_once()
         return result
-
-    @router.post("/approve")
-    async def approve(slug: str, body: ApproveBody) -> dict:
-        hub = projects.get(slug).hub
-        snap = hub.plan.snapshot()
-        blocking = [e for e in snap["errors"] if e.get("change") == body.change or e.get("change") is None]
-        if blocking:
-            raise HTTPException(status_code=409, detail={"code": "plan_invalid", "message": "fix the validation errors for this change first", "errors": blocking})
-        try:
-            digest = await asyncio.to_thread(planlib.approve, hub.plan.store, body.change)
-        except PlanLoadError as exc:
-            raise HTTPException(status_code=422, detail={"code": "cannot_approve", "message": str(exc)}) from exc
-        await asyncio.to_thread(hub.plan.refresh)
-        return {"change": body.change, "approved_digest": digest}
 
     return router

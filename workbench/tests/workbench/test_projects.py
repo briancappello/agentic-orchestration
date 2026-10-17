@@ -127,7 +127,7 @@ def test_two_projects_plan_and_sync_apart(store):
         assert keys("onboarding") == {"welcome", "welcome/greet"}
         assert keys("store") == {"billing", "billing/invoice"}
 
-        assert client.post("/api/projects/onboarding/approve", json={"change": "welcome"}).status_code == 200
+        assert client.post("/api/projects/onboarding/approve", json={"epic": "welcome"}).status_code == 200
         preview = client.post("/api/projects/onboarding/sync/preview").json()
         r = client.post("/api/projects/onboarding/sync/apply", json={"preview_id": preview["preview_id"], "confirm": True})
         assert r.status_code == 200, r.text

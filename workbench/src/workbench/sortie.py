@@ -69,6 +69,12 @@ class SortieClient:
         """Create the tracker project when it is missing, then report it."""
         return await self._request("PUT", f"/api/v1/plan/projects/{key}", json={"name": name})
 
+    async def pull_back(self, plan_key: str) -> dict[str, Any]:
+        return await self._request("POST", "/api/v1/plan/pull-back", json={"plan_key": plan_key})
+
+    async def cancel(self, plan_key: str) -> dict[str, Any]:
+        return await self._request("POST", "/api/v1/plan/cancel", json={"plan_key": plan_key})
+
     def bind(self, project: str) -> "ProjectSortie":
         return ProjectSortie(self, project)
 
@@ -91,3 +97,10 @@ class ProjectSortie:
 
     async def apply(self, graph: dict[str, Any], preview_id: str) -> dict[str, Any]:
         return await self.client.apply(graph, preview_id, project=self.project)
+
+    # Pull-back and cancel act on the dispatched project's stories only.
+    async def pull_back(self, plan_key: str) -> dict[str, Any]:
+        return await self.client.pull_back(plan_key)
+
+    async def cancel(self, plan_key: str) -> dict[str, Any]:
+        return await self.client.cancel(plan_key)

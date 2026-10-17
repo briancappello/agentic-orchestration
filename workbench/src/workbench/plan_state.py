@@ -25,10 +25,14 @@ class PlanState:
     the graph never disappears while someone fixes a file.
     """
 
-    def __init__(self, store: Path, validate: Validator = planlib.validate):
+    def __init__(self, store: Path, validate: Validator = planlib.validate,
+                 inputs: Callable[[], tuple[dict[str, str], dict[str, str]]] | None = None):
         self.store = store
         self._validate = validate
+        # Approved digests and the frozen set, read at every validation.
+        self._inputs = inputs or (lambda: ({}, {}))
         self.graph: dict[str, Any] | None = None
+        self.stories: dict[str, dict[str, Any]] = {}
         self.errors: list[dict[str, Any]] = []
         self.version = 0
         self.validated_at = 0.0
@@ -40,9 +44,12 @@ class PlanState:
     def refresh(self) -> None:
         """Validate the store now and keep the result."""
         try:
-            result = self._validate(self.store)
+            approvals, frozen = self._inputs()
+            result = self._validate(self.store, approvals=approvals, frozen=frozen)
             errors = [e.to_dict() for e in result.errors]
             graph = result.graph
+            if graph is not None:
+                self.stories = result.stories
         except PlanLoadError as exc:
             errors = [{"code": "store", "message": str(exc), "file": None, "change": None, "deliverable": None, "members": []}]
             graph = None

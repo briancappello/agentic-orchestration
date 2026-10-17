@@ -66,22 +66,25 @@ def test_invalid_plan_cannot_be_previewed(store):
         assert not [x for x in fake.requests if x[1] == "/api/v1/plan/sync"]
 
 
-def test_approve_then_edit_returns_to_draft(store):
+def test_approve_the_epic_then_edit_one_story(store):
     fake = FakeSortie()
     app = setup(store, fake)
     with TestClient(app) as client:
         sign_in(client)
-        approval = lambda: {n["plan_key"]: n["approval"] for n in project(app).plan.graph["nodes"]}["billing"]  # noqa: E731
-        assert approval() == "draft"
+        approval = lambda: {n["plan_key"]: n["approval"] for n in project(app).plan.graph["nodes"]}  # noqa: E731
+        assert approval()["billing/invoice"] == "draft"
 
-        r = client.post(f"{P}/approve", json={"change": "billing"})
-        assert r.status_code == 200 and r.json()["approved_digest"].startswith("sha256:")
-        assert approval() == "approved"
+        r = client.post(f"{P}/approve", json={"epic": "billing"})
+        assert r.status_code == 200 and r.json()["approved"] == ["billing/invoice", "billing/tax"]
+        assert approval()["billing/invoice"] == "approved" and approval()["billing"] == "approved"
+        assert client.post(f"{P}/approve", json={"epic": "billing"}).json()["error"]["code"] == "epic_already_approved"
 
         doc = planlib.load_store(store.root).breakdowns["billing"].doc
         doc["deliverables"].append(deliverable("vat"))
         store.change("billing", doc)
-        assert wait_for(lambda: approval() == "draft")
+        assert wait_for(lambda: approval().get("billing/vat") == "draft")
+        assert approval()["billing/invoice"] == "approved"
 
-        r = client.post(f"{P}/approve", json={"change": "nope"})
-        assert r.status_code == 422
+        assert client.post(f"{P}/approve", json={"keys": ["billing/nope"]}).status_code == 404
+        assert client.post(f"{P}/approve", json={"keys": ["billing/vat"]}).status_code == 200
+        assert approval()["billing/vat"] == "approved"

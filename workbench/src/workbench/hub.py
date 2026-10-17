@@ -9,6 +9,7 @@ import time
 from typing import Any
 
 from .merge import merge
+from .plan_overlay import frozen_set, overlay
 from .plan_state import PlanState
 from .sortie import ProjectSortie, SortieError
 
@@ -16,9 +17,14 @@ log = logging.getLogger(__name__)
 
 
 class Hub:
-    def __init__(self, plan: PlanState, sortie: ProjectSortie):
+    def __init__(self, plan: PlanState, sortie: ProjectSortie, records=None):
         self.plan = plan
         self.sortie = sortie
+        # (approvals, rereviews) of the project, by plan key.
+        self.records = records or (lambda: ({}, {}))
+        self.frozen: dict[str, str] = {}
+        self.fields: dict[str, dict[str, Any]] = {}
+        self._pulled_back: set[str] = set()
         self.tracker: dict[str, Any] | None = None
         self.sortie_error: str | None = None
         self.capabilities: list[str] = []
@@ -41,7 +47,30 @@ class Hub:
             self.tracker = graph
             self.capabilities = list(graph.get("capabilities") or [])
             self.sortie_error = None
+            approvals, _ = self.records()
+            frozen = frozen_set(self.plan.stories, approvals, graph)
+            if frozen != self.frozen:
+                self.frozen = frozen
+                # Edits to stories that just started are now refused.
+                await asyncio.to_thread(self.plan.refresh)
+                return
         self.rebuild()
+        await self.pull_back_stale()
+
+    async def pull_back_stale(self) -> None:
+        """Pull back each released story whose content changed since its
+        approval, before an agent takes the old content."""
+        # A story pulled back and released again may need pulling back again.
+        self._pulled_back = {k for k in self._pulled_back if self.fields.get(k, {}).get("stale_release")}
+        for key, f in list(self.fields.items()):
+            if not f.get("stale_release") or key in self._pulled_back:
+                continue
+            self._pulled_back.add(key)
+            try:
+                await self.sortie.pull_back(key)
+                log.info("pulled back %s: its content changed after its release", key)
+            except SortieError as exc:
+                log.warning("could not pull back edited story %s: %s", key, exc.message)
 
     async def poll_loop(self, interval: float, stop: asyncio.Event) -> None:
         while not stop.is_set():
@@ -54,6 +83,10 @@ class Hub:
     def rebuild(self) -> None:
         snap = self.plan.snapshot()
         doc = merge(snap["graph"], self.tracker)
+        approvals, rereviews = self.records()
+        self.fields = overlay(snap["graph"], self.plan.stories, approvals, rereviews, self.tracker)
+        for n in doc["nodes"]:
+            n.update(self.fields.get(n["plan_key"], {}))
         self.version += 1
         doc.update(
             version=self.version,
@@ -69,6 +102,7 @@ class Hub:
                 "generated_at": (self.tracker or {}).get("generated_at"),
             },
         )
+        doc["plan_states"] = (self.tracker or {}).get("plan_states")
         self.doc = doc
         self._publish(doc)
 
