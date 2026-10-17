@@ -193,6 +193,16 @@ A started story is frozen: the validator refuses an edit to it or its removal, a
 
 Each action needs the `approver` role, and the workbench records who did it. The routes, under `/api/projects/<slug>/`, are `POST approve` (`{"keys": [...]}` or `{"epic": "<change>"}`), `POST stories/pull-back`, `POST stories/cancel`, and `POST stories/supersede` (each `{"key": "<change>/<id>"}`).
 
+### Watch and steer workers
+
+The context card lists the project's **Workers**: the stories Sortie runs, retries, or holds, with their stage (the workflow rule that runs them), attempt, turn, last message, and who holds the floor. A project that Sortie does not dispatch has none. Choose **Watch** in the list, or **Watch the worker** on a selected running story, to show that worker's session in the chat pane in place of the planning chat. The pane shows the session from its start. **Back to planning** returns to the planning chat, which kept running.
+
+Watching needs the `planner` role. An `approver` can also steer the agent with a message, **Take over** (the broker's `interrupt`) and **Hand back**, answer its permission requests, and **Cancel story**. A planner sees the session and the permission requests, but no way to answer them. The workbench records each command with who sent it, and the pane shows each message with its sender's name.
+
+When the watched run ends and Sortie starts another run of the same story, for a retry or the next stage, the pane follows it and says so. When Sortie runs nothing more for the story, the pane says that the worker ended.
+
+The workbench reads each worker's broker address and viewer token from Sortie with its Sortie token, and relays the broker under the person's session; the browser never gets the token. The routes, under `/api/projects/<slug>/workers/<identifier>/`, are `GET events` (planner), `GET messages` (planner), and `POST commands` (approver; a planner may send only `state`).
+
 ### Projects from before story approval
 
 When a project opens, the workbench updates the planning schemas in its spec store to the ones it ships, in one git commit ("Update the planning schemas"), and imports each breakdown approved in the old format (`status: approved` with a matching `approved_digest`) as an approval of all its stories, recorded as "Imported approval".
@@ -212,4 +222,5 @@ Choose **End session** in the chat pane first: stopping the backend leaves the p
 - **`planlib: ... planning schema not found`.** The store has no `openspec/schemas/planning/`.
 - **Sync refused with `stale_preview`.** The plan or the tracker changed after the preview. Preview again.
 - **A story stays Ready after a sync.** Sortie is not under plan control, or its `release_state` is not a state of the tracker project. Sortie's plan graph reports `plan_states`; with none, nothing is released.
+- **A running story has no Watch.** Its broker has not reported its address to Sortie yet, or it runs in a version of `acp-broker` that does not report. Sortie's `GET /api/v1/state` shows `broker: null` for it.
 - **`frozen` in the red panel.** The agent edited or removed a started story. Undo the edit, and amend or supersede instead.
