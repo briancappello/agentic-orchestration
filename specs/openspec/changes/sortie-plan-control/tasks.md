@@ -2,12 +2,12 @@ The Sortie work is in the fork (`~/dev/sortie`), on branch `feat/plan-control` o
 
 ## 1. Configuration
 
-- [ ] 1.1 Add `tracker.release_state`, `backlog_state`, `cancel_state`, and `done_state` to the tracker config, the schema, and `domain.TrackerStates` (design D1). Verify with config tests:
+- [x] 1.1 Add `tracker.release_state`, `backlog_state`, `cancel_state`, and `done_state` to the tracker config, the schema, and `domain.TrackerStates` (design D1). Verify with config tests:
   - each one alone is accepted when `release_state` is unset;
   - with `release_state` set, each missing setting and each wrong state class (release not active, backlog active or terminal, cancel or done not terminal) is rejected with an error naming the setting;
   - a missing `reactions.merge_completion` is rejected;
   - a failed reload keeps the previous configuration.
-- [ ] 1.2 Add the four states to Huly's startup existence check, and also `no_change_state`, which the same check misses today. Verify with a Huly adapter test where each state name is absent from the project.
+- [x] 1.2 Add the four states to Huly's startup existence check, and also `no_change_state`, which the same check misses today. Verify with a Huly adapter test where each state name is absent from the project.
 
 ## 2. Satisfaction records and the blocker judge
 
