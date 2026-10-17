@@ -265,6 +265,7 @@
   .chip.done { --c: var(--done); border-color: #b9d3c3; background: var(--done-tint); color: var(--done); }
   .chip.prog { --c: var(--amber); border-color: #ecc77f; background: var(--amber-tint); color: var(--amber-ink); }
   .chip.todo { --c: var(--slate); background: var(--slate-tint); color: var(--slate-ink); }
+  .chip.cancelled { --c: var(--mute); color: var(--mute); }
   .chip.id { font: 500 11.5px var(--font-mono); color: var(--mute); }
   .agent { margin-top: var(--s-md); padding: 12px 14px; border-radius: var(--r-well); background: var(--ink); color: #fff; }
   .agent b { display: flex; align-items: center; gap: 8px; font-size: 14px; }
@@ -293,5 +294,5 @@
   .list button:hover { background: var(--strip); }
   .list em { margin-left: auto; font-size: 12px; font-style: normal; font-weight: 500; color: var(--mute); white-space: nowrap; }
   .dot { width: 10px; height: 10px; flex: none; border-radius: 50%; border: 2.5px solid var(--c); background: #fff; }
-  .dot.done { --c: var(--done); } .dot.prog { --c: var(--amber); } .dot.todo { --c: var(--slate); }
+  .dot.done { --c: var(--done); } .dot.prog { --c: var(--amber); } .dot.todo { --c: var(--slate); } .dot.cancelled { --c: var(--line); }
 </style>

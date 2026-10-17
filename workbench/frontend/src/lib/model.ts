@@ -1,7 +1,7 @@
 /** Read-only helpers over a merged graph: status, progress, badges, neighbours. */
 import type { GraphNode, MergedGraph } from "./types";
 
-export type StatusClass = "done" | "prog" | "todo";
+export type StatusClass = "done" | "prog" | "todo" | "cancelled";
 
 const ACTIVE_STATE = /progress|review|doing|active|started/i;
 
@@ -52,13 +52,21 @@ export class GraphModel {
     return n.kind === "epic" ? n : this.byKey.get(this.doc.parents.find((p) => p.child === n.plan_key)?.parent ?? n.change);
   }
 
+  /** A story Sortie cancelled: in the tracker's cancel state. It is closed, but not done. */
+  isCancelled(n: GraphNode | undefined): boolean {
+    const cancel = this.doc.plan_states?.cancel;
+    return !!n && n.kind === "story" && !!n.tracker?.terminal && !!cancel && n.tracker.state.toLowerCase() === cancel.toLowerCase();
+  }
+
   statusClass(n: GraphNode): StatusClass {
     if (n.kind === "epic") {
-      const stories = this.storiesOf(n.plan_key);
+      // A cancelled story no longer counts toward its epic.
+      const stories = this.storiesOf(n.plan_key).filter((s) => !this.isCancelled(s));
       if (n.tracker?.terminal || (stories.length > 0 && stories.every((s) => this.isDone(s)))) return "done";
       if (stories.some((s) => this.statusClass(s) !== "todo") || (n.tracker && ACTIVE_STATE.test(n.tracker.state))) return "prog";
       return "todo";
     }
+    if (this.isCancelled(n)) return "cancelled";
     if (n.tracker?.terminal) return "done";
     if (n.runtime && n.runtime.status !== "budget_held") return "prog";
     if (n.tracker && ACTIVE_STATE.test(n.tracker.state)) return "prog";
@@ -75,7 +83,7 @@ export class GraphModel {
   }
 
   progress(epic: GraphNode): { done: number; total: number } {
-    const stories = this.storiesOf(epic.plan_key);
+    const stories = this.storiesOf(epic.plan_key).filter((s) => !this.isCancelled(s));
     return { done: stories.filter((s) => this.isDone(s)).length, total: stories.length };
   }
 

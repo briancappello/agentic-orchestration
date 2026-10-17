@@ -20,6 +20,7 @@
     if (progress && progress.total === 0) return node.status === "draft" && node.approval === "unplanned" ? "no breakdown" : "no stories";
     if (progress) return `${progress.done}/${progress.total} done`;
     if (cls === "done") return "complete";
+    if (cls === "cancelled") return "cancelled";
     if (node.plan_status === "needs_rereview") return "needs re-review";
     if (node.plan_status === "held") return "held for approval";
     if (node.plan_status === "draft") return "not approved";
@@ -78,6 +79,8 @@
   .card.done { --c: var(--done); --tx: var(--done); --t: var(--done-tint); --h: rgba(47, 111, 78, 0.22); }
   .card.prog { --c: var(--amber); --tx: var(--amber-ink); --t: var(--amber-tint); --h: rgba(201, 138, 26, 0.3); }
   .card.todo { --c: var(--slate); --tx: var(--slate-ink); --t: var(--slate-tint); --h: rgba(138, 143, 152, 0.3); }
+  .card.cancelled { --c: var(--line); --tx: var(--mute); --t: #fff; --h: rgba(138, 143, 152, 0.18); opacity: 0.75; }
+  .card.cancelled .t { text-decoration: line-through; text-decoration-color: var(--mute); }
   .card.unplanned { background: repeating-linear-gradient(135deg, var(--h) 0 1px, #fff 1px 7px); }
   .card.draft { border-style: dashed; }
   .card.orphaned { opacity: 0.8; }

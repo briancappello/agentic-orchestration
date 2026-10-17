@@ -219,6 +219,28 @@ describe("approver actions", () => {
     expect($(`[data-key='${b.plan_key}'] .meta`)!.textContent).toBe("needs re-review");
   });
 
+  it("shows a cancelled story as cancelled, not done, and leaves it out of its epic", async () => {
+    const doc = planDoc();
+    const inv = doc.nodes.find((n) => n.plan_key === "billing/invoice")!;
+    inv.tracker = { ...inv.tracker!, state: "Canceled", terminal: true };
+    const billing = doc.nodes.find((n) => n.plan_key === "billing")!;
+    // Without plan control there is no cancel state: a terminal state is done.
+    expect(new GraphModel(doc).statusClass(inv)).toBe("done");
+    doc.plan_states = { release: "Todo", backlog: "Backlog", cancel: "Canceled", done: "Done" };
+    const model = new GraphModel(doc);
+    expect(model.statusClass(inv)).toBe("cancelled");
+    expect(model.isDone(inv)).toBe(false);
+    const all = model.storiesOf("billing").length;
+    expect(model.progress(billing)).toEqual({ done: 0, total: all - 1 });
+    app = mount(GraphHarness, { target: document.body, props: { initial: doc } });
+    await settle();
+    (app as unknown as { getView: () => { epic: string | null } }).getView().epic = "billing";
+    await settle();
+    expect($("[data-key='billing/invoice']")!.classList.contains("cancelled")).toBe(true);
+    expect($("[data-key='billing/invoice'] .meta")!.textContent).toBe("cancelled");
+    expect(document.body.textContent).toContain("1 cancelled");
+  });
+
   it("does not call a story waiting for approval ready", async () => {
     const doc = planDoc();
     const s = doc.nodes.find((n) => n.plan_key === "billing/invoice")!;

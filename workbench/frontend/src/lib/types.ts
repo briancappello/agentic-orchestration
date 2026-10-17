@@ -62,6 +62,14 @@ export interface PlanError {
   members: string[];
 }
 
+/** Sortie's plan-control states, when it runs under plan control. */
+export interface PlanStates {
+  release: string;
+  backlog: string;
+  cancel: string;
+  done: string;
+}
+
 export interface MergedGraph {
   version: number;
   generated_at: number;
@@ -69,6 +77,7 @@ export interface MergedGraph {
   parents: { child: string; parent: string }[];
   blocks: { blocker: string; blocked: string }[];
   unplanned_changes: string[];
+  plan_states?: PlanStates | null;
   validation: { valid: boolean; errors: PlanError[]; version: number };
   sortie: {
     reachable: boolean; error: string | null; capabilities: string[]; generated_at: string | null;

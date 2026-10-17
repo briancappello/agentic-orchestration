@@ -33,7 +33,7 @@
     layoutScore({
       nodes: nodes.map((n) => ({ key: n.plan_key, depth: n.depth })),
       blockers: (k) => model.blockers(k),
-      isDone: (k) => model.isDone(model.node(k)),
+      isDone: (k) => model.isDone(model.node(k)) || model.isCancelled(model.node(k)),
       showExternal: !!epic && view.showCross,
     }),
   );
@@ -46,6 +46,7 @@
     done: nodes.filter((n) => model.statusClass(n) === "done").length,
     prog: nodes.filter((n) => model.statusClass(n) === "prog").length,
     todo: nodes.filter((n) => model.statusClass(n) === "todo").length,
+    cancelled: nodes.filter((n) => model.isCancelled(n)).length,
     nospec: nodes.filter((n) => n.has_spec === false).length,
     drafts: nodes.filter((n) => n.status === "draft").length,
   });
@@ -60,7 +61,7 @@
 
   function caption(col: string[]): string {
     const ns = col.map((k) => model.node(k)!);
-    if (ns.every((n) => model.isDone(n))) return "complete";
+    if (ns.every((n) => model.isDone(n) || model.isCancelled(n))) return "complete";
     if (ns.some((n) => model.statusClass(n) === "prog" || n.runtime)) return "in flight";
     return "queued";
   }
@@ -98,7 +99,7 @@
 <div class="strip">
   <p class="summary">
     <b>{nodes.length} {nodes.length === 1 ? singular(unit) : unit}</b> · {counts.done} done · {counts.prog} in progress ·
-    {counts.todo} to do · {counts.nospec} without a spec · {counts.drafts} draft
+    {counts.todo} to do{#if counts.cancelled} · {counts.cancelled} cancelled{/if} · {counts.nospec} without a spec · {counts.drafts} draft
   </p>
   <span class="spacer"></span>
   {#if epic}
