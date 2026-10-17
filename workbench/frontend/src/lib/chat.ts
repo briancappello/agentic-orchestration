@@ -23,7 +23,7 @@ export interface PermissionOption {
 export type ChatItem =
   | { kind: "agent"; key: string; text: string; time: number }
   | { kind: "thought"; key: string; text: string; time: number }
-  | { kind: "user"; key: string; text: string; time: number }
+  | { kind: "user"; key: string; text: string; time: number; by?: string }
   | { kind: "tool"; key: string; title: string; status: string; time: number }
   | { kind: "permission"; key: string; id: string; title: string; options: PermissionOption[]; resolved: string | null; time: number }
   | { kind: "notice"; key: string; text: string; time: number };
@@ -112,8 +112,8 @@ export function applyEvent(tr: Transcript, ev: BrokerEvent): Transcript {
 }
 
 /** The person's own messages, which the backend keeps, placed in time order. */
-export function withUserMessages(items: ChatItem[], messages: { time: number; text: string }[]): ChatItem[] {
-  const users: ChatItem[] = messages.map((m, i) => ({ kind: "user", key: `u${i}`, text: displayText(m.text), time: m.time * 1000 }));
+export function withUserMessages(items: ChatItem[], messages: { time: number; text: string; by?: string }[]): ChatItem[] {
+  const users: ChatItem[] = messages.map((m, i) => ({ kind: "user", key: `u${i}`, text: displayText(m.text), time: m.time * 1000, ...(m.by ? { by: m.by } : {}) }));
   return [...items, ...users].sort((a, b) => a.time - b.time);
 }
 
