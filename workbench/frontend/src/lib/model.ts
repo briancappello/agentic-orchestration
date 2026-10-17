@@ -91,6 +91,8 @@ export class GraphModel {
 
   /** Not done, not started, and every blocker done. */
   isReady(n: GraphNode): boolean {
+    // A story waiting for a person (not approved, held, or in re-review) is not ready, whatever its blockers.
+    if (n.plan_status && !["ready", "released"].includes(n.plan_status)) return false;
     return this.statusClass(n) === "todo" && !n.runtime && this.blockers(n.plan_key).every((b) => this.isDone(this.byKey.get(b)));
   }
 

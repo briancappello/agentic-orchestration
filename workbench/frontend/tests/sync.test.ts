@@ -7,6 +7,7 @@ import { planDoc } from "./fixtures";
 import type { SyncPreviewResponse } from "../src/lib/api";
 import type { SyncClient } from "../src/lib/sync";
 import { errorTarget } from "../src/lib/sync";
+import { GraphModel } from "../src/lib/model";
 import type { SessionClient } from "../src/lib/session";
 import { session as identity } from "../src/lib/identity.svelte";
 import type { GraphNode } from "../src/lib/types";
@@ -196,6 +197,25 @@ describe("approver actions", () => {
     await settle();
     expect($(`[data-key='${a.plan_key}'] .meta`)!.textContent).toBe("held for approval");
     expect($(`[data-key='${b.plan_key}'] .meta`)!.textContent).toBe("needs re-review");
+  });
+
+  it("does not call a story waiting for approval ready", async () => {
+    const doc = planDoc();
+    const s = doc.nodes.find((n) => n.plan_key === "billing/invoice")!;
+    const model = new GraphModel(doc);
+    expect(model.isReady(s)).toBe(true);
+    for (const st of ["draft", "held", "needs_rereview"] as const) {
+      s.plan_status = st;
+      expect(new GraphModel(doc).isReady(s), st).toBe(false);
+    }
+    s.plan_status = "ready";
+    expect(new GraphModel(doc).isReady(s)).toBe(true);
+    s.plan_status = "draft";
+    app = mount(GraphHarness, { target: document.body, props: { initial: doc } });
+    await settle();
+    (app as unknown as { getView: () => { epic: string | null } }).getView().epic = "billing";
+    await settle();
+    expect($("[data-key='billing/invoice'] .meta")!.textContent).toBe("not approved");
   });
 
   it("hides every action from a planner", async () => {
