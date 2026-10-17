@@ -48,7 +48,7 @@ None. This store has no archived specs yet. This change revises the approval req
 
 ## Impact
 
-- Spec store: the planning schema (`openspec/schemas/planning/`) drops `status` and `approved_digest`, and adds `review` and `supersedes` to each deliverable. Every existing `breakdown.yaml` needs a one-time migration. An epic that is approved today becomes batch 0.
+- Project spec stores: the planning schema (`openspec/schemas/planning/`, copied into each project's store from the workbench's `src/workbench/store_template/`) drops `status` and `approved_digest`, and adds `review` and `supersedes` to each deliverable. Every existing `breakdown.yaml` needs a one-time migration. An epic that is approved today becomes batch 0.
 - planlib (`src/planlib/`): `approval.py` becomes a digest for each story, with no file writes. `graph.py` emits `approval`, `release`, and the held and re-review reasons for each story. Validation accepts a frozen set and checks `supersedes`.
 - Workbench (`src/workbench/`): approval and release records in `workbench.db`; the approve, pull-back, cancel, and supersede routes; sync sends release, approval, and approver for each story; the graph and epic views show these statuses.
 - Depends on change `workbench-identity`, for the approver, and on change `sortie-plan-control`, for release, pull-back, cancel, the approver fields, and the review gate.
