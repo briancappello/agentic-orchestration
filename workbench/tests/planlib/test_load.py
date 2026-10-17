@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -114,3 +115,19 @@ def test_fixture_schemas_match_the_store_template():
     assert fixtures
     for f in fixtures:
         assert json.loads(f.read_text()) == json.loads((STORE_SCHEMAS / f.name).read_text()), f.name
+
+
+SORTIE_SRC = os.environ.get("SORTIE_SRC") or str(Path.home() / "dev" / "sortie")
+SORTIE_GRAPH_SCHEMA = Path(SORTIE_SRC) / "internal/plan/testdata/plan-graph.schema.json"
+
+
+@pytest.mark.skipif(
+    "SORTIE_SRC" not in os.environ and not SORTIE_GRAPH_SCHEMA.parent.is_dir(),
+    reason="no Sortie checkout: set SORTIE_SRC to check the plan graph schema against Sortie's",
+)
+def test_plan_graph_schema_matches_sorties():
+    """The plan graph schema is the contract with Sortie, which publishes
+    its copy. With SORTIE_SRC set, a missing copy fails instead of skipping."""
+    assert SORTIE_GRAPH_SCHEMA.is_file(), f"{SORTIE_GRAPH_SCHEMA} is missing"
+    ours = json.loads((STORE_SCHEMAS / "plan-graph.schema.json").read_text())
+    assert ours == json.loads(SORTIE_GRAPH_SCHEMA.read_text())
