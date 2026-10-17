@@ -162,9 +162,40 @@ Open `http://127.0.0.1:8790` and sign in. The first page lists the projects.
 2. **Start a planning session** in the chat pane. The workbench starts one broker with the agent in the spec store, and the agent reports what the plan holds. Answer its permission requests in the chat.
 3. **Ask for a breakdown**, for example "break the `billing` change into deliverables". The agent writes `breakdown.yaml`, runs `planlib validate`, and fixes what it reports. The graph redraws as the files change. Problems the validator finds appear in the red panel above the graph; select one to select its node.
 4. **Point at nodes.** Selecting a node shows its details at the top of the chat and attaches it to your next message. Remove the attachment with its × before sending if you do not mean it.
-5. **Approve.** Select the change's epic and choose **Approve breakdown**. Any later edit to its deliverables returns it to draft.
-6. **Sync.** Choose **Sync…** in the graph's top bar. The dialog shows how many issues will be created and updated and how many relations added and removed. Nothing reaches the tracker until you apply. A tracker that lacks a needed capability is named, and there is no apply.
-7. **Run.** Move the stories to `Todo` in the tracker. Sortie dispatches the unblocked ones; their running badges appear on the graph within a few seconds. Sortie runs agents only for its configured project (`tracker.project`); other projects are planned and synced, and their top bar says "agents not dispatched".
+5. **Approve.** Only a person with the `approver` role approves; the agent never does. Approvals live in the workbench database, with who approved and when, and never in the breakdown files. Approve a story's exact content: a later edit to it returns it to draft. Open an epic, or select it, and choose **Approve the epic** to approve every story of a change that has none approved yet. After that, approve story by story: select a story and choose **Approve**, or choose **Approve N draft stories** in the epic's view.
+6. **Sync.** Choose **Sync…** in the graph's top bar. The dialog shows how many issues will be created and updated, how many relations added and removed, and which stories are released to agents. Nothing reaches the tracker until you apply. A tracker that lacks a needed capability is named, and there is no apply.
+7. **Run.** A synced story waits in Sortie's `backlog_state` until it is released. Sync releases it, by moving it to `release_state`, once it and every story it directly depends on are approved; Sortie then dispatches it when its blockers are done, and its running badge appears on the graph within a few seconds. Release is one way: the workbench never moves a released story back on its own, except to pull back a story whose content changed after release. Sortie runs agents only for its configured project (`tracker.project`); other projects are planned and synced, and their top bar says "agents not dispatched".
+
+### Story status
+
+Each story shows its plan status on its node and in its details. The graph API names it in `plan_status`:
+
+| Status | Meaning |
+| --- | --- |
+| Draft (`draft`) | Not approved, or edited since its approval. |
+| Held (`held`) | Approved, but a story it depends on is not approved yet. The details name those stories. Shown as "held for approval" on the node. |
+| Ready (`ready`) | Approved, with every direct blocker approved or merged. The next sync releases it. |
+| Released (`released`) | In the tracker's release state, so Sortie may dispatch it. |
+| Started (`frozen`) | An agent has claimed it. Its content is frozen. |
+| Re-review (`needs_rereview`) | It needs a person again: a story it depends on was cancelled (`blocker_canceled`), or an agent said the work was already done and its evidence did not check out (`unverified_no_change`). Approve it again, or cancel it. |
+
+A story's `review` field says who reviews its pull request: `human` (the default; a person merges it in the forge) or `criteria` (a separate agent checks the acceptance criteria, and the pull request merges on its own).
+
+### Change a story after it starts
+
+A started story is frozen: the validator refuses an edit to it or its removal, and the graph's red panel says so. Change scope instead with one of these:
+
+- **Amend.** Add a new story that depends on the started one.
+- **Supersede.** Add a new story with `supersedes: <the started story>`. Approve it, select it, and choose **Confirm: replaces …**. The workbench cancels the old story in the tracker and moves its dependents onto the new one.
+- **Cancel.** Select the story and choose **Cancel story**. Sortie stops its worker and moves it to `cancel_state`. Every story that depends on it directly goes to Re-review.
+
+**Pull back** (on a released story that has not started) returns it to `backlog_state`, so no agent takes it until the next sync releases it again.
+
+Each action needs the `approver` role, and the workbench records who did it. The routes, under `/api/projects/<slug>/`, are `POST approve` (`{"keys": [...]}` or `{"epic": "<change>"}`), `POST stories/pull-back`, `POST stories/cancel`, and `POST stories/supersede` (each `{"key": "<change>/<id>"}`).
+
+### Projects from before story approval
+
+When a project opens, the workbench updates the planning schemas in its spec store to the ones it ships, in one git commit ("Update the planning schemas"), and imports each breakdown approved in the old format (`status: approved` with a matching `approved_digest`) as an approval of all its stories, recorded as "Imported approval".
 
 Each project has its own planning session, and sessions of different projects run at the same time. A planning session runs apart from the backend: a detached driver process holds the broker, and the backend finds it again through the runtime directory. So a page reload, another tab, a backend restart, or a `--reload` after a code change reattaches to the same session with its history. Only **End session** in the chat pane stops it.
 
@@ -180,3 +211,5 @@ Choose **End session** in the chat pane first: stopping the backend leaves the p
 - **A session is still running after the backend stopped.** That is by design. Start the backend and choose **End session**, or send SIGTERM to the `driver_pid` in the runtime directory's `state.json`.
 - **`planlib: ... planning schema not found`.** The store has no `openspec/schemas/planning/`.
 - **Sync refused with `stale_preview`.** The plan or the tracker changed after the preview. Preview again.
+- **A story stays Ready after a sync.** Sortie is not under plan control, or its `release_state` is not a state of the tracker project. Sortie's plan graph reports `plan_states`; with none, nothing is released.
+- **`frozen` in the red panel.** The agent edited or removed a started story. Undo the edit, and amend or supersede instead.

@@ -16,7 +16,17 @@ Never write anywhere else. Never call a tracker or its API, and never run `sorti
 - A planned change uses the OpenSpec schema `spec-driven-planned`. Create one with `openspec new change <name> --schema spec-driven-planned`, or set `schema: spec-driven-planned` in an existing change's `.openspec.yaml`. `openspec instructions breakdown --change <name>` prints the breakdown's instructions.
 - Each deliverable has a kebab-case `id`, a short imperative `title`, a `kind` (`story` or `enabler`), `depends_on` (ids in the change, or `<change>/<id>` in another change), `covers` (`<capability-path>#<Requirement name>`, using the exact requirement names in the change's specs), and at least one checkable `acceptance_criteria`.
 - A dependency on another change's deliverable needs `plan.yaml` to order the two changes.
-- Leave `status: draft`. Never set `status: approved` or `approved_digest`; only the person approves, in the workbench.
+- Do not write `status` or `approved_digest`. Never approve anything: only a person approves, story by story, in the workbench.
+- Set `review` on a deliverable when the person says how its work is reviewed: `human` (the default: a person merges the pull request) or `criteria` (a separate agent checks the acceptance criteria and the pull request merges on its own). Ask when it is not clear and the work is risky.
+
+## Started stories
+
+A story that an agent has started is frozen. Never edit or remove it: the workbench refuses the plan, and its problem panel shows a `frozen` error. `planlib validate` run by you does not know which stories have started, so when the person says a story has started, or the workbench reports `frozen`, change scope this way instead:
+
+- To add to it, add a new deliverable that depends on it.
+- To replace it, add a new deliverable with `supersedes: <id or change/id of the started story>`. The person then confirms the replacement in the workbench, which cancels the old story and moves its dependents to the new one.
+
+Only the person cancels a story, in the workbench.
 
 ## Check every write
 

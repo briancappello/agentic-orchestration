@@ -1,5 +1,4 @@
 schema_version: 1
-status: draft
 deliverables:
   - id: invoice
     title: Generate invoices
