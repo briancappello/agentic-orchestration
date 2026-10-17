@@ -57,8 +57,22 @@ export function projectApi(slug: string) {
     sessionConfig: () => request<SessionConfig>("GET", `${p}/session/config`),
     setSessionConfig: (category: ConfigCategory, value: string) => request<SessionConfig>("PUT", `${p}/session/config`, { category, value }),
     sessionEvents: `${p}/session/events`,
+    workerMessages: (id: string) => request<{ commands: WorkerCommand[] }>("GET", `${p}/workers/${encodeURIComponent(id)}/messages`),
+    workerCommand: (id: string, cmd: Record<string, unknown>) => request<unknown>("POST", `${p}/workers/${encodeURIComponent(id)}/commands`, cmd),
+    workerEvents: (id: string) => `${p}/workers/${encodeURIComponent(id)}/events`,
     events: `${p}/events`,
   };
+}
+
+/** A command a person sent to a worker, and who sent it. */
+export interface WorkerCommand {
+  id: number;
+  op: string;
+  text: string | null;
+  session_id: string | null;
+  actor_id: string;
+  actor_name: string;
+  time: number;
 }
 
 export interface SessionStatus {

@@ -4,21 +4,27 @@
   import { GraphModel } from "../lib/model";
   import type { SessionClient } from "../lib/session";
   import type { StoryActions } from "../lib/sync";
-  import type { MergedGraph, ViewState } from "../lib/types";
+  import type { GraphNode, MergedGraph, ViewState } from "../lib/types";
+  import type { WorkerClient } from "../lib/worker";
   import type { ConfigCategory, ConfigOption } from "../lib/api";
   import ContextCard from "./ContextCard.svelte";
   import Icon from "./Icon.svelte";
   import ModelPicker from "./ModelPicker.svelte";
   import Transcript from "./Transcript.svelte";
+  import WorkerPane from "./WorkerPane.svelte";
 
   let {
-    doc, view, session, onselect, actions,
+    doc, view, session, onselect, actions, worker = null, onwatch, onunwatch,
   }: {
     doc: MergedGraph;
     view: ViewState;
     session: SessionClient;
     onselect: (key: string | null) => void;
     actions?: StoryActions;
+    /** The worker a person watches, shown in place of the planning session. */
+    worker?: { node: GraphNode; client: WorkerClient } | null;
+    onwatch?: (node: GraphNode) => void;
+    onunwatch?: () => void;
   } = $props();
 
   const model = $derived(new GraphModel(doc));
@@ -179,8 +185,13 @@
   });
 </script>
 
-<ContextCard {model} {view} {attached} {actions} onattach={(k) => (attached = [...attached, k])} onselect={(k) => onselect(k)} />
+<ContextCard {model} {view} {attached} {actions} {onwatch} watching={worker?.node.tracker?.identifier ?? null} onattach={(k) => (attached = [...attached, k])} onselect={(k) => onselect(k)} />
 
+{#if worker}
+  {#key worker.node.tracker?.identifier}
+    <WorkerPane node={worker.node} client={worker.client} {actions} onclose={() => onunwatch?.()} />
+  {/key}
+{:else}
 <div class="session-bar">
   <span class="state" class:on={active || starting}><i></i>{starting ? "Starting session" : active ? (transcript.busy ? "Agent working" : "Planning session") : "No session"}</span>
   {#if active}
@@ -224,6 +235,7 @@
   </div>
   <button type="submit" class="primary" disabled={starting || !draft.trim()}>{starting ? "Starting…" : "Send"}</button>
 </form>
+{/if}
 
 <style>
   .session-bar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: var(--s-md); padding: 10px var(--s-panel); border-bottom: 1px solid var(--hair); }

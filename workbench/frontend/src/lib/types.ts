@@ -7,6 +7,12 @@ export interface Runtime {
   turn_count?: number | null;
   last_message?: string | null;
   attempt?: number | null;
+  /** From Sortie's state: the workflow rule running it, its session, and whether its broker can be watched. */
+  stage?: string | null;
+  session_id?: string | null;
+  held?: boolean;
+  holder?: string | null;
+  watchable?: boolean;
 }
 
 export interface TrackerView {

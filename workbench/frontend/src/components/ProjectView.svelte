@@ -3,6 +3,7 @@
   import { api, projectApi, subscribeGraph } from "../lib/api";
   import { httpSession } from "../lib/session";
   import { httpSync } from "../lib/sync";
+  import { httpWorker } from "../lib/worker";
   import { emptyGraph, type MergedGraph, type TrackerProject, type ViewState } from "../lib/types";
   import ChatPane from "./ChatPane.svelte";
   import GraphPane from "./GraphPane.svelte";
@@ -15,6 +16,11 @@
   let name = $state("");
   let tracker: TrackerProject | null = $state(null);
   let syncing = $state(false);
+  // The tracker identifier of the worker shown in the chat pane, if any.
+  let watching: string | null = $state(null);
+  const workerClient = $derived(watching ? httpWorker(slug, watching) : null);
+  const workerNode = $derived(watching ? doc.nodes.find((n) => n.tracker?.identifier === watching) : undefined);
+  const worker = $derived(workerClient && workerNode ? { node: workerNode, client: workerClient } : null);
   // svelte-ignore state_referenced_locally
   const session = httpSession(slug);
   // svelte-ignore state_referenced_locally
@@ -73,7 +79,8 @@
     </GraphPane>
   {/snippet}
   {#snippet chat()}
-    <ChatPane {doc} {view} {session} onselect={(k) => selectAnywhere(k)} actions={sync} />
+    <ChatPane {doc} {view} {session} onselect={(k) => selectAnywhere(k)} actions={sync} {worker}
+      onwatch={(n) => { watching = n.tracker?.identifier ?? null; selectAnywhere(n.plan_key); }} onunwatch={() => (watching = null)} />
   {/snippet}
 </Shell>
 {#if syncing}<SyncDialog {sync} onclose={() => (syncing = false)} />{/if}

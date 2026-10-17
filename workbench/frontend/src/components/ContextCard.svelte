@@ -4,9 +4,10 @@
   import { planStatusLabel, rereviewText, type StoryActions } from "../lib/sync";
   import type { GraphNode, ViewState } from "../lib/types";
   import Icon from "./Icon.svelte";
+  import { workersOf, workerStatus } from "../lib/worker";
 
   let {
-    model, view, attached, onattach, onselect, actions,
+    model, view, attached, onattach, onselect, actions, onwatch, watching = null,
   }: {
     model: GraphModel;
     view: ViewState;
@@ -14,6 +15,9 @@
     onattach: (key: string) => void;
     onselect: (key: string) => void;
     actions?: StoryActions;
+    onwatch?: (node: GraphNode) => void;
+    /** The identifier of the worker the chat pane shows, if any. */
+    watching?: string | null;
   } = $props();
 
   let busy = $state("");
@@ -43,6 +47,7 @@
   const active = $derived(scope.filter((n) => (n.kind === "epic" ? model.badge(n) !== null : n.runtime !== null)));
   const unplanned = $derived(scope.filter((n) => n.has_spec === false));
   const noun = $derived(view.epic ? "stories" : "epics");
+  const workers = $derived(workersOf(view.epic ? model.storiesOf(view.epic) : model.doc.nodes));
 
   function why(n: GraphNode): string {
     return model.badge(n)?.label ?? model.statusLabel(n);
@@ -115,6 +120,9 @@
           {/if}
         </dl>
         <div class="acts">
+          {#if node.kind === "story" && node.runtime?.watchable && onwatch && node.tracker?.identifier !== watching}
+            <button type="button" class="attach" data-act="watch" onclick={() => onwatch(node)}>Watch the worker</button>
+          {/if}
           {#if !attached.includes(node.plan_key)}
             <button type="button" class="attach" onclick={() => onattach(node.plan_key)}>Attach to message</button>
           {/if}
@@ -168,6 +176,25 @@
           </div>
         {/each}
       </div>
+      <div class="workers">
+        <span class="label">Workers</span>
+        {#if !model.doc.sortie.dispatched}
+          <p class="none" data-note="not-dispatched">Sortie does not run agents for this project.</p>
+        {:else}
+          <ul class="list" data-list="Workers">
+            {#each workers as w (w.plan_key)}
+              <li class="worker" data-worker={w.tracker?.identifier}>
+                <button type="button" onclick={() => onselect(w.plan_key)}>
+                  <span class="dot prog"></span><span class="mono">{w.tracker?.identifier}</span>&nbsp;{w.title}
+                  <em>{[workerStatus(w), w.runtime?.stage, w.runtime?.turn_count && `turn ${w.runtime.turn_count}`].filter(Boolean).join(" · ")}</em>
+                </button>
+                {#if w.runtime?.last_message}<p class="last">{w.runtime.last_message}</p>{/if}
+                {#if w.runtime?.watchable && onwatch}<button type="button" class="watch" data-act="watch" onclick={() => onwatch(w)}>Watch</button>{/if}
+              </li>
+            {:else}<li class="none">No workers</li>{/each}
+          </ul>
+        {/if}
+      </div>
     {/if}
   {/if}
 </section>
@@ -179,6 +206,11 @@
   .chip.plan.ready, .chip.plan.released { color: var(--done); }
   .chip.plan.needs_rereview { color: var(--amber-ink); }
   .danger { color: var(--alert); }
+  .workers { display: flex; flex-direction: column; gap: 6px; }
+  .worker { position: relative; }
+  .worker .last { margin: 0 0 4px 22px; font-size: 12px; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: calc(100% - 90px); }
+  .worker .watch { position: absolute; right: 0; top: 4px; height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-button); background: #fff; font-weight: 600; font-size: 12px; }
+  .worker .watch:hover { border-color: var(--ink); }
   /* A shadow at the bottom edge shows only while more content sits below it:
      the white cover scrolls with the content and hides it at the end. */
   .context {
