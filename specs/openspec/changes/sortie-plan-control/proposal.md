@@ -11,8 +11,10 @@ Change `plan-approvals` makes the workbench the place where engineers release, p
 
 ## What Changes
 
-- **Release through sync.** Each node in the plan graph carries `release: true | false`. Sync moves a released story from its initial state to `tracker.release_state` (for example `Todo`) one time only. It makes that move only from the initial state, so it never overrides a later state. This is the one exception to the rule that plan sync does not change status. Sync still never deletes an issue, and never changes an assignee or a label.
-- **Atomic pull-back.** `POST /api/v1/plan/pull-back` moves a released story back to its initial state, but only when no worker has claimed it. The check and the move run under the orchestrator's dispatch claim, so the request cannot race a poll tick. If a worker already claimed the story, the request returns `409 already_claimed`.
+- **Plan control is opt-in.** It turns on when `tracker.release_state` is set. It then needs `tracker.backlog_state`, `tracker.cancel_state`, `tracker.done_state`, and `reactions.merge_completion`. Without `release_state`, Sortie behaves as before.
+- **Approval is decided per story.** Sync skips draft stories one by one, not whole changes, so new drafts in an epic no longer stop its approved stories from syncing.
+- **Release through sync.** Each story node carries `release: true | false`. Sync moves a released story from `tracker.backlog_state` to `tracker.release_state` (for example from `Backlog` to `Todo`), and makes that move from no other state, so it never overrides a later state. New issues start in `backlog_state`. Sync still never deletes an issue and never changes an assignee. It changes labels only to keep one review label (below).
+- **Atomic pull-back.** `POST /api/v1/plan/pull-back` moves a released story back to `tracker.backlog_state`, but only when no worker has claimed it. Dispatch works from the last poll's snapshot, and a fresh claim still reads as `Todo` in the tracker. So the check runs on the orchestrator's event loop, against its claims, and an in-memory mark blocks dispatch until a poll confirms the move. If a worker already claimed the story, the request returns `409 already_claimed`.
 - **Cancel.** `POST /api/v1/plan/cancel` stops the story's worker when one is running: it ends the agent session and its broker, and releases the claim. It then moves the issue to `tracker.cancel_state`. The run is recorded as cancelled, so it is not retried.
 - **Blockers are satisfied by Sortie's own record, not by tracker state.**
   - A blocker with a plan key is satisfied only when Sortie's trusted record shows one of two things:
@@ -26,6 +28,7 @@ Change `plan-approvals` makes the workbench the place where engineers release, p
   - `review: human`: a person reviews the pull request in the forge and merges it.
   - `review: criteria`: a separate Sortie stage (stage chain `next`) runs a new agent session. That session checks the story's acceptance criteria and gives a verdict. When it passes, Sortie merges the pull request through its auto-merge reaction.
   - The self-review of the implementing agent never counts as the gate.
+  - Sync records the gate as the label `sortie-review:human` or `sortie-review:criteria`, so dispatch rules can route on it. Auto-merge gains a per-issue gate: it never merges a `human` story.
 - **A claim that the work was already done needs evidence.** Along with `no-change-needed` in `.sortie/status`, the agent writes `.sortie/evidence.json`, which cites either a plan key or a commit.
   - A cited commit is confirmed only when it is on the base branch of the host-owned mirror (change `execution-environment`).
   - A cited plan key is reported to the workbench as a proposed supersede.
@@ -47,10 +50,11 @@ Change `plan-approvals` makes the workbench the place where engineers release, p
 
 ### Modified Capabilities
 
-None. This store has no archived specs yet. This change revises in-flight specs of other changes:
-- change `plan-to-tracker-dag`: `sortie/plan-sync` (the release exception), `sortie/plan-graph-api` (satisfaction fields), `sortie/tracker-write-capabilities` (`approval_fields`);
-- change `sortie-session-control`: the cancel control;
-- change `acp-broker`: the broker reports its address.
+- `sortie/plan-sync`: approval per story, and what a sync may change (the release, the review label).
+- `sortie/plan-graph-api`: the review gate, approver, satisfaction, merge record, wait reasons, and proposed supersede on each story node.
+- `sortie/tracker-write-capabilities`: a fifth optional capability, **approval fields**.
+- `sortie/control-api-auth`: the new endpoints that need a token, and the broker report that accepts a session token.
+- `acp-broker/session-registry`: the broker reports its HTTP listener to Sortie.
 
 ## Impact
 
@@ -59,7 +63,7 @@ None. This store has no archived specs yet. This change revises in-flight specs 
   - `internal/server`: the pull-back, cancel, and broker-token endpoints, and the broker URL in state;
   - `internal/orchestrator`: the blocker check for issues with a plan key, the pull-back under the claim, cancel, and the evidence check on a no-change exit;
   - `internal/persistence`: cancelled runs, and confirmed no-change claims with their evidence;
-  - `internal/config`: `release_state`, `cancel_state`, and `done_state`;
+  - `internal/config`: `release_state`, `backlog_state`, `cancel_state`, and `done_state`, and their checks;
   - `internal/registry` and the Huly adapter: `approval_fields`;
   - `acp-broker/internal/broker`: the broker reports its address.
 - Docs in the fork: the workflow reference, the agent-to-orchestrator protocol (`.sortie/evidence.json`), and the Huly adapter notes.

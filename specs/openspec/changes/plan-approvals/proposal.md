@@ -44,7 +44,9 @@ The approval in change `plan-to-tracker-dag` cannot support that loop:
 
 ### Modified Capabilities
 
-None. This store has no archived specs yet. This change revises the approval requirements of change `plan-to-tracker-dag` (`planning/breakdown-artifact`, `planning/plan-validator`, `planning/plan-workbench`): approval moves out of the breakdown file, and the validator gains the frozen-story check and `supersedes`.
+- `planning/breakdown-artifact`: `Approval before sync` and `Published schema`. Approval leaves the file, and each deliverable gains `review` and `supersedes`.
+- `planning/plan-validator`: `Checks beyond the schema` and `The validated graph is the exchange format`. The validator gains the frozen-story check and `supersedes`, and the graph carries approval, release, review, and approver for each story.
+- `planning/plan-workbench`: `Node encoding`, `Selection details`, and `Sync with preview`. These show the new statuses and add the story actions.
 
 ## Impact
 

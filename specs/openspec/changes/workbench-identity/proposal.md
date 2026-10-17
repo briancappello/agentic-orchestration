@@ -21,7 +21,7 @@ The plan workbench has one shared operator password (`workbench hash-password`) 
 
 ### Modified Capabilities
 
-None. This store has no archived specs yet. This change replaces the operator sign-in that change `plan-to-tracker-dag` gives the workbench (`planning/plan-workbench`).
+- `planning/plan-workbench`: the `Access` requirement. The shared operator password becomes OIDC sign-in with roles, and the password stays only as the local mode.
 
 ## Impact
 
