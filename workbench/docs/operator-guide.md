@@ -25,7 +25,7 @@ Ports used below: Sortie `7678`, workbench `8790`. Each broker picks a free loca
 
 ## 1. Build Sortie and the broker
 
-In the Sortie checkout, on the branch that carries plan sync (`feat/plan-to-tracker-dag`):
+Build Sortie in the Sortie checkout, on our default branch `plan-bench`, which carries plan sync and the execution environments. Build the broker in the acp-broker checkout:
 
 ```sh
 go build -o ~/.local/bin/sortie ./cmd/sortie

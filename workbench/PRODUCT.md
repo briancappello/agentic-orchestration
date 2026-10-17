@@ -57,7 +57,7 @@ Open (deliberately undecided):
 ## Evidence on Hand
 
 - Project spec stores that the workbench creates from `src/workbench/store_template/`. `~/dev/agent-platform-specs` holds the platform's own design as stock OpenSpec changes, and it is not a workbench plan.
-- A working local Huly (v0.7.426), and Sortie's Huly adapter with plan writes on the Sortie branch `feat/plan-to-tracker-dag`.
+- A working local Huly (v0.7.426), and Sortie's Huly adapter with plan writes on the Sortie branch `plan-bench`.
 
 ## Product Principles
 
