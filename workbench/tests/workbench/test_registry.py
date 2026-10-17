@@ -153,3 +153,21 @@ def test_scaffold_refuses_an_existing_directory(tmp_path):
     with pytest.raises(ScaffoldError):
         scaffold_store(tmp_path / "billing", "Billing")
     assert (tmp_path / "billing" / "keep.txt").read_text() == "mine"
+
+
+def test_the_page_is_never_cached_but_its_bundles_are(store, tmp_path):
+    from fastapi.testclient import TestClient
+    from tests.workbench.conftest import make_config
+    from workbench.app import create_app
+
+    dist = tmp_path / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text("<script src=/assets/index-abc.js></script>")
+    (dist / "assets" / "index-abc.js").write_text("1")
+    (dist / "favicon.svg").write_text("<svg/>")
+    with TestClient(create_app(make_config(store.root, frontend_dir=dist))) as client:
+        for path in ("/", "/index.html", "/p/billing"):
+            r = client.get(path)
+            assert r.status_code == 200 and "index-abc.js" in r.text and r.headers["cache-control"] == "no-cache", path
+        assert "no-cache" not in client.get("/assets/index-abc.js").headers.get("cache-control", "")
+        assert "no-cache" not in client.get("/favicon.svg").headers.get("cache-control", "")

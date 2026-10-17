@@ -148,6 +148,8 @@ def _mount_frontend(app: FastAPI, dist: Path | None) -> None:
         if path.startswith("api/"):
             raise HTTPException(status_code=404, detail="not found")
         candidate = (dist / path).resolve()
-        if path and candidate.is_file() and dist.resolve() in candidate.parents:
+        if path and candidate.is_file() and dist.resolve() in candidate.parents and candidate.name != "index.html":
             return FileResponse(candidate)
-        return FileResponse(dist / "index.html")
+        # index.html names the hashed bundles of this build, so the browser
+        # must ask for it every time; otherwise it keeps running an old build.
+        return FileResponse(dist / "index.html", headers={"Cache-Control": "no-cache"})
