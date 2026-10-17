@@ -15,6 +15,14 @@ Each node SHALL carry:
 - URL;
 - parent id.
 
+With plan control on, each story node SHALL also carry:
+- its review gate, from its review label;
+- its approver and approval time, when the adapter declares **approval fields**;
+- its satisfaction: `merged`, `no_change_confirmed`, `unverified_no_change`, `canceled`, or `null`;
+- its merge commit and its pull request (as `owner/repo#number`), when Sortie holds them;
+- for each of its blockers that is not satisfied, the blocker's id and the reason (`sortie/blocker-satisfaction`);
+- a proposed supersede, when its no-change claim cites a plan key (`sortie/no-change-evidence`).
+
 Each edge SHALL carry the blocking issue's id and the blocked issue's id. Issues without a plan key SHALL be omitted unless the request sets `include_unkeyed=true`.
 
 #### Scenario: Read after a sync
@@ -26,6 +34,14 @@ Each edge SHALL carry the blocking issue's id and the blocked issue's id. Issues
 - **WHEN** the project also holds a bug that no plan created
 - **THEN** the default response omits it
 - **AND** a request with `include_unkeyed=true` includes it with no plan key
+
+#### Scenario: A merged story
+- **WHEN** Sortie latched the merge commit of story `billing/a3`
+- **THEN** its node carries satisfaction `merged`, the merge commit, and the pull request
+
+#### Scenario: A story that waits
+- **WHEN** story `billing/b1` is blocked by `billing/a3`, which is in `Canceled`
+- **THEN** the node of `billing/b1` lists `billing/a3` with the reason `canceled`
 
 ### Requirement: Live state joined in
 Each node SHALL also carry its Sortie runtime state when it has one: `running` with turn count and last message, `retrying` with attempt number, or `budget_held`. Nodes with none SHALL carry no runtime state. The response SHALL include the time it was generated.
