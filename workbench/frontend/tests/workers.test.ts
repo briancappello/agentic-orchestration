@@ -1,5 +1,5 @@
 import { flushSync, mount, tick, unmount } from "svelte";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import ChatHarness from "./ChatHarness.svelte";
 import { planDoc, synced } from "./fixtures";
 import type { WorkerCommand } from "../src/lib/api";
@@ -147,10 +147,16 @@ describe("watching a worker", () => {
     $<HTMLButtonElement>("[data-act='handback']")!.click();
     await settle();
     expect(w.sent.map((c) => c.op)).toEqual(["steer", "interrupt", "handback"]);
-    vi.stubGlobal("confirm", () => true);
     $<HTMLButtonElement>("[data-act='cancel-worker']")!.click();
     await settle();
-    vi.unstubAllGlobals();
+    expect(cancelled).toEqual([]);
+    $<HTMLButtonElement>("[data-confirm='cancel'] [data-act='keep']")!.click();
+    await settle();
+    expect($("[data-confirm='cancel']")).toBeNull();
+    $<HTMLButtonElement>("[data-act='cancel-worker']")!.click();
+    await settle();
+    $<HTMLButtonElement>("[data-confirm='cancel'] [data-act='confirm']")!.click();
+    await settle();
     expect(cancelled).toEqual([open.plan_key]);
   });
 

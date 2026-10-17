@@ -22,8 +22,18 @@
 
   let busy = $state("");
   let actError = $state("");
-  async function act(name: string, run: () => Promise<unknown>, confirmText = "") {
-    if (confirmText && !confirm(confirmText)) return;
+  // An action that asks first: its question and button, until the person answers.
+  let pending: { name: string; text: string; label: string; run: () => Promise<unknown> } | null = $state(null);
+  $effect(() => {
+    void view.selected;
+    pending = null;
+  });
+  async function act(name: string, run: () => Promise<unknown>, ask?: { text: string; label: string }) {
+    if (ask) {
+      pending = { name, run, ...ask };
+      return;
+    }
+    pending = null;
     busy = name;
     actError = "";
     try {
@@ -141,14 +151,23 @@
             {/if}
             {#if node.kind === "story" && node.supersedes && node.plan_status !== "draft"}
               <button type="button" class="attach" data-act="supersede" disabled={!!busy}
-                onclick={() => act("supersede", () => actions.supersede(node.plan_key), `Cancel ${node.supersedes} and move its dependents to ${node.plan_key}?`)}>Confirm: replaces {node.supersedes}</button>
+                onclick={() => act("supersede", () => actions.supersede(node.plan_key), { text: `Cancel ${node.supersedes} and move the stories that depend on it to ${node.plan_key}?`, label: `Replace ${node.supersedes}` })}>Confirm: replaces {node.supersedes}</button>
             {/if}
             {#if node.kind === "story" && node.tracker && !node.tracker.terminal}
               <button type="button" class="attach danger" data-act="cancel" disabled={!!busy}
-                onclick={() => act("cancel", () => actions.cancel(node.plan_key), `Cancel ${node.plan_key}? Its worker stops, and the stories that depend on it need re-review.`)}>Cancel story</button>
+                onclick={() => act("cancel", () => actions.cancel(node.plan_key), { text: `Cancel ${node.plan_key}? Its worker stops, its issue is cancelled, and the stories that depend on it need re-review.`, label: "Cancel story" })}>Cancel story</button>
             {/if}
           {/if}
         </div>
+        {#if pending}
+          <div class="confirm" role="group" aria-label={pending.label} data-confirm={pending.name}>
+            <p>{pending.text}</p>
+            <div>
+              <button type="button" class="small danger" data-act="confirm" onclick={() => pending && act(pending.name, pending.run)}>{pending.label}</button>
+              <button type="button" class="small" data-act="keep" onclick={() => (pending = null)}>Keep it</button>
+            </div>
+          </div>
+        {/if}
         {#if actError}<p class="err" role="alert">{actError}</p>{/if}
       </div>
     {:else}
@@ -208,6 +227,11 @@
   .chip.plan.ready, .chip.plan.released { color: var(--done); }
   .chip.plan.needs_rereview { color: var(--amber-ink); }
   .danger { color: var(--alert); }
+  .confirm { display: flex; flex-direction: column; gap: 8px; margin-top: var(--s-md); padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--panel); font-size: 12.5px; }
+  .confirm div { display: flex; gap: 6px; }
+  .small { height: 30px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-button); background: #fff; color: var(--ink); font-size: 12.5px; font-weight: 600; }
+  .small:hover { background: var(--strip); }
+  .small.danger { border-color: var(--alert); color: var(--alert); }
   .workers { display: flex; flex-direction: column; gap: 6px; }
   .worker .row { display: flex; align-items: center; gap: 8px; }
   .list .worker .row button:first-child { flex: 1; min-width: 0; margin-right: 0; }

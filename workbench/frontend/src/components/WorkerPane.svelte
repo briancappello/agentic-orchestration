@@ -103,8 +103,10 @@
     if (e.key === "Enter" && !e.shiftKey) steer(e);
   }
 
+  let asking = $state(false);
   async function cancel() {
-    if (!actions || !confirm(`Cancel ${node.plan_key}? Its worker stops, and the stories that depend on it need re-review.`)) return;
+    if (!actions) return;
+    asking = false;
     busy = "cancel";
     error = "";
     try {
@@ -137,10 +139,19 @@
       <button type="button" class="ghost" data-act="interrupt" disabled={!!busy || ended} onclick={() => send({ op: "interrupt" }, "interrupt")}>Take over</button>
       <button type="button" class="ghost" data-act="handback" disabled={!!busy || ended} onclick={() => send({ op: "handback" }, "handback")}>Hand back</button>
       {#if actions && node.tracker && !node.tracker.terminal}
-        <button type="button" class="ghost danger" data-act="cancel-worker" disabled={!!busy} onclick={cancel}>Cancel story</button>
+        <button type="button" class="ghost danger" data-act="cancel-worker" disabled={!!busy} onclick={() => (asking = true)}>Cancel story</button>
       {/if}
       <button type="submit" class="primary" disabled={!!busy || ended || !draft.trim()}>Send</button>
     </div>
+    {#if asking}
+      <div class="confirm" role="group" aria-label="Cancel story" data-confirm="cancel">
+        <p>Cancel {node.plan_key}? Its worker stops, its issue is cancelled, and the stories that depend on it need re-review.</p>
+        <div>
+          <button type="button" class="ghost danger" data-act="confirm" onclick={cancel}>Cancel story</button>
+          <button type="button" class="ghost" data-act="keep" onclick={() => (asking = false)}>Keep it</button>
+        </div>
+      </div>
+    {/if}
   </form>
 {:else}
   <p class="readonly" data-note="watch-only">You can watch this worker. Steering it needs the approver role.</p>
@@ -166,5 +177,7 @@
   .controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
   textarea { width: 100%; resize: none; min-height: 52px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-button); background: #fff; line-height: 1.45; }
   textarea:disabled { background: var(--strip); }
+  .confirm { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--panel); font-size: 12.5px; }
+  .confirm div { display: flex; gap: 6px; justify-content: flex-end; }
   .readonly { flex: none; padding: var(--s-md) var(--s-panel) var(--s-panel); border-top: 1px solid var(--line); font-size: 12.5px; color: var(--mute); }
 </style>

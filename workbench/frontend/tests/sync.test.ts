@@ -174,6 +174,26 @@ describe("approver actions", () => {
     expect(sync.calls).toEqual([`pull-back ${s.plan_key}`]);
   });
 
+  it("asks before it cancels a story, in the page", async () => {
+    approver();
+    const doc = planDoc();
+    const s = story(doc, { plan_status: "frozen", frozen: true,
+      tracker: { id: "i1", identifier: "T-1", title: "t", state: "In Progress", terminal: false, url: null, parent_id: null } });
+    const sync = new FakeSync();
+    const h = chat(doc, sync);
+    await settle();
+    h.select(s.plan_key);
+    await settle();
+    $<HTMLButtonElement>("[data-act='cancel']")!.click();
+    await settle();
+    expect(sync.calls).toEqual([]);
+    expect($("[data-confirm='cancel']")!.textContent).toContain("need re-review");
+    $<HTMLButtonElement>("[data-confirm='cancel'] [data-act='confirm']")!.click();
+    await settle();
+    expect(sync.calls).toEqual([`cancel ${s.plan_key}`]);
+    expect($("[data-confirm]")).toBeNull();
+  });
+
   it("explains a re-review", async () => {
     approver();
     const doc = planDoc();
