@@ -6,14 +6,15 @@ import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
 
-from .auth import COOKIE_NAME, Sessions, verify_password
+from .auth import PLANNER, Sessions
+from .auth_routes import auth_router, make_checks
 from .config import Config
 from .hub import sse
+from .oidc import OIDCClient
 from .project_routes import project_router
 from .projects import ProjectManager
 from .registry import Registry, RegistryError
@@ -22,11 +23,7 @@ from .session_routes import session_router
 from .sync import sync_router
 
 
-_CODES = {401: "unauthorized", 404: "not_found"}
-
-
-class LoginBody(BaseModel):
-    password: str
+_CODES = {401: "unauthorized", 403: "forbidden", 404: "not_found"}
 
 
 def create_app(config: Config, **services) -> FastAPI:
@@ -46,6 +43,8 @@ def create_app(config: Config, **services) -> FastAPI:
         finally:
             await projects.stop()
             await sortie.aclose()
+            if app.state.oidc is not None:
+                await app.state.oidc.aclose()
             registry.close()
 
     app = FastAPI(title="plan workbench", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
@@ -56,30 +55,19 @@ def create_app(config: Config, **services) -> FastAPI:
     app.state.sessions = sessions
     app.state.services = services
 
-    def require_operator(request: Request) -> None:
-        if not sessions.valid(request.cookies.get(COOKIE_NAME)):
-            raise HTTPException(status_code=401, detail="sign in first")
-
+    oidc = services.get("oidc")
+    if oidc is None and config.oidc:
+        oidc = OIDCClient(config.oidc_issuer, config.oidc_client_id, config.oidc_client_secret, config.oidc_redirect_url,
+                          scopes=config.oidc_scopes)
+    app.state.oidc = oidc
+    current_identity, require_role = make_checks(sessions)
+    # Every signed-in person holds at least the planner role.
+    require_operator = require_role(PLANNER)
     app.state.require_operator = require_operator
+    app.state.require_role = require_role
+    app.state.current_identity = current_identity
 
-    @app.post("/api/login")
-    def login(body: LoginBody, response: Response) -> dict:
-        if not verify_password(body.password, config.password_hash):
-            raise HTTPException(status_code=401, detail="wrong password")
-        response.set_cookie(
-            COOKIE_NAME, sessions.issue(), max_age=config.session_max_age,
-            httponly=True, samesite="strict", secure=config.cookie_secure, path="/",
-        )
-        return {"signed_in": True}
-
-    @app.post("/api/logout")
-    def logout(response: Response) -> dict:
-        response.delete_cookie(COOKIE_NAME, path="/")
-        return {"signed_in": False}
-
-    @app.get("/api/me", dependencies=[Depends(require_operator)])
-    def me() -> dict:
-        return {"signed_in": True}
+    app.include_router(auth_router(config, sessions, oidc, current_identity))
 
     app.include_router(project_router(projects, require_operator))
 

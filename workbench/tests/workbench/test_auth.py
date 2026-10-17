@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from workbench.app import create_app
-from workbench.auth import COOKIE_NAME, Sessions, hash_password, verify_password
+from workbench.auth import COOKIE_NAME, Sessions, hash_password, local_identity, verify_password
 from tests.workbench.conftest import BROKER_TOKEN, PASSWORD, SORTIE_TOKEN, make_config, sign_in
 
 
@@ -36,7 +36,7 @@ def test_sign_in_sets_signed_httponly_cookie(config):
 def test_wrong_password_and_forged_cookie_are_refused(config):
     client = TestClient(create_app(config))
     assert client.post("/api/login", json={"password": "nope"}).status_code == 401
-    client.cookies.set(COOKIE_NAME, Sessions("other-secret", 60).issue())
+    client.cookies.set(COOKIE_NAME, Sessions("other-secret", 60).issue(local_identity()))
     assert client.get("/api/me").status_code == 401
 
 

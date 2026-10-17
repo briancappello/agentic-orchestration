@@ -7,6 +7,17 @@ import getpass
 import sys
 
 
+def is_loopback(host: str) -> bool:
+    import ipaddress
+
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host.strip("[]")).is_loopback
+    except ValueError:
+        return False
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="workbench")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -39,9 +50,13 @@ def main(argv: list[str] | None = None) -> int:
     from .config import Config, ConfigError
 
     try:
-        Config.from_env()  # fail here, once, rather than in every reloaded worker
+        config = Config.from_env()  # fail here, once, rather than in every reloaded worker
     except ConfigError as exc:
         print(f"workbench: {exc}", file=sys.stderr)
+        return 2
+    if not config.oidc and not is_loopback(args.host) and not config.allow_local_mode:
+        print(f"workbench: local mode (one shared password) on {args.host}, which is not a loopback address: "
+              "set WORKBENCH_OIDC_ISSUER, or WORKBENCH_ALLOW_LOCAL_MODE=1 to accept it", file=sys.stderr)
         return 2
     src = Path(__file__).resolve().parents[1]
     uvicorn.run(

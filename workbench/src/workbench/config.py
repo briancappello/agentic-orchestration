@@ -23,6 +23,7 @@ class Config:
     home: Path
     sortie_url: str
     sortie_token: str
+    # Local mode only: the operator password's hash. Empty in OIDC mode.
     password_hash: str
     secret_key: str
     broker_command: list[str] = field(default_factory=lambda: ["acp-broker"])
@@ -40,6 +41,22 @@ class Config:
     debounce_ms: int = 300
     poll_seconds: float = 5.0
     cookie_secure: bool = False
+    # OpenID Connect. With no issuer, the workbench runs in local mode.
+    oidc_issuer: str = ""
+    oidc_client_id: str = ""
+    oidc_client_secret: str = ""
+    oidc_redirect_url: str = ""
+    oidc_roles_claim: str = "groups"
+    # Some providers (Dex, Okta) return the groups claim only for a "groups" scope.
+    oidc_scopes: str = "openid profile email"
+    oidc_planner_group: str = ""
+    oidc_approver_group: str = ""
+    # Local mode on a non-loopback address, which `workbench serve` refuses otherwise.
+    allow_local_mode: bool = False
+
+    @property
+    def oidc(self) -> bool:
+        return bool(self.oidc_issuer)
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "Config":
@@ -61,6 +78,21 @@ class Config:
                 raise ConfigError(f"WORKBENCH_STORE {store} has no openspec/ directory")
             if not huly_project:
                 raise ConfigError("WORKBENCH_HULY_PROJECT is required with WORKBENCH_STORE: the Huly project the store syncs into")
+        issuer = env.get("WORKBENCH_OIDC_ISSUER", "").strip().rstrip("/")
+        secret = env.get("WORKBENCH_OIDC_CLIENT_SECRET", "").strip()
+        if not secret and env.get("WORKBENCH_OIDC_CLIENT_SECRET_FILE", "").strip():
+            try:
+                secret = Path(env["WORKBENCH_OIDC_CLIENT_SECRET_FILE"].strip()).expanduser().read_text().strip()
+            except OSError as exc:
+                raise ConfigError(f"WORKBENCH_OIDC_CLIENT_SECRET_FILE: {exc}") from exc
+        if issuer:
+            for key in ("WORKBENCH_OIDC_CLIENT_ID", "WORKBENCH_OIDC_REDIRECT_URL", "WORKBENCH_OIDC_PLANNER_GROUP", "WORKBENCH_OIDC_APPROVER_GROUP"):
+                need(key)
+            if not secret:
+                raise ConfigError("WORKBENCH_OIDC_CLIENT_SECRET (or WORKBENCH_OIDC_CLIENT_SECRET_FILE) is required with WORKBENCH_OIDC_ISSUER")
+        password_hash = env.get("WORKBENCH_PASSWORD_HASH", "").strip()
+        if not issuer and not password_hash:
+            raise ConfigError("WORKBENCH_PASSWORD_HASH is required without WORKBENCH_OIDC_ISSUER (local mode)")
         here = Path(__file__).resolve().parents[2]
         prompt = env.get("WORKBENCH_PROMPT_FILE") or str(here / "prompts" / "planning-session.md")
         frontend = env.get("WORKBENCH_FRONTEND_DIR") or str(here / "frontend" / "dist")
@@ -70,7 +102,7 @@ class Config:
             huly_project=huly_project,
             sortie_url=need("WORKBENCH_SORTIE_URL").rstrip("/"),
             sortie_token=env.get("WORKBENCH_SORTIE_TOKEN", ""),
-            password_hash=need("WORKBENCH_PASSWORD_HASH"),
+            password_hash=password_hash,
             secret_key=need("WORKBENCH_SECRET_KEY"),
             broker_command=shlex.split(env.get("WORKBENCH_BROKER_COMMAND", "acp-broker")),
             agent_command=shlex.split(env.get("WORKBENCH_AGENT_COMMAND", "opencode acp")),
@@ -79,4 +111,13 @@ class Config:
             frontend_dir=Path(frontend),
             runtime_dir=Path(env["WORKBENCH_RUNTIME_DIR"]).expanduser() if env.get("WORKBENCH_RUNTIME_DIR") else None,
             cookie_secure=env.get("WORKBENCH_COOKIE_SECURE", "") == "1",
+            oidc_issuer=issuer,
+            oidc_client_id=env.get("WORKBENCH_OIDC_CLIENT_ID", "").strip(),
+            oidc_client_secret=secret,
+            oidc_redirect_url=env.get("WORKBENCH_OIDC_REDIRECT_URL", "").strip(),
+            oidc_roles_claim=env.get("WORKBENCH_OIDC_ROLES_CLAIM", "").strip() or "groups",
+            oidc_scopes=env.get("WORKBENCH_OIDC_SCOPES", "").strip() or "openid profile email",
+            oidc_planner_group=env.get("WORKBENCH_OIDC_PLANNER_GROUP", "").strip(),
+            oidc_approver_group=env.get("WORKBENCH_OIDC_APPROVER_GROUP", "").strip(),
+            allow_local_mode=env.get("WORKBENCH_ALLOW_LOCAL_MODE", "") == "1",
         )
