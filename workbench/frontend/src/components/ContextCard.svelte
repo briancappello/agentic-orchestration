@@ -184,12 +184,14 @@
           <ul class="list" data-list="Workers">
             {#each workers as w (w.plan_key)}
               <li class="worker" data-worker={w.tracker?.identifier}>
-                <button type="button" onclick={() => onselect(w.plan_key)}>
-                  <span class="dot prog"></span><span class="mono">{w.tracker?.identifier}</span>&nbsp;{w.title}
-                  <em>{[workerStatus(w), w.runtime?.stage, w.runtime?.turn_count && `turn ${w.runtime.turn_count}`].filter(Boolean).join(" · ")}</em>
-                </button>
+                <div class="row">
+                  <button type="button" onclick={() => onselect(w.plan_key)}>
+                    <span class="dot prog"></span><span class="mono">{w.tracker?.identifier}</span>&nbsp;{w.title}
+                    <em>{[workerStatus(w), w.runtime?.stage, w.runtime?.turn_count && `turn ${w.runtime.turn_count}`].filter(Boolean).join(" · ")}</em>
+                  </button>
+                  {#if w.runtime?.watchable && onwatch}<button type="button" class="watch" data-act="watch" onclick={() => onwatch(w)}>Watch</button>{/if}
+                </div>
                 {#if w.runtime?.last_message}<p class="last">{w.runtime.last_message}</p>{/if}
-                {#if w.runtime?.watchable && onwatch}<button type="button" class="watch" data-act="watch" onclick={() => onwatch(w)}>Watch</button>{/if}
               </li>
             {:else}<li class="none">No workers</li>{/each}
           </ul>
@@ -207,10 +209,11 @@
   .chip.plan.needs_rereview { color: var(--amber-ink); }
   .danger { color: var(--alert); }
   .workers { display: flex; flex-direction: column; gap: 6px; }
-  .worker { position: relative; }
-  .worker .last { margin: 0 0 4px 22px; font-size: 12px; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: calc(100% - 90px); }
-  .worker .watch { position: absolute; right: 0; top: 4px; height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-button); background: #fff; font-weight: 600; font-size: 12px; }
-  .worker .watch:hover { border-color: var(--ink); }
+  .worker .row { display: flex; align-items: center; gap: 8px; }
+  .list .worker .row button:first-child { flex: 1; min-width: 0; margin-right: 0; }
+  .worker .last { margin: 0 0 4px 16px; font-size: 12px; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .list .worker .watch { flex: none; width: auto; margin: 0; justify-content: center; height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-button); background: #fff; font-size: 12px; }
+  .list .worker .watch:hover { border-color: var(--ink); background: #fff; }
   /* A shadow at the bottom edge shows only while more content sits below it:
      the white cover scrolls with the content and hides it at the end. */
   .context {
