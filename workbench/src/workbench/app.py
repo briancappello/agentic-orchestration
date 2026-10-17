@@ -22,6 +22,7 @@ from .sortie import SortieClient
 from .session_routes import session_router
 from .story_routes import story_router
 from .sync import sync_router
+from .worker_routes import worker_router
 
 
 _CODES = {401: "unauthorized", 403: "forbidden", 404: "not_found"}
@@ -31,10 +32,12 @@ def create_app(config: Config, **services) -> FastAPI:
     """Build the app. ``services`` lets tests inject collaborators:
     ``validate`` replaces planlib.validate, ``sortie`` the Sortie client, and
     ``sessions`` builds each project's session manager from
-    ``(project, store, runtime_dir)``."""
+    ``(project, store, runtime_dir)``, and ``broker_transport`` carries the
+    requests to workers' brokers."""
     sortie = services.get("sortie") or SortieClient(config.sortie_url, config.sortie_token)
     registry = Registry(config.home / "workbench.db")
-    projects = ProjectManager(config, registry, sortie, services.get("sessions"), services.get("validate"))
+    projects = ProjectManager(config, registry, sortie, services.get("sessions"), services.get("validate"),
+                              broker_transport=services.get("broker_transport"))
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -112,6 +115,7 @@ def create_app(config: Config, **services) -> FastAPI:
     app.include_router(sync_router(projects, require_operator))
     app.include_router(story_router(projects, require_role))
     app.include_router(session_router(projects, require_operator))
+    app.include_router(worker_router(projects, require_role))
 
     @app.exception_handler(RegistryError)
     async def registry_error(_request: Request, exc: RegistryError) -> JSONResponse:

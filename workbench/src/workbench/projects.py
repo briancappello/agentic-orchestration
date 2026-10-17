@@ -17,6 +17,7 @@ from .registry import Project, Registry, RegistryError, check_new, suggest_slug
 from .scaffold import ScaffoldError, scaffold_store, upgrade_schemas
 from .sessions import SessionManager, runtime_base
 from .sortie import SortieClient, SortieError
+from .workers import WorkerRelay
 
 log = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ class ProjectRuntime:
     it closes; its planning session runs apart and survives both."""
 
     def __init__(self, project: Project, store: Path, config: Config, sortie: SortieClient,
-                 sessions: SessionManager, validate=None, registry: Registry | None = None):
+                 sessions: SessionManager, validate=None, registry: Registry | None = None, broker_transport=None):
         self.project = project
         self.store = store
         self.config = config
@@ -37,6 +38,8 @@ class ProjectRuntime:
         self.plan = PlanState(store, inputs=self.plan_inputs, **({"validate": validate} if validate else {}))
         self.hub = Hub(self.plan, sortie.bind(project.huly_project), records=self.records)
         self.sessions = sessions
+        # The brokers of the workers Sortie runs for this project's stories.
+        self.workers = WorkerRelay(sortie.bind(project.huly_project), transport=broker_transport)
         # Sync previews waiting for confirmation, by preview id.
         self.pending: dict[str, dict[str, Any]] = {}
         self._stop = asyncio.Event()
@@ -104,6 +107,7 @@ class ProjectRuntime:
         await asyncio.gather(*self._tasks, return_exceptions=True)
         self._tasks.clear()
         await self.sessions.aclose()
+        await self.workers.aclose()
 
     def summary(self) -> dict[str, Any]:
         doc = self.hub.doc or {}
@@ -126,8 +130,9 @@ class ProjectManager:
     """The registry plus a runtime for every registered project."""
 
     def __init__(self, config: Config, registry: Registry, sortie: SortieClient,
-                 session_factory: SessionFactory | None = None, validate=None):
+                 session_factory: SessionFactory | None = None, validate=None, broker_transport=None):
         self.config = config
+        self.broker_transport = broker_transport
         self.registry = registry
         self.sortie = sortie
         self.validate = validate
@@ -172,7 +177,8 @@ class ProjectManager:
     async def _open(self, project: Project) -> ProjectRuntime:
         store = project.store(self.config.home)
         sessions = self.session_factory(project, store, self.runtime_dir(project))
-        rt = ProjectRuntime(project, store, self.config, self.sortie, sessions, self.validate, self.registry)
+        rt = ProjectRuntime(project, store, self.config, self.sortie, sessions, self.validate, self.registry,
+                            broker_transport=self.broker_transport)
         self.runtimes[project.slug] = rt
         await rt.start()
         return rt
