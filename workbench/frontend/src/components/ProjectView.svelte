@@ -73,7 +73,7 @@
     </GraphPane>
   {/snippet}
   {#snippet chat()}
-    <ChatPane {doc} {view} {session} onselect={(k) => selectAnywhere(k)} onapprove={(c) => sync.approve(c)} />
+    <ChatPane {doc} {view} {session} onselect={(k) => selectAnywhere(k)} actions={sync} />
   {/snippet}
 </Shell>
 {#if syncing}<SyncDialog {sync} onclose={() => (syncing = false)} />{/if}

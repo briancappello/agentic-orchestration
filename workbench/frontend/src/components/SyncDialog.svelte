@@ -10,7 +10,7 @@
   let result = $state<Record<string, unknown> | null>(null);
 
   const counts = $derived(preview?.preview.counts);
-  const writes = $derived(counts ? counts.creates + counts.updates + counts.parents + counts.relations_added + counts.relations_removed : 0);
+  const writes = $derived(counts ? counts.creates + counts.updates + counts.parents + counts.relations_added + counts.relations_removed + (counts.releases ?? 0) + (counts.labels ?? 0) + (counts.approvals ?? 0) : 0);
 
   async function load() {
     phase = "loading";
@@ -48,7 +48,7 @@
     {#if phase === "loading"}
       <p class="muted">Asking Sortie for a preview…</p>
     {:else if (phase === "preview" || phase === "applying") && preview && counts}
-      <p class="muted">Nothing reaches the tracker until you apply. Only approved changes sync.</p>
+      <p class="muted">Nothing reaches the tracker until you apply. Only approved stories sync.</p>
       <dl class="counts">
         <div><dt>Issues to create</dt><dd data-count="creates">{counts.creates}</dd></div>
         <div><dt>Issues to update</dt><dd data-count="updates">{counts.updates}</dd></div>
@@ -56,7 +56,11 @@
         <div><dt>Relations to add</dt><dd data-count="relations_added">{counts.relations_added}</dd></div>
         <div><dt>Relations to remove</dt><dd data-count="relations_removed">{counts.relations_removed}</dd></div>
         <div><dt>Orphaned issues</dt><dd data-count="orphans">{counts.orphans}</dd></div>
+        <div><dt>Stories to release</dt><dd data-count="releases">{counts.releases ?? 0}</dd></div>
       </dl>
+      {#if preview.preview.releases?.length}
+        <p class="note" data-releases>Released to agents: <span class="mono">{preview.preview.releases.map((r) => r.identifier || r.plan_key).join(", ")}</span>. A story is released once it and all its blockers are approved.</p>
+      {/if}
       {#if preview.preview.skipped_drafts.length}
         <p class="note">Skipped, breakdown still a draft: <span class="mono">{preview.preview.skipped_drafts.join(", ")}</span></p>
       {/if}

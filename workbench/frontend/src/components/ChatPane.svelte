@@ -4,6 +4,7 @@
   import { applyEvent, composeMessage, emptyTranscript, groupTurns, withUserMessages, workSummary, type ChatBlock, type Transcript } from "../lib/chat";
   import { GraphModel } from "../lib/model";
   import type { SessionClient } from "../lib/session";
+  import type { StoryActions } from "../lib/sync";
   import type { MergedGraph, ViewState } from "../lib/types";
   import type { ConfigCategory, ConfigOption } from "../lib/api";
   import ContextCard from "./ContextCard.svelte";
@@ -11,13 +12,13 @@
   import ModelPicker from "./ModelPicker.svelte";
 
   let {
-    doc, view, session, onselect, onapprove,
+    doc, view, session, onselect, actions,
   }: {
     doc: MergedGraph;
     view: ViewState;
     session: SessionClient;
     onselect: (key: string | null) => void;
-    onapprove?: (change: string) => Promise<unknown>;
+    actions?: StoryActions;
   } = $props();
 
   const model = $derived(new GraphModel(doc));
@@ -178,7 +179,7 @@
   });
 </script>
 
-<ContextCard {model} {view} {attached} {onapprove} onattach={(k) => (attached = [...attached, k])} onselect={(k) => onselect(k)} />
+<ContextCard {model} {view} {attached} {actions} onattach={(k) => (attached = [...attached, k])} onselect={(k) => onselect(k)} />
 
 <div class="session-bar">
   <span class="state" class:on={active || starting}><i></i>{starting ? "Starting session" : active ? (transcript.busy ? "Agent working" : "Planning session") : "No session"}</span>

@@ -34,7 +34,18 @@ export interface GraphNode {
   status: NodeStatus;
   tracker: TrackerView | null;
   runtime: Runtime | null;
+  // Stories only: the plan status the workbench derives from approvals and Sortie.
+  plan_status?: PlanStatus | null;
+  held_by?: string[];
+  rereview?: { reason: string; ref: string } | null;
+  frozen?: boolean;
+  approved_by?: { name: string; id: string } | null;
+  approved_at?: number | null;
+  review?: "human" | "criteria";
+  supersedes?: string | null;
 }
+
+export type PlanStatus = "draft" | "held" | "ready" | "released" | "frozen" | "needs_rereview";
 
 export interface PlanError {
   code: string;

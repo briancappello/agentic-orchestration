@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { GraphModel } from "../lib/model";
+  import { planStatusLabel } from "../lib/sync";
   import type { GraphNode } from "../lib/types";
 
   let {
@@ -19,6 +20,8 @@
     if (progress && progress.total === 0) return node.status === "draft" && node.approval === "unplanned" ? "no breakdown" : "no stories";
     if (progress) return `${progress.done}/${progress.total} done`;
     if (cls === "done") return "complete";
+    if (node.plan_status === "needs_rereview") return "needs re-review";
+    if (node.plan_status === "held") return "held for approval";
     if (cls === "prog") return "in progress";
     const open = model.blockers(node.plan_key).filter((b) => !model.isDone(model.node(b))).length;
     return open ? `waiting on ${open}` : "ready";
@@ -26,6 +29,7 @@
   const label = $derived(
     `${model.identifier(node)} ${node.title}, ${model.statusLabel(node)}` +
       (unplanned ? ", no spec" : "") +
+      (node.plan_status && node.plan_status !== "draft" ? `, ${planStatusLabel(node.plan_status).toLowerCase()}` : "") +
       (node.status === "draft" ? ", draft" : node.status === "orphaned" ? ", orphaned" : ""),
   );
 </script>
@@ -54,7 +58,7 @@
   <span class="t">{node.title}</span>
   <span class="pg">{#if node.kind === "epic" || pct === 100}<i style:width="{pct}%"></i>{/if}</span>
   <span class="r3">
-    <span class="meta">{meta}</span>
+    <span class="meta" class:warn={node.plan_status === "needs_rereview"} data-plan-status={node.plan_status ?? null}>{meta}</span>
     <span class="tags">
       {#if node.status === "draft"}<span class="tag marker draft-tag">Draft</span>{/if}
       {#if node.status === "orphaned"}<span class="tag marker orphan-tag">Orphaned</span>{/if}
@@ -76,6 +80,7 @@
   .card.unplanned { background: repeating-linear-gradient(135deg, var(--h) 0 1px, #fff 1px 7px); }
   .card.draft { border-style: dashed; }
   .card.orphaned { opacity: 0.8; }
+  .meta.warn { color: var(--amber-ink); font-weight: 700; }
   .card:hover { box-shadow: var(--shadow-lift); }
   .card.sel { box-shadow: var(--shadow-halo); }
   :global(.score.focused) .card:not(.sel):not(.near) { opacity: 0.45; }

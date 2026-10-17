@@ -1,33 +1,40 @@
 <script lang="ts">
+  import { can } from "../lib/identity.svelte";
   import type { GraphModel } from "../lib/model";
+  import { planStatusLabel, rereviewText, type StoryActions } from "../lib/sync";
   import type { GraphNode, ViewState } from "../lib/types";
   import Icon from "./Icon.svelte";
 
   let {
-    model, view, attached, onattach, onselect, onapprove,
+    model, view, attached, onattach, onselect, actions,
   }: {
     model: GraphModel;
     view: ViewState;
     attached: string[];
     onattach: (key: string) => void;
     onselect: (key: string) => void;
-    onapprove?: (change: string) => Promise<unknown>;
+    actions?: StoryActions;
   } = $props();
 
-  let approving = $state(false);
-  let approveError = $state("");
-  async function approve(change: string) {
-    if (!onapprove) return;
-    approving = true;
-    approveError = "";
+  let busy = $state("");
+  let actError = $state("");
+  async function act(name: string, run: () => Promise<unknown>, confirmText = "") {
+    if (confirmText && !confirm(confirmText)) return;
+    busy = name;
+    actError = "";
     try {
-      await onapprove(change);
+      await run();
     } catch (err) {
-      approveError = err instanceof Error ? err.message : "Approval failed.";
+      actError = err instanceof Error ? err.message : "That did not work.";
     } finally {
-      approving = false;
+      busy = "";
     }
   }
+
+  const approver = $derived(!!actions && can("approver"));
+  const epicStories = $derived(view.epic ? model.storiesOf(view.epic) : []);
+  const drafts = $derived(epicStories.filter((n) => n.plan_status === "draft"));
+  const epicNeverApproved = (epic: GraphNode) => model.storiesOf(epic.plan_key).every((n) => n.approval !== "approved");
 
   let open = $state(true);
   const node = $derived(model.node(view.selected));
@@ -59,8 +66,17 @@
         <div class="chips">
           <span class="chip {model.statusClass(node)}"><i></i>{model.statusLabel(node)}</span>
           {#if node.status === "orphaned"}<span class="chip">orphaned: no longer in the plan</span>{/if}
-          {#if node.approval}<span class="chip">breakdown {node.approval}</span>{/if}
+          {#if node.plan_status}<span class="chip plan {node.plan_status}" data-plan-status={node.plan_status}>{planStatusLabel(node.plan_status)}</span>{/if}
+          {#if node.kind === "story" && node.review}<span class="chip">review: {node.review === "criteria" ? "acceptance criteria" : "a person"}</span>{/if}
         </div>
+        {#if node.plan_status === "held" && node.held_by?.length}
+          <p class="why" data-why="held">Waits for the approval of {#each node.held_by as k, i (k)}{i ? ", " : ""}<button type="button" class="link" onclick={() => onselect(k)}>{k}</button>{/each}.</p>
+        {:else if node.plan_status === "needs_rereview"}
+          <p class="why warn" data-why="rereview">{rereviewText(node.rereview)}</p>
+        {:else if node.plan_status === "frozen"}
+          <p class="why" data-why="frozen">Agents have started it, so its content is fixed. Change scope with a new story that depends on it, or one that supersedes it.</p>
+        {/if}
+        {#if node.approved_by}<p class="approver">Approved by {node.approved_by.name}{#if node.approved_at} · {new Date(node.approved_at * 1000).toLocaleString()}{/if}</p>{/if}
 
         {#if node.runtime}
           <div class="agent" class:warn={node.runtime.status !== "running"}>
@@ -102,15 +118,44 @@
           {#if !attached.includes(node.plan_key)}
             <button type="button" class="attach" onclick={() => onattach(node.plan_key)}>Attach to message</button>
           {/if}
-          {#if node.kind === "epic" && node.approval === "draft" && onapprove}
-            <button type="button" class="attach approve" data-approve={node.change} disabled={approving} onclick={() => approve(node.change)}>
-              {approving ? "Approving…" : "Approve breakdown"}
-            </button>
+          {#if approver && actions}
+            {#if node.kind === "epic" && node.approval === "draft" && epicNeverApproved(node)}
+              <button type="button" class="attach approve" data-act="approve-epic" disabled={!!busy}
+                onclick={() => act("approve", () => actions.approve({ epic: node.change }))}>{busy === "approve" ? "Approving…" : "Approve the epic"}</button>
+            {/if}
+            {#if node.kind === "story" && (node.plan_status === "draft" || node.plan_status === "needs_rereview") && !node.frozen}
+              <button type="button" class="attach approve" data-act="approve" disabled={!!busy}
+                onclick={() => act("approve", () => actions.approve({ keys: [node.plan_key] }))}>{busy === "approve" ? "Approving…" : "Approve"}</button>
+            {/if}
+            {#if node.kind === "story" && node.plan_status === "released"}
+              <button type="button" class="attach" data-act="pull-back" disabled={!!busy}
+                onclick={() => act("pull-back", () => actions.pullBack(node.plan_key))}>{busy === "pull-back" ? "Pulling back…" : "Pull back"}</button>
+            {/if}
+            {#if node.kind === "story" && node.supersedes && node.plan_status !== "draft"}
+              <button type="button" class="attach" data-act="supersede" disabled={!!busy}
+                onclick={() => act("supersede", () => actions.supersede(node.plan_key), `Cancel ${node.supersedes} and move its dependents to ${node.plan_key}?`)}>Confirm: replaces {node.supersedes}</button>
+            {/if}
+            {#if node.kind === "story" && node.tracker && !node.tracker.terminal}
+              <button type="button" class="attach danger" data-act="cancel" disabled={!!busy}
+                onclick={() => act("cancel", () => actions.cancel(node.plan_key), `Cancel ${node.plan_key}? Its worker stops, and the stories that depend on it need re-review.`)}>Cancel story</button>
+            {/if}
           {/if}
         </div>
-        {#if approveError}<p class="err" role="alert">{approveError}</p>{/if}
+        {#if actError}<p class="err" role="alert">{actError}</p>{/if}
       </div>
     {:else}
+      {#if approver && actions && view.epic && drafts.length}
+        <div class="acts">
+          {#if epicStories.every((n) => n.approval !== "approved")}
+            <button type="button" class="attach approve" data-act="approve-epic" disabled={!!busy}
+              onclick={() => act("approve", () => actions.approve({ epic: view.epic! }))}>Approve the epic ({drafts.length} {drafts.length === 1 ? "story" : "stories"})</button>
+          {:else}
+            <button type="button" class="attach approve" data-act="approve-drafts" disabled={!!busy}
+              onclick={() => act("approve", () => actions.approve({ keys: drafts.map((n) => n.plan_key) }))}>Approve {drafts.length} draft {drafts.length === 1 ? "story" : "stories"}</button>
+          {/if}
+        </div>
+        {#if actError}<p class="err" role="alert">{actError}</p>{/if}
+      {/if}
       <div class="lists">
         {#each [["Ready to start", ready], ["Agent activity", active], ["Without a spec", unplanned]] as [title, list] (title)}
           <div>
@@ -128,6 +173,12 @@
 </section>
 
 <style>
+  .why { font-size: 12.5px; color: var(--mute); }
+  .why.warn { color: var(--amber-ink); }
+  .approver { font-size: 12px; color: var(--mute); }
+  .chip.plan.ready, .chip.plan.released { color: var(--done); }
+  .chip.plan.needs_rereview { color: var(--amber-ink); }
+  .danger { color: var(--alert); }
   /* A shadow at the bottom edge shows only while more content sits below it:
      the white cover scrolls with the content and hides it at the end. */
   .context {
@@ -172,8 +223,8 @@
   .link:hover { text-decoration-color: var(--ink); }
   .none { color: var(--mute); font-size: 12px; }
   .acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: var(--s-md); }
-  .approve { background: var(--ink); color: #fff; border-color: var(--ink); }
-  .approve:hover:not(:disabled) { background: #000; }
+  .attach.approve { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .attach.approve:hover:not(:disabled) { background: #000; }
   .err { color: var(--alert); font-size: 12px; margin-top: 6px; }
   .attach { height: 42px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-button); background: #fff; font-weight: 600; }
   .attach:hover { border-color: var(--ink); }

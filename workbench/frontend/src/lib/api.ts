@@ -46,7 +46,10 @@ export function projectApi(slug: string) {
     graph: () => request<MergedGraph>("GET", `${p}/graph`),
     preview: () => request<SyncPreviewResponse>("POST", `${p}/sync/preview`),
     apply: (previewId: string) => request<{ result: unknown }>("POST", `${p}/sync/apply`, { preview_id: previewId, confirm: true }),
-    approve: (change: string) => request<{ change: string; approved_digest: string }>("POST", `${p}/approve`, { change }),
+    approve: (target: { keys?: string[]; epic?: string }) => request<{ approved: string[] }>("POST", `${p}/approve`, target),
+    pullBack: (key: string) => request<unknown>("POST", `${p}/stories/pull-back`, { key }),
+    cancel: (key: string) => request<{ cancelled: string; rereview: string[] }>("POST", `${p}/stories/cancel`, { key }),
+    supersede: (key: string) => request<{ superseded: string; by: string }>("POST", `${p}/stories/supersede`, { key }),
     session: () => request<SessionStatus>("GET", `${p}/session`),
     startSession: (message: string) => request<SessionStatus>("POST", `${p}/session`, { message }),
     stopSession: () => request<SessionStatus>("DELETE", `${p}/session`),
@@ -92,9 +95,11 @@ export interface SyncPreviewResponse {
   can_apply: boolean;
   capabilities: string[];
   preview: {
-    counts: { creates: number; updates: number; parents: number; relations_added: number; relations_removed: number; orphans: number };
+    counts: { creates: number; updates: number; parents: number; relations_added: number; relations_removed: number; orphans: number;
+      releases?: number; labels?: number; approvals?: number };
     missing_capabilities: string[];
     skipped_drafts: string[];
+    releases?: { plan_key: string; identifier?: string; to: string }[];
     unplanned_changes?: string[];
   };
 }
