@@ -14,7 +14,7 @@ from .config import Config
 from .hub import Hub
 from .plan_state import PlanState, watch
 from .registry import Project, Registry, RegistryError, check_new, suggest_slug
-from .scaffold import ScaffoldError, scaffold_store
+from .scaffold import ScaffoldError, scaffold_store, upgrade_schemas
 from .sessions import SessionManager, runtime_base
 from .sortie import SortieClient, SortieError
 
@@ -77,8 +77,18 @@ class ProjectRuntime:
                 log.info("project %s: imported the approval of %s from its breakdown", self.slug, change)
         return imported
 
+    def upgrade_schemas(self) -> None:
+        try:
+            changed = upgrade_schemas(self.store)
+        except (OSError, ScaffoldError) as exc:
+            log.warning("project %s: could not update its planning schemas: %s", self.slug, exc)
+            return
+        if changed:
+            log.info("project %s: updated its planning schemas: %s", self.slug, ", ".join(changed))
+
     async def start(self) -> None:
         self.hub.bind(asyncio.get_running_loop())
+        await asyncio.to_thread(self.upgrade_schemas)
         await asyncio.to_thread(self.import_legacy_approvals)
         await asyncio.to_thread(self.plan.refresh)
         if (self.store / "openspec").is_dir():

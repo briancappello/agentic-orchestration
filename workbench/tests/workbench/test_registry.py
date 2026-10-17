@@ -8,7 +8,7 @@ import pytest
 
 import planlib
 from workbench.registry import Registry, RegistryError, check_new, suggest_slug
-from workbench.scaffold import ScaffoldError, scaffold_store
+from workbench.scaffold import ScaffoldError, scaffold_store, upgrade_schemas
 
 
 def test_migrates_once_and_reopens(tmp_path):
@@ -124,6 +124,27 @@ def test_scaffold_makes_a_valid_committed_store(tmp_path):
     assert result.errors == [] and result.graph["nodes"] == []
     status = subprocess.run(["git", "status", "--porcelain"], cwd=tmp_path / "billing", capture_output=True, text=True)
     assert status.stdout == ""
+
+
+def test_an_old_store_gets_the_current_schemas(tmp_path):
+    root = tmp_path / "billing"
+    scaffold_store(root, "Billing")
+    schema = root / "openspec" / "schemas" / "planning" / "breakdown.schema.json"
+    current = schema.read_text()
+    schema.write_text('{"old": true}')
+    mine = root / "openspec" / "schemas" / "planning" / "mine.json"
+    mine.write_text("{}")
+    git = lambda *a: subprocess.run(["git", *a], cwd=root, check=True, capture_output=True, text=True).stdout
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "old schema")
+    git("add", "openspec/schemas/planning/mine.json")
+
+    assert upgrade_schemas(root) == ["openspec/schemas/planning/breakdown.schema.json"]
+    assert schema.read_text() == current and mine.read_text() == "{}"
+    assert git("log", "-1", "--format=%s") == "Update the planning schemas\n"
+    # The commit takes only the schema; what the store had staged stays staged.
+    assert git("status", "--porcelain") == "A  openspec/schemas/planning/mine.json\n"
+    assert upgrade_schemas(root) == []
+    assert upgrade_schemas(tmp_path / "missing") == []
 
 
 def test_scaffold_refuses_an_existing_directory(tmp_path):

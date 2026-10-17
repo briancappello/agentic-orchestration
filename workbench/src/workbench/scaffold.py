@@ -40,6 +40,30 @@ def scaffold_store(root: Path, name: str) -> None:
         raise
 
 
+def upgrade_schemas(root: Path) -> list[str]:
+    """Bring the workbench's own schema files in an existing store up to the
+    ones this workbench ships, and commit them. Only files the store already
+    has are replaced: a store that never took the workbench's schemas keeps
+    its own. Returns the paths it changed, relative to ``root``."""
+    root = Path(root)
+    dest = root / "openspec" / "schemas"
+    if not dest.is_dir():
+        return []
+    template = resources.files("workbench").joinpath("store_template", "openspec", "schemas")
+    changed: list[str] = []
+    with resources.as_file(template) as src:
+        for f in sorted(Path(src).rglob("*")):
+            target = dest / f.relative_to(src)
+            if f.is_file() and target.is_file() and target.read_bytes() != f.read_bytes():
+                target.write_bytes(f.read_bytes())
+                changed.append(str(target.relative_to(root)))
+    if changed and (root / ".git").exists():
+        _git(root, "add", "--", *changed)
+        _git(root, "-c", "user.name=plan workbench", "-c", "user.email=workbench@localhost",
+             "commit", "-qm", "Update the planning schemas", "--", *changed)
+    return changed
+
+
 def _git(cwd: Path, *args: str) -> None:
     try:
         subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
