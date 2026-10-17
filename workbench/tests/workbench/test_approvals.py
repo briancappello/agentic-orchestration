@@ -8,7 +8,7 @@ import yaml
 from fastapi.testclient import TestClient
 
 from tests.conftest import breakdown, deliverable
-from tests.workbench.conftest import P, make_config, project, sign_in
+from tests.workbench.conftest import P, make_config, polled, project, sign_in
 from tests.workbench.fake_oidc import CLIENT_ID, CLIENT_SECRET, ISSUER, REDIRECT, FakeProvider
 from tests.workbench.fake_sortie import FakeSortie
 from tests.workbench.test_identity import sign_in_oidc
@@ -82,6 +82,7 @@ def test_an_edit_to_a_released_story_pulls_it_back(store):
     app = app_for(store, fake)
     with TestClient(app) as client:
         sign_in(client)
+        polled(app)
         client.post(f"{P}/approve", json={"epic": "billing"})
         assert status(app, "billing/b2")["plan_status"] == "released"
         store.change("billing", breakdown(deliverable("b1", ["accounts/a3"]), deliverable("b2", title="Edited")))
@@ -150,6 +151,7 @@ def test_unverified_claim_needs_rereview(store):
     app = app_for(store, fake)
     with TestClient(app) as client:
         sign_in(client)
+        polled(app)
         assert status(app, "billing/b2")["rereview"] == {"reason": "unverified_no_change", "ref": "no_mirror"}
 
 

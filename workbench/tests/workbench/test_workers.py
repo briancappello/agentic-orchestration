@@ -21,6 +21,7 @@ def test_a_running_worker_joins_its_story(store):
     app = app_for(store, fake)
     with TestClient(app) as client:
         sign_in(client)
+        polled(app, b1["identifier"])
         rt = status(app, "billing/b1")["runtime"]
         assert rt["status"] == "running" and rt["turn_count"] == 3
         assert rt["stage"] == "implement" and rt["session_id"] == "s1" and rt["watchable"] is True
@@ -37,6 +38,7 @@ def test_a_worker_whose_broker_did_not_report_cannot_be_watched(store):
     app = app_for(store, fake)
     with TestClient(app) as client:
         sign_in(client)
+        polled(app, b1["identifier"])
         assert status(app, "billing/b1")["runtime"]["watchable"] is False
 
 
@@ -49,6 +51,7 @@ def test_a_failed_state_read_keeps_the_runtime(store):
     app = app_for(store, fake)
     with TestClient(app) as client:
         sign_in(client)
+        polled(app, b1["identifier"])
         rt = status(app, "billing/b1")["runtime"]
         assert rt["status"] == "running" and rt["watchable"] is False and rt["stage"] is None
         assert ("GET", "/api/v1/state", None) in fake.requests
@@ -128,6 +131,14 @@ def worker_app(store, fake, brokers, **services):
                       broker_transport=brokers.transport(), **services), b1["identifier"]
 
 
+def polled(app, ident):
+    """Wait for the hub's first Sortie poll: until then no story carries its
+    tracker identifier, and the worker routes answer 404."""
+    from tests.workbench.test_watch import wait_for
+    assert wait_for(lambda: any((n.get("tracker") or {}).get("identifier") == ident
+                                for n in project(app).hub.doc.get("nodes") or [])), "no Sortie poll yet"
+
+
 def sse_events(text):
     out = []
     for block in text.strip().split("\n\n"):
@@ -144,6 +155,7 @@ def test_an_approver_steers_and_the_command_is_recorded(store):
     app, ident = worker_app(store, fake, brokers)
     with TestClient(app) as client:
         sign_in(client)
+        polled(app, ident)
         r = client.post(f"{P}/workers/{ident}/commands", json={"op": "steer", "text": "use the invoice table"})
         assert r.status_code == 200 and r.json()["recorded"]["actor_name"] == "Local operator"
         assert brokers.commands == [("broker-1.test", {"op": "steer", "text": "use the invoice table"})]
@@ -163,6 +175,7 @@ def test_a_planner_watches_but_cannot_steer(store):
                             oidc=OIDCClient(ISSUER, CLIENT_ID, CLIENT_SECRET, REDIRECT, transport=provider.transport()))
     with TestClient(app) as client:
         sign_in_oidc(client, provider)
+        polled(app, ident)
         project(app).workers.follow_poll = 0.01
         fake.end(ident)  # one run, then nothing: the stream ends
         fake.run(ident, "s1", broker="http://broker-1.test", token=TOKEN)
@@ -178,9 +191,10 @@ def test_a_planner_watches_but_cannot_steer(store):
 
 def test_an_unknown_worker_is_refused_before_sortie(store):
     fake, brokers = FakeSortie(), FakeBrokers()
-    app, _ = worker_app(store, fake, brokers)
+    app, ident = worker_app(store, fake, brokers)
     with TestClient(app) as client:
         sign_in(client)
+        polled(app, ident)
         before = len(fake.requests)
         for method, path in [("GET", "events"), ("GET", "messages"), ("POST", "commands")]:
             r = client.request(method, f"{P}/workers/OTHER-9/{path}", json={"op": "state"} if method == "POST" else None)
@@ -200,6 +214,7 @@ def test_the_stream_follows_the_story_and_ends(store):
     brokers.brokers["broker-1.test"]["after"] = second_run
     with TestClient(app) as client:
         sign_in(client)
+        polled(app, ident)
         project(app).workers.follow_poll = 0.01
         r = client.get(f"{P}/workers/{ident}/events", headers={"Last-Event-ID": "7"})
         evs = sse_events(r.text)
@@ -218,6 +233,7 @@ def test_no_broker_token_or_address_reaches_the_browser(store):
     brokers.brokers["broker-1.test"]["after"] = lambda: fake.end(ident)
     with TestClient(app) as client:
         sign_in(client)
+        polled(app, ident)
         project(app).workers.follow_poll = 0.01
         bodies = [client.post(f"{P}/workers/{ident}/commands", json={"op": "steer", "text": "go"}).text,
                   client.get(f"{P}/workers/{ident}/messages").text,
@@ -232,6 +248,7 @@ def test_a_worker_without_a_broker_answers_409(store):
     app, ident = worker_app(store, fake, brokers)
     with TestClient(app) as client:
         sign_in(client)
+        polled(app, ident)
         fake.brokers.pop(ident)
         r = client.post(f"{P}/workers/{ident}/commands", json={"op": "steer", "text": "x"})
         assert r.status_code == 409 and r.json()["error"]["code"] == "no_worker"

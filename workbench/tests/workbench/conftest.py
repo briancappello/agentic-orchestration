@@ -45,3 +45,14 @@ def config(store) -> Config:
 def project(app, slug: str = SLUG):
     """The project's runtime: its plan, hub, sessions and pending syncs."""
     return app.state.projects.runtimes[slug]
+
+
+def polled(app, slug: str = SLUG, timeout: float = 3.0) -> None:
+    """Wait for the project's first Sortie poll. The app starts polling in the
+    background, so a test that reads tracker state right after startup must wait."""
+    import time
+
+    deadline = time.monotonic() + timeout
+    while project(app, slug).hub.tracker is None and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert project(app, slug).hub.tracker is not None, "no Sortie poll yet"
