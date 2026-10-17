@@ -53,6 +53,46 @@ def check_graph(store: LoadedStore, names_for: NamesFor) -> list[PlanError]:
     errors += _check_cycles(store)
     errors += _check_cross_change(store)
     errors += _check_covers(store, names_for)
+    errors += _check_supersedes(store)
+    return errors
+
+
+def check_frozen(store: LoadedStore, frozen: dict[str, str]) -> list[PlanError]:
+    """A story agents have started may not change or disappear."""
+    from .approval import story_digest
+
+    current = {f"{c}/{d['id']}": (bd, d) for c, bd in store.breakdowns.items() for d in bd.doc["deliverables"]}
+    errors = []
+    for key, digest in sorted(frozen.items()):
+        change, _, did = key.partition("/")
+        if key not in current:
+            errors.append(PlanError("frozen", f"'{key}' has started and cannot be removed; add a story that supersedes it instead",
+                                    file=str(CHANGES_DIR / change / "breakdown.yaml"), change=change, deliverable=did, members=(key,)))
+        elif story_digest(current[key][1]) != digest:
+            errors.append(PlanError("frozen", f"'{key}' has started and cannot change; add an amending story that depends on it, "
+                                    "or a replacement that supersedes it", file=current[key][0].file, change=change, deliverable=did, members=(key,)))
+    return errors
+
+
+def _check_supersedes(store: LoadedStore) -> list[PlanError]:
+    errors = []
+    known = {f"{c}/{d['id']}" for c, bd in store.breakdowns.items() for d in bd.doc["deliverables"]}
+    seen: dict[str, str] = {}
+    for change, bd in sorted(store.breakdowns.items()):
+        for d in bd.doc["deliverables"]:
+            if not d.get("supersedes"):
+                continue
+            key, target = f"{change}/{d['id']}", resolve_ref(change, d["supersedes"])
+            if target == key:
+                errors.append(PlanError("bad_supersedes", "a deliverable cannot supersede itself", file=bd.file, change=change, deliverable=d["id"]))
+            elif target not in known:
+                errors.append(PlanError("bad_supersedes", f"supersedes '{d['supersedes']}', which is not a deliverable in the store",
+                                        file=bd.file, change=change, deliverable=d["id"], members=(key, target)))
+            elif target in seen:
+                errors.append(PlanError("bad_supersedes", f"'{target}' is already superseded by '{seen[target]}'",
+                                        file=bd.file, change=change, deliverable=d["id"], members=(key, seen[target], target)))
+            else:
+                seen[target] = key
     return errors
 
 

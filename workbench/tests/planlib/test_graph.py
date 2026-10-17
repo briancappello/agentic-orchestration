@@ -4,7 +4,7 @@ import json
 import subprocess
 import sys
 
-from planlib import Schemas, approve, validate
+from planlib import Schemas, validate
 from planlib.cli import main
 from tests.conftest import breakdown, deliverable
 
@@ -70,8 +70,9 @@ def test_depth_is_longest_chain_within_view(store):
 
 def test_approval_state_flows_into_nodes(store):
     two_changes(store)
-    approve(store.root, "billing")
-    nodes = by_key(validate(store.root, show=no_openspec).graph)
+    stories = validate(store.root, show=no_openspec).stories
+    approvals = {k: v["digest"] for k, v in stories.items() if k.startswith("billing/")}
+    nodes = by_key(validate(store.root, show=no_openspec, approvals=approvals).graph)
     assert nodes["billing"]["approval"] == "approved"
     assert nodes["billing/report"]["approval"] == "approved"
     assert nodes["accounts-api"]["approval"] == "draft"

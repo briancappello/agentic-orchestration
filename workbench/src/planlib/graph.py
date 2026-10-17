@@ -8,7 +8,7 @@ from typing import Any
 
 import networkx as nx
 
-from .approval import approval_state
+from .approval import story_digest
 from .checks import NamesFor, resolve_ref
 from .errors import PlanError
 from .requirements import RequirementsError
@@ -29,12 +29,24 @@ def source_digest(store: LoadedStore) -> str:
     return "sha256:" + h.hexdigest()
 
 
-def build_graph(store: LoadedStore, names_for: NamesFor, schemas: Schemas) -> tuple[dict[str, Any] | None, list[PlanError]]:
+def build_graph(store: LoadedStore, names_for: NamesFor, schemas: Schemas,
+                approvals: dict[str, str] | None = None,
+                stories: dict[str, dict[str, Any]] | None = None) -> tuple[dict[str, Any] | None, list[PlanError]]:
     """Return the graph document, or the errors that prevent building it.
 
-    Call only after every check passed.
+    ``stories``, when given, is filled with each story's digest, review
+    gate, and the story it supersedes: what the workbench needs beside the
+    graph, which the graph schema does not carry.
+
+    ``approvals`` maps plan keys to the digest each story's approval
+    covers; a story is approved while its digest matches. Without
+    approvals every story reads as draft. Call only after every check
+    passed.
     """
     assert store.plan is not None
+    approvals = approvals or {}
+    stories = {} if stories is None else stories
+    graph_v2 = schemas.version("plan-graph") >= 2
     errors: list[PlanError] = []
     nodes: list[dict[str, Any]] = []
     parents: list[dict[str, str]] = []
@@ -49,6 +61,12 @@ def build_graph(store: LoadedStore, names_for: NamesFor, schemas: Schemas) -> tu
             blocks.append({"blocker": dep, "blocked": entry["name"]})
     epic_depth = _depths(epic_graph)
 
+    # A replacement takes over the dependents of the story it supersedes.
+    replaced_by = {
+        resolve_ref(change, d["supersedes"]): f"{change}/{d['id']}"
+        for change, bd in store.breakdowns.items() for d in bd.doc["deliverables"] if d.get("supersedes")
+    }
+
     for change in planned:
         try:
             has_spec = any(names_for(change).values())
@@ -56,7 +74,15 @@ def build_graph(store: LoadedStore, names_for: NamesFor, schemas: Schemas) -> tu
             errors.append(PlanError("openspec", str(exc), change=change))
             continue
         bd = store.breakdowns.get(change)
-        approval = approval_state(bd.doc) if bd else "unplanned"
+        story_approval = {}
+        if bd:
+            for d in bd.doc["deliverables"]:
+                key = f"{change}/{d['id']}"
+                story_approval[key] = "approved" if approvals.get(key) == story_digest(d) else "draft"
+        if bd is None:
+            approval = "unplanned"
+        else:
+            approval = "approved" if "approved" in story_approval.values() else "draft"
         nodes.append(
             {
                 "plan_key": change,
@@ -81,6 +107,8 @@ def build_graph(store: LoadedStore, names_for: NamesFor, schemas: Schemas) -> tu
             story_graph.add_node(key)
             for ref in d["depends_on"]:
                 blocker = resolve_ref(change, ref)
+                if blocker in replaced_by and replaced_by[blocker] != key:
+                    blocker = replaced_by[blocker]
                 blocks.append({"blocker": blocker, "blocked": key})
                 if blocker.split("/", 1)[0] == change:
                     story_graph.add_edge(blocker, key)
@@ -94,14 +122,20 @@ def build_graph(store: LoadedStore, names_for: NamesFor, schemas: Schemas) -> tu
                     "change": change,
                     "title": d["title"],
                     "body": _story_body(d),
-                    "approval": approval,
+                    "approval": story_approval[key],
                     "has_spec": bool(d["covers"]),
                     "depth": story_depth[key],
                     "deliverable_kind": d["kind"],
                     "covers": list(d["covers"]),
                     "acceptance_criteria": list(d["acceptance_criteria"]),
+                    **({"review": d.get("review", "human")} if graph_v2 else {}),
                 }
             )
+            stories[key] = {
+                "digest": story_digest(d),
+                "review": d.get("review", "human"),
+                "supersedes": resolve_ref(change, d["supersedes"]) if d.get("supersedes") else None,
+            }
             parents.append({"child": key, "parent": change})
 
     if errors:

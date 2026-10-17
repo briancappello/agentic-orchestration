@@ -1,75 +1,85 @@
 from __future__ import annotations
 
-import pytest
-import yaml
-
-from planlib import PlanLoadError
-from planlib.approval import approval_state, approve, deliverables_digest
+from planlib import story_digest, validate
+from planlib.approval import deliverables_digest, legacy_approved
 from tests.conftest import breakdown, deliverable
 
 
-def read(path):
-    return yaml.safe_load(path.read_text())
+def no_openspec(*_):
+    raise AssertionError("openspec should not be called")
 
 
-def test_draft_reads_as_draft():
-    assert approval_state(breakdown(deliverable("a"))) == "draft"
+def nodes(result):
+    return {n["plan_key"]: n for n in result.graph["nodes"]}
 
 
-def test_approve_then_edit_then_approve(store):
-    d = store.change("billing", breakdown(deliverable("invoice")))
-    f = d / "breakdown.yaml"
-
-    digest = approve(store.root, "billing")
-    doc = read(f)
-    assert doc["status"] == "approved" and doc["approved_digest"] == digest
-    assert approval_state(doc) == "approved"
-
-    doc["deliverables"].append(deliverable("tax", ["invoice"]))
-    f.write_text(yaml.safe_dump(doc, sort_keys=False))
-    edited = read(f)
-    assert edited["status"] == "approved"
-    assert approval_state(edited) == "draft"
-
-    approve(store.root, "billing")
-    assert approval_state(read(f)) == "approved"
+def billing(store, *extra):
+    store.plan([("billing", [])])
+    store.change("billing", breakdown(deliverable("a"), deliverable("b", ["a"]), deliverable("c"), *extra))
 
 
-def test_digest_ignores_key_order_but_not_values():
-    a = breakdown(deliverable("x"))
-    b = {"deliverables": [dict(reversed(list(a["deliverables"][0].items())))]}
-    assert deliverables_digest(a) == deliverables_digest(b)
-    b["deliverables"][0]["title"] = "Other"
-    assert deliverables_digest(a) != deliverables_digest(b)
+def digests(store, *keys):
+    r = validate(store.root, show=no_openspec)
+    return {k: r.stories[k]["digest"] for k in keys}
 
 
-def test_approve_keeps_comments_and_layout(store):
-    text = (
-        "# reviewed with finance\n"
-        "schema_version: 1\n"
-        "status: draft\n"
-        "deliverables:\n"
-        "  - id: invoice  # the first one\n"
-        "    title: Invoice\n"
-        "    kind: story\n"
-        "    depends_on: []\n"
-        "    covers: []\n"
-        "    acceptance_criteria: [works]\n"
-    )
-    d = store.change("billing", text)
-    approve(store.root, "billing")
-    out = (d / "breakdown.yaml").read_text()
-    assert "# reviewed with finance" in out and "# the first one" in out
-    assert "status: approved\napproved_digest: sha256:" in out
+def test_without_approvals_every_story_is_draft(store):
+    billing(store)
+    n = nodes(validate(store.root, show=no_openspec))
+    assert {n[k]["approval"] for k in ("billing/a", "billing/b", "billing/c")} == {"draft"}
+    assert n["billing"]["approval"] == "draft"
 
 
-def test_approve_refuses_invalid_breakdown(store):
-    store.change("billing", breakdown(deliverable("invoice", kind="task")))
-    with pytest.raises(PlanLoadError, match="fails its schema"):
-        approve(store.root, "billing")
+def test_a_status_in_the_file_approves_nothing(store):
+    store.plan([("billing", [])])
+    doc = breakdown(deliverable("a"))
+    doc.update(status="approved", approved_digest=deliverables_digest(doc))
+    store.change("billing", doc)
+    assert nodes(validate(store.root, show=no_openspec))["billing/a"]["approval"] == "draft"
 
 
-def test_approve_refuses_missing_breakdown(store):
-    store.change("billing")
-    with pytest.raises(PlanLoadError, match="no breakdown"):
-        approve(store.root, "billing")
+def test_batch_0_then_one_more(store):
+    billing(store)
+    approved = digests(store, "billing/a", "billing/b", "billing/c")
+    billing(store, deliverable("d", ["c"]))
+    n = nodes(validate(store.root, show=no_openspec, approvals=approved))
+    assert [n[k]["approval"] for k in ("billing/a", "billing/b", "billing/c", "billing/d")] == ["approved"] * 3 + ["draft"]
+    assert n["billing"]["approval"] == "approved"
+
+    approved.update(digests(store, "billing/d"))
+    assert nodes(validate(store.root, show=no_openspec, approvals=approved))["billing/d"]["approval"] == "approved"
+
+
+def test_one_story_edited(store):
+    billing(store)
+    approved = digests(store, "billing/a", "billing/b", "billing/c")
+    store.plan([("billing", [])])
+    store.change("billing", breakdown(deliverable("a"), deliverable("b", ["a"], acceptance_criteria=["changed"]), deliverable("c")))
+    n = nodes(validate(store.root, show=no_openspec, approvals=approved))
+    assert n["billing/b"]["approval"] == "draft"
+    assert n["billing/a"]["approval"] == n["billing/c"]["approval"] == "approved"
+
+
+def test_the_digest_covers_every_field():
+    base = deliverable("x")
+    assert story_digest(base) == story_digest(dict(reversed(list(base.items()))))
+    for field, value in [("title", "Other"), ("review", "criteria"), ("supersedes", "y"), ("notes", "n"), ("depends_on", ["z"])]:
+        assert story_digest({**base, field: value}) != story_digest(base), field
+
+
+def test_review_defaults_to_human_and_reaches_the_graph(store):
+    store.plan([("billing", [])])
+    store.change("billing", breakdown(deliverable("a"), deliverable("b", review="criteria")))
+    r = validate(store.root, show=no_openspec)
+    n = nodes(r)
+    assert n["billing/a"]["review"] == "human" and n["billing/b"]["review"] == "criteria"
+    assert r.stories["billing/b"]["review"] == "criteria"
+
+
+def test_legacy_approval_is_recognized_for_import():
+    doc = breakdown(deliverable("a"))
+    assert not legacy_approved(doc)
+    doc.update(status="approved", approved_digest=deliverables_digest(doc))
+    assert legacy_approved(doc)
+    doc["deliverables"].append(deliverable("b"))
+    assert not legacy_approved(doc)

@@ -208,12 +208,23 @@ artifacts:
         no spec describes; the workbench marks it as having no spec.
       - `acceptance_criteria`: at least one observable, checkable criterion.
       - `notes`: optional.
+      - `review`: how the work is reviewed before it merges. `human` (the
+        default) means a person reviews and merges the pull request;
+        `criteria` means a separate agent checks the acceptance criteria and
+        Sortie merges. Propose `criteria` only when the criteria are
+        concrete enough to check without judgment.
+      - `supersedes`: only for a replacement of a story that has already
+        started: the id (or `<change>/<id>`) of the story it replaces. Its
+        dependents move to the replacement.
 
       Size deliverables so one agent session can finish one. Prefer parallel
       deliverables over a single chain when the work allows it.
 
-      Leave `status: draft`. Never set `status: approved` or
-      `approved_digest`; only a person approves, from the workbench.
+      Never approve anything: write no `status` or `approved_digest`. A
+      person approves each story in the workbench, and approval is not
+      stored in this file. Once a story has started, it is frozen: do not
+      edit or remove it. Add an amending story that depends on it, or a
+      replacement with `supersedes`.
 
       After every write to this file or to `openspec/plan.yaml`, run
       `planlib validate --store <store-root>` and fix every error it reports

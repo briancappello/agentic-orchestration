@@ -4,18 +4,18 @@
   "description": "The deliverables of one OpenSpec change and the dependencies among them. Lives at openspec/changes/<change>/breakdown.yaml.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "status", "deliverables"],
+  "required": ["schema_version", "deliverables"],
   "properties": {
     "schema_version": {
       "description": "Version of this format. Readers refuse versions they do not support.",
       "const": 1
     },
     "status": {
-      "description": "Only a person sets approved. A breakdown whose deliverables no longer match approved_digest reads as draft.",
+      "description": "Deprecated. Approval is recorded per story by the plan workbench, never in this file. Read only to import approvals made before that.",
       "enum": ["draft", "approved"]
     },
     "approved_digest": {
-      "description": "sha256 of the canonical JSON of deliverables, recorded when a person approves.",
+      "description": "Deprecated, with status: the digest of an approval made under the old format.",
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
@@ -24,12 +24,6 @@
       "items": { "$ref": "#/$defs/deliverable" }
     }
   },
-  "if": {
-    "properties": { "status": { "const": "approved" } },
-    "required": ["status"]
-  },
-  "then": { "required": ["approved_digest"] },
-  "else": { "not": { "required": ["approved_digest"] } },
   "$defs": {
     "kebab": {
       "type": "string",
@@ -69,7 +63,15 @@
           "minItems": 1,
           "items": { "type": "string", "minLength": 1 }
         },
-        "notes": { "type": "string" }
+        "notes": { "type": "string" },
+        "review": {
+          "description": "How the work is reviewed before it merges: human (a person merges the pull request) or criteria (a separate agent checks the acceptance criteria). Default human.",
+          "enum": ["human", "criteria"]
+        },
+        "supersedes": {
+          "description": "The deliverable this one replaces, once that one has started. Its dependents move to this one.",
+          "$ref": "#/$defs/deliverable_ref"
+        }
       }
     }
   }
