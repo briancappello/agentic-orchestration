@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +19,7 @@ SCHEMA_DIR = Path("openspec") / "schemas" / "planning"
 SUPPORTED_VERSIONS: dict[str, int] = {
     "breakdown": 1,
     "plan": 1,
-    "plan-graph": 1,
+    "plan-graph": 2,
 }
 
 
@@ -28,10 +28,14 @@ class Schemas:
     """The store's planning schemas, each with a ready validator."""
 
     validators: dict[str, Draft202012Validator]
+    # The version each store schema declares. A store created before a
+    # format change keeps its older schema, and planlib writes that version.
+    versions: dict[str, int] = field(default_factory=dict)
 
     @classmethod
     def load(cls, store: Path) -> "Schemas":
         validators: dict[str, Draft202012Validator] = {}
+        versions: dict[str, int] = {}
         for kind, supported in SUPPORTED_VERSIONS.items():
             path = Path(store) / SCHEMA_DIR / f"{kind}.schema.json"
             try:
@@ -50,7 +54,12 @@ class Schemas:
                 )
             Draft202012Validator.check_schema(schema)
             validators[kind] = Draft202012Validator(schema)
-        return cls(validators)
+            versions[kind] = declared
+        return cls(validators, versions)
+
+    def version(self, kind: str) -> int:
+        """The version of ``kind`` the store's schema declares."""
+        return self.versions.get(kind, SUPPORTED_VERSIONS[kind])
 
     def check(self, kind: str, doc: Any, *, file: str, change: str | None = None) -> list[PlanError]:
         """Check ``doc`` against the ``kind`` schema, version first.

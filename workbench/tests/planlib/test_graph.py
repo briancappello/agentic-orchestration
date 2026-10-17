@@ -135,3 +135,19 @@ def test_console_script_runs(store):
         capture_output=True, text=True,
     )
     assert proc.returncode == 0, proc.stderr
+
+
+def test_graph_version_follows_the_store_schema(store):
+    """A store created before plan graph version 2 keeps its version 1
+    schema, and gets version 1 graphs that its schema accepts."""
+    two_changes(store)
+    assert validate(store.root, show=no_openspec).graph["schema_version"] == 2
+
+    schema = store.root / "openspec/schemas/planning/plan-graph.schema.json"
+    doc = json.loads(schema.read_text())
+    doc["properties"]["schema_version"] = {"const": 1}
+    for field in ("release", "review", "approved_by", "approved_at"):
+        doc["$defs"]["node"]["properties"].pop(field)
+    schema.write_text(json.dumps(doc))
+    r = validate(store.root, show=no_openspec)
+    assert r.errors == [] and r.graph["schema_version"] == 1

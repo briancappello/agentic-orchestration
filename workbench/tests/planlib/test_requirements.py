@@ -11,7 +11,8 @@ from planlib.requirements import RequirementsError, openspec_show, requirement_n
 from tests.conftest import FIXTURES
 
 CAPTURED = FIXTURES / "openspec-1.13"
-REAL_STORE = Path.home() / "dev" / "agent-platform-specs"
+# A real, larger change: plan-to-tracker-dag as archived in the platform spec store.
+REAL_CHANGE = Path.home() / "dev" / "agent-platform-specs" / "openspec/changes/archive/2026-10-16-plan-to-tracker-dag"
 HAS_OPENSPEC = shutil.which("openspec") is not None
 
 
@@ -88,11 +89,13 @@ def test_real_openspec_on_captured_change(billing_store):
 
 
 @pytest.mark.skipif(
-    not HAS_OPENSPEC or not (REAL_STORE / "openspec/changes/plan-to-tracker-dag").is_dir(),
-    reason="openspec or the spec store is not available",
+    not HAS_OPENSPEC or not REAL_CHANGE.is_dir(),
+    reason="openspec or the platform spec store is not available",
 )
-def test_real_change_in_store():
-    names = requirement_names(REAL_STORE, "plan-to-tracker-dag")
+def test_real_change_in_store(store):
+    shutil.copytree(REAL_CHANGE, store.root / "openspec" / "changes" / "plan-to-tracker-dag")
+    (store.root / "openspec" / "config.yaml").write_text("schema: spec-driven\n")
+    names = requirement_names(store.root, "plan-to-tracker-dag")
     assert "Optional write capabilities" in names["sortie/tracker-write-capabilities"]
     assert sum(len(v) for v in names.values()) == 42
 

@@ -12,7 +12,7 @@ from .approval import approval_state
 from .checks import NamesFor, resolve_ref
 from .errors import PlanError
 from .requirements import RequirementsError
-from .schemas import SUPPORTED_VERSIONS, Schemas
+from .schemas import Schemas
 from .store import CHANGES_DIR, PLAN_FILE, LoadedStore
 
 _WHY = re.compile(r"^##\s+Why\s*$(.*?)(?=^##\s|\Z)", re.MULTILINE | re.DOTALL)
@@ -107,7 +107,7 @@ def build_graph(store: LoadedStore, names_for: NamesFor, schemas: Schemas) -> tu
     if errors:
         return None, errors
     doc = {
-        "schema_version": SUPPORTED_VERSIONS["plan-graph"],
+        "schema_version": schemas.version("plan-graph"),
         "source_digest": source_digest(store),
         "nodes": nodes,
         "parents": parents,
