@@ -117,7 +117,16 @@ uv run workbench hash-password > ~/.config/plan-workbench-password-hash   # type
 | `WORKBENCH_HULY_PROJECT` | With `WORKBENCH_STORE` | The Huly project key that store syncs into. |
 | `WORKBENCH_SORTIE_URL` | Yes | Sortie's HTTP address, for example `http://127.0.0.1:7678`. |
 | `WORKBENCH_SORTIE_TOKEN` | When Sortie has a control token | Sortie's `server.control_token`. |
-| `WORKBENCH_PASSWORD_HASH` | Yes | Output of `workbench hash-password`. |
+| `WORKBENCH_PASSWORD_HASH` | In local mode | Output of `workbench hash-password`. Local mode is the workbench without `WORKBENCH_OIDC_ISSUER`: one shared password signs in a local identity with both roles. It is for development; see "Sign-in" below. |
+| `WORKBENCH_OIDC_ISSUER` | For team use | The OpenID Connect issuer URL. Setting it turns on sign-in through the provider and turns off the password. |
+| `WORKBENCH_OIDC_CLIENT_ID` | With an issuer | The workbench's client id at the provider. |
+| `WORKBENCH_OIDC_CLIENT_SECRET` or `WORKBENCH_OIDC_CLIENT_SECRET_FILE` | With an issuer | The client secret, or a file that holds it. |
+| `WORKBENCH_OIDC_REDIRECT_URL` | With an issuer | `<workbench base URL>/api/auth/callback`, exactly as registered at the provider. |
+| `WORKBENCH_OIDC_PLANNER_GROUP` | With an issuer | The group whose members get the `planner` role: plan, edit, sync, run planning sessions, and manage projects. |
+| `WORKBENCH_OIDC_APPROVER_GROUP` | With an issuer | The group whose members get the `approver` role as well: approve, release, pull back, cancel, supersede, and steer. |
+| `WORKBENCH_OIDC_ROLES_CLAIM` | No | The ID token claim that lists the person's groups, default `groups`. |
+| `WORKBENCH_OIDC_SCOPES` | No | The scopes the sign-in asks for, default `openid profile email`. Dex and Okta return groups only with `groups` added. |
+| `WORKBENCH_ALLOW_LOCAL_MODE` | No | `1` lets `workbench serve` run local mode on a non-loopback `--host`, which it refuses otherwise. |
 | `WORKBENCH_SECRET_KEY` | Yes | Random string that signs the session cookie. |
 | `WORKBENCH_BROKER_COMMAND` | No | Broker command, default `acp-broker`. |
 | `WORKBENCH_AGENT_COMMAND` | No | Agent command, default `opencode acp`. |
@@ -138,6 +147,12 @@ uv run workbench serve --port 8790
 The tokens stay in this process. The browser holds only the workbench's own cookie.
 
 To work on the workbench itself, add `--reload`: the backend restarts when its Python code changes. Run `npm run dev` in `frontend/` and open `http://localhost:5173` for hot reload of the frontend; Vite forwards `/api` to the backend on port 8790. Keep `WORKBENCH_SECRET_KEY` fixed so a restart keeps you signed in.
+
+### Sign-in
+
+With `WORKBENCH_OIDC_ISSUER` set, people sign in with the team's identity provider (authorization code flow with PKCE). Register the workbench at the provider as a confidential web client with the redirect URL `<base>/api/auth/callback`. Make the provider put the person's groups into the ID token claim `WORKBENCH_OIDC_ROLES_CLAIM` (Keycloak: a group membership mapper. Authentik: the default `groups` scope. Dex and Okta: add `groups` to `WORKBENCH_OIDC_SCOPES`). Membership in the approver group gives both roles; a person in neither group is refused, with a message saying so. Roles are read at sign-in, so a change at the provider applies at the person's next sign-in.
+
+The browser holds only the workbench's signed session cookie (`HttpOnly`, `SameSite=Strict`, and `Secure` with `WORKBENCH_COOKIE_SECURE=1`), which carries the person's name, email, and roles. No provider token reaches it. **Sign out** ends the session, and then the provider's session when the provider offers an end-session endpoint. After switching from local mode, everyone signs in once more.
 
 ## 5. Plan
 
