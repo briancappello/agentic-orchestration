@@ -7,8 +7,8 @@
   "required": ["schema_version", "source_digest", "nodes", "parents", "blocks", "unplanned_changes"],
   "properties": {
     "schema_version": {
-      "description": "Version of this format. Readers refuse versions they do not support.",
-      "const": 1
+      "description": "Version of this format. Readers refuse versions they do not support. Version 2 adds the optional story fields release, review, approved_by, and approved_at.",
+      "enum": [1, 2]
     },
     "source_digest": {
       "description": "sha256 over the plan file and every breakdown file the graph was built from.",
@@ -85,6 +85,29 @@
         "acceptance_criteria": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "release": {
+          "description": "Version 2, stories only. True when the story is approved and every story it directly depends on is approved, so a sync releases it to the agents.",
+          "type": "boolean"
+        },
+        "review": {
+          "description": "Version 2, stories only. The review gate: human (a person merges the pull request) or criteria (a separate agent checks the acceptance criteria, then Sortie merges).",
+          "enum": ["human", "criteria"]
+        },
+        "approved_by": {
+          "description": "Version 2, stories only. The person who approved the story.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "id"],
+          "properties": {
+            "name": { "type": "string", "minLength": 1 },
+            "id": { "description": "Stable identity: issuer and subject.", "type": "string" }
+          }
+        },
+        "approved_at": {
+          "description": "Version 2, stories only. When the story was approved, in RFC 3339.",
+          "type": "string",
+          "format": "date-time"
         }
       }
     },
