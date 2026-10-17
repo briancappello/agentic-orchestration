@@ -194,6 +194,25 @@ class Registry:
                 self._db.execute("ROLLBACK")
                 raise
 
+    def record_command(self, project_id: int, identifier: str, session_id: str | None, op: str, text: str | None,
+                       actor_id: str, actor_name: str) -> dict:
+        """Record a command a person sent to a worker."""
+        now = time.time()
+        with self._lock:
+            cur = self._db.execute(
+                "INSERT INTO worker_commands (project_id, identifier, session_id, op, text, actor_id, actor_name, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (project_id, identifier, session_id, op, text, actor_id, actor_name, now))
+        return {"id": cur.lastrowid, "identifier": identifier, "session_id": session_id, "op": op, "text": text,
+                "actor_id": actor_id, "actor_name": actor_name, "time": now}
+
+    def commands(self, project_id: int, identifier: str) -> list[dict]:
+        """The commands sent to a story's workers, oldest first."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT id, identifier, session_id, op, text, actor_id, actor_name, created_at AS time FROM worker_commands "
+                "WHERE project_id = ? AND identifier = ? ORDER BY created_at, id", (project_id, identifier)).fetchall()
+        return [dict(r) for r in rows]
+
     def delete(self, slug: str) -> None:
         with self._lock:
             self._db.execute("DELETE FROM projects WHERE slug = ?", (slug,))
