@@ -54,7 +54,7 @@ None. This store has no archived specs yet. This change revises in-flight specs 
 
 ## Impact
 
-- Sortie fork (`~/dev/sortie`), on a branch off `feat/plan-to-tracker-dag`. Changes are additive wherever possible, so upstream rebases stay small:
+- Sortie fork (`~/dev/sortie`), on a branch off `plan-bench`, our default branch. Changes are additive wherever possible, so upstream rebases stay small:
   - `internal/plan`: the release flag, the approver fields, and the satisfaction fields in the graph;
   - `internal/server`: the pull-back, cancel, and broker-token endpoints, and the broker URL in state;
   - `internal/orchestrator`: the blocker check for issues with a plan key, the pull-back under the claim, cancel, and the evidence check on a no-change exit;

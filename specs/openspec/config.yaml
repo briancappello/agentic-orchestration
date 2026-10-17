@@ -10,8 +10,9 @@ context: |
   Components and where their code lives:
     - sortie (~/dev/sortie, our fork of sortie-ai/sortie, Go): the
       orchestrator. Polls the tracker, runs agent sessions per ticket, stage
-      chains, reactions, handoff. Our changes stay small, isolated, and
-      rebased onto upstream.
+      chains, reactions, handoff. Our default branch is plan-bench; feature
+      branches start from it and merge back into it. Our changes stay small
+      and isolated, so upstream merges stay cheap.
     - acp-broker (acp-broker/ in this repository, Go):
       sits between sortie and an ACP agent. One session, two input vectors:
       the autonomous driver and humans (watch, steer, take over, hand back,
@@ -24,7 +25,7 @@ context: |
       (~/dev/wtvm) is prior art only.
     - Human surfaces: acp-broker attach (TUI), herdr (~/dev/herdr) panes and
       the herdr-web-ui plugin for web and phone.
-    - Tracker: Huly (prototype adapter on sortie branch prototype/huly-tracker).
+    - Tracker: Huly (adapter with plan writes on sortie branch plan-bench).
     - Telemetry: OpenTelemetry Collector; Langfuse (self-hosted, MIT core) for
       LLM traces and cost per stage; sortie's Prometheus metrics.
 
