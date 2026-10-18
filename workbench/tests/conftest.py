@@ -7,6 +7,8 @@ from typing import Any, Callable
 import pytest
 import yaml
 
+from planlib.requirements import clear_openspec_cache
+
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
@@ -74,3 +76,11 @@ def make_store(tmp_path: Path) -> Callable[[str], StoreBuilder]:
         return StoreBuilder(tmp_path / name)
 
     return make
+
+
+@pytest.fixture(autouse=True)
+def _fresh_openspec_cache():
+    """planlib caches `openspec show` output for the life of the process: each test starts empty."""
+    clear_openspec_cache()
+    yield
+    clear_openspec_cache()

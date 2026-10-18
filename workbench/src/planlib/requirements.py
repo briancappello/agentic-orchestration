@@ -11,9 +11,14 @@ never a silent pass.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import re
+import shutil
 import subprocess
+import threading
+from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -22,6 +27,24 @@ from .store import CHANGES_DIR
 
 # The OpenSpec version whose `show --json` output this module was tested with.
 TESTED_OPENSPEC_VERSION = "1.13"
+
+# OpenSpec's CLI sends usage telemetry on every command and waits for the send
+# before it exits: about 0.25s of each call, and a network request per plan
+# check. planlib turns it off for every call it makes (an operator who wants
+# it can set these variables to other values; an explicit value is kept).
+OPENSPEC_ENV = {"OPENSPEC_TELEMETRY": "0", "DO_NOT_TRACK": "1"}
+
+# Parsed `openspec show` output, by change and the bytes it was read from.
+_CACHE_SIZE = 256
+_cache: OrderedDict[tuple, Any] = OrderedDict()
+_cache_lock = threading.Lock()
+
+
+def openspec_env() -> dict[str, str]:
+    """The environment for an OpenSpec subprocess: this process's, with
+    telemetry off unless the operator set the variables explicitly."""
+    return {**OPENSPEC_ENV, **os.environ}
+
 
 # Delta operations whose requirements exist in the change once it is applied.
 _LIVE_OPERATIONS = ("ADDED", "MODIFIED")
@@ -45,11 +68,10 @@ class _HeaderRequirement:
     text: str
 
 
-def openspec_show(store: Path, change: str) -> Any:
-    """Run ``openspec show <change> --type change --json`` in the store."""
+def _run_openspec_show(store: Path, change: str) -> Any:
     cmd = ["openspec", "show", change, "--type", "change", "--json", "--no-interactive"]
     try:
-        proc = subprocess.run(cmd, cwd=store, capture_output=True, text=True, timeout=60)
+        proc = subprocess.run(cmd, cwd=store, capture_output=True, text=True, timeout=60, env=openspec_env())
     except FileNotFoundError as exc:
         raise RequirementsError("openspec is not installed or not on PATH") from exc
     except subprocess.TimeoutExpired as exc:
@@ -61,6 +83,48 @@ def openspec_show(store: Path, change: str) -> Any:
         return json.loads(proc.stdout)
     except json.JSONDecodeError as exc:
         raise RequirementsError(f"`{' '.join(cmd)}` did not print JSON: {exc}") from exc
+
+
+def _cache_key(store: Path, change: str) -> tuple:
+    """What `openspec show <change>` reads: the change's files, the store's
+    OpenSpec config, and the OpenSpec install itself."""
+    h = hashlib.sha256()
+    root = Path(store) / CHANGES_DIR / change
+    for f in sorted(p for p in root.rglob("*") if p.is_file()):
+        h.update(str(f.relative_to(root)).encode() + b"\0" + f.read_bytes() + b"\0")
+    config = Path(store) / "openspec" / "config.yaml"
+    if config.is_file():
+        h.update(b"config\0" + config.read_bytes())
+    exe = shutil.which("openspec") or ""
+    real = os.path.realpath(exe) if exe else ""
+    try:
+        stamp = os.stat(real).st_mtime_ns if real else 0
+    except OSError:
+        stamp = 0
+    return (str(Path(store).resolve()), change, h.hexdigest(), real, stamp)
+
+
+def openspec_show(store: Path, change: str) -> Any:
+    """``openspec show <change> --type change --json`` in the store, cached by
+    what it reads: the same files give the same output, so an unchanged change
+    costs no subprocess. A failure is never cached."""
+    key = _cache_key(store, change)
+    with _cache_lock:
+        if key in _cache:
+            _cache.move_to_end(key)
+            return json.loads(_cache[key])
+    result = _run_openspec_show(store, change)
+    with _cache_lock:
+        # Kept as text, so no caller can change the cached copy.
+        _cache[key] = json.dumps(result)
+        while len(_cache) > _CACHE_SIZE:
+            _cache.popitem(last=False)
+    return result
+
+
+def clear_openspec_cache() -> None:
+    with _cache_lock:
+        _cache.clear()
 
 
 def requirement_names(store: Path, change: str, show: ShowRunner = openspec_show) -> dict[str, set[str]]:

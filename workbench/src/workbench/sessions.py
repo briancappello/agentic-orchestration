@@ -29,6 +29,8 @@ from typing import Any, AsyncIterator
 
 import httpx
 
+from planlib.requirements import OPENSPEC_ENV
+
 log = logging.getLogger(__name__)
 
 MODEL_CATEGORY = "model"
@@ -189,6 +191,8 @@ class SessionManager:
                 f.write(json.dumps({"time": time.time(), "op": "prompt", "text": message}) + "\n")
             self._state_path.unlink(missing_ok=True)
             env = {k: v for k, v in os.environ.items() if not k.startswith(("SORTIE_", "WORKBENCH_"))}
+            # The planning agent runs openspec too: no usage telemetry from it either.
+            env = {**OPENSPEC_ENV, **env}
             src = Path(__file__).resolve().parents[1]
             env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(src), env.get("PYTHONPATH", "")]))
             self._child = subprocess.Popen(
