@@ -225,6 +225,15 @@ Choose **End session** in the chat pane first: stopping the backend leaves the p
 - **A running story has no Watch.** Its broker has not reported its address to Sortie yet, or it runs in a version of `acp-broker` that does not report. Sortie's `GET /api/v1/state` shows `broker: null` for it.
 - **`frozen` in the red panel.** The agent edited or removed a started story. Undo the edit, and amend or supersede instead.
 
+## How the workbench calls OpenSpec
+
+The workbench validates the whole plan at every approval, every edit, and every story start, and that check runs `openspec show <change> --json` to cross-check each change's requirement names against OpenSpec's own reading. Two defaults keep it fast, and both apply to every install, with nothing to configure:
+
+- **OpenSpec's usage telemetry is off.** OpenSpec's CLI sends telemetry on every command and waits for the send before it exits: about 0.2 to 0.4 seconds of each call, and a network request per plan check. planlib sets `OPENSPEC_TELEMETRY=0` and `DO_NOT_TRACK=1` for each OpenSpec call it makes, and the workbench does the same for the planning agent's session. To turn telemetry back on, set either variable to another value in the workbench's environment; an explicit value is kept.
+- **`openspec show` output is cached** in the workbench process, by the bytes of the change's files, the store's `openspec/config.yaml`, and the installed `openspec` executable. An approval changes no file, so it makes no OpenSpec call; an edit re-runs OpenSpec only for the change it touched. A failed call is never cached.
+
+`scripts/check/openspec_timing.sh [store]` measures both on this machine: `openspec show` with telemetry on and off, and `planlib.validate` cold, warm (as at an approval), and after a spec edit. A warm check should take milliseconds; if it does not, a default regressed. `tests/planlib/test_openspec_speed.py` guards both defaults.
+
 ## Check the UI without Huly
 
 `scripts/check/ui.sh planner|approver|local` starts the workbench on `http://127.0.0.1:8799` against a fake Sortie with fake worker brokers (`scripts/check/fake_sortie.py`), with a small seeded plan whose story `billing/b1` runs as `HLAB-1`. `planner` and `approver` sign in through Dex (`scripts/check/dex.yaml`, in a container), as one person with the planner role, or with both roles; `local` uses local mode with the password `check`. Each run starts from a blank state in `~/.cache/plan-workbench-check`, and Ctrl-C stops everything. Drive the worker with `curl -X POST 127.0.0.1:7690/admin/next` (its next run) and `/admin/end` (no more runs). With it running, `scripts/check/roles_api.sh planner|approver` checks, through the API, what that role may and may not do.
