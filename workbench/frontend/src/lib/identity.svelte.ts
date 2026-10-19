@@ -10,7 +10,17 @@ export interface Identity {
   id: string;
 }
 
-export const session = $state<{ identity: Identity | null; mode: "oidc" | "local" }>({ identity: null, mode: "local" });
+/** The license, and where the source of this workbench is, from /api/about. */
+export interface About {
+  license: string;
+  source_url: string;
+}
+
+export const session = $state<{ identity: Identity | null; mode: "oidc" | "local"; about: About | null }>({
+  identity: null,
+  mode: "local",
+  about: null,
+});
 
 /** Whether the signed-in person holds role. */
 export function can(role: Role): boolean {

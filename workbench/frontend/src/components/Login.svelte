@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api, ApiError } from "../lib/api";
-  import { SIGN_IN_ERRORS } from "../lib/identity.svelte";
+  import { SIGN_IN_ERRORS, session } from "../lib/identity.svelte";
 
   let { mode, error: signInError = "", onsignedin }: { mode: "oidc" | "local"; error?: string; onsignedin: () => void } = $props();
   let password = $state("");
@@ -46,10 +46,18 @@
       <p class="note">Local mode: one shared password, for development.</p>
     </form>
   {/if}
+  {#if session.about}
+    <p class="source">
+      Free software under the {session.about.license}.
+      <a href={session.about.source_url} rel="noopener">Get the source code</a>
+    </p>
+  {/if}
 </main>
 
 <style>
-  .login { min-height: 100%; display: grid; place-items: center; padding: var(--s-panel); }
+  .login { min-height: 100%; display: grid; place-items: center; grid-template-rows: 1fr auto; padding: var(--s-panel); }
+  .source { font-size: 12px; text-align: center; }
+  .source a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
   .box { width: min(360px, 100%); display: flex; flex-direction: column; gap: var(--s-md); }
   h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
   p { color: var(--mute); }

@@ -57,6 +57,12 @@ def auth_router(config: Config, sessions: Sessions, oidc: OIDCClient | None, cur
         """Public: how a person signs in here."""
         return {"mode": "oidc" if oidc else "local"}
 
+    @router.get("/about")
+    def about() -> dict:
+        """Public: the license, and where to get the source, which the AGPL
+        requires offering to everyone who uses the workbench."""
+        return {"name": "plan-workbench", "license": "AGPL-3.0-or-later", "source_url": config.source_url}
+
     @router.post("/login")
     def login(body: LoginBody, response: Response) -> dict:
         if oidc is not None:

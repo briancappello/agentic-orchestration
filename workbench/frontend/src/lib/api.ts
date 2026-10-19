@@ -1,5 +1,5 @@
 /** The workbench backend: the browser's only server. */
-import type { Identity } from "./identity.svelte";
+import type { About, Identity } from "./identity.svelte";
 import type { MergedGraph, ProjectSummary, TrackerProject } from "./types";
 
 export class ApiError extends Error {
@@ -26,6 +26,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 export const api = {
   me: () => request<{ signed_in: boolean; mode: "oidc" | "local"; identity: Identity }>("GET", "/api/me"),
   authMode: () => request<{ mode: "oidc" | "local" }>("GET", "/api/auth/mode"),
+  about: () => request<About>("GET", "/api/about"),
   login: (password: string) => request<{ signed_in: boolean }>("POST", "/api/login", { password }),
   logout: () => request<{ signed_in: false; end_session_url: string | null }>("POST", "/api/logout"),
   projects: () => request<{ projects: ProjectSummary[] }>("GET", "/api/projects"),

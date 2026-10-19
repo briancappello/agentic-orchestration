@@ -42,6 +42,7 @@
     }
   }
   start();
+  api.about().then((a) => (session.about = a)).catch(() => {});
 </script>
 
 <svelte:window {onhashchange} />

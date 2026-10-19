@@ -85,7 +85,7 @@ def test_safe_next(path, want):
 # Every route declares a check
 
 
-PUBLIC = {"/api/auth/mode", "/api/login", "/api/auth/login", "/api/auth/callback", "/api/logout"}
+PUBLIC = {"/api/auth/mode", "/api/about", "/api/login", "/api/auth/login", "/api/auth/callback", "/api/logout"}
 
 
 def _depends_on_identity(route: APIRoute) -> bool:

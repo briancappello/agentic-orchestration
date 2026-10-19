@@ -10,6 +10,7 @@ afterEach(() => {
   app = undefined;
   document.body.innerHTML = "";
   session.identity = null;
+  session.about = null;
 });
 
 const settle = async () => { await tick(); flushSync(); };
@@ -55,5 +56,30 @@ describe("user menu", () => {
     expect(can("approver")).toBe(false);
     session.identity = { name: "Bo", email: "", roles: ["planner", "approver"], id: "y" };
     expect(can("approver")).toBe(true);
+  });
+});
+
+describe("source code", () => {
+  const about = { license: "AGPL-3.0-or-later", source_url: "https://git.example.com/workbench" };
+
+  it("is offered before signing in, once the backend says where it is", async () => {
+    app = mount(Login, { target: document.body, props: { mode: "local", onsignedin: () => {} } });
+    await settle();
+    expect(document.querySelector(".source")).toBeNull();
+    session.about = about;
+    await settle();
+    const a = document.querySelector<HTMLAnchorElement>(".source a")!;
+    expect(a.getAttribute("href")).toBe(about.source_url);
+    expect(document.querySelector(".source")?.textContent).toContain("AGPL-3.0-or-later");
+  });
+
+  it("is offered in the user menu", async () => {
+    session.identity = { name: "Ana", email: "", roles: ["planner"], id: "x" };
+    session.about = about;
+    app = mount(UserMenu, { target: document.body });
+    await settle();
+    const a = document.querySelector<HTMLAnchorElement>("a.out")!;
+    expect(a.textContent).toBe("Source");
+    expect(a.getAttribute("href")).toBe(about.source_url);
   });
 });

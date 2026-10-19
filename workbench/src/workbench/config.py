@@ -10,6 +10,17 @@ from pathlib import Path
 
 DEFAULT_AGENT_MODEL = "anthropic/claude-opus-5-5"
 
+SOURCE_URL = "https://github.com/briancappello/agentic-orchestration"
+
+PACKAGE = Path(__file__).resolve().parent
+
+
+def bundled(in_package: str, in_source: str) -> Path:
+    """A file the wheel ships inside the package; from a source checkout,
+    the same file where it lives in the source tree."""
+    path = PACKAGE / in_package
+    return path if path.exists() else PACKAGE.parents[1] / in_source
+
 
 class ConfigError(Exception):
     """The configuration is incomplete or invalid."""
@@ -53,6 +64,9 @@ class Config:
     oidc_approver_group: str = ""
     # Local mode on a non-loopback address, which `workbench serve` refuses otherwise.
     allow_local_mode: bool = False
+    # Where the people who use this workbench can get its source, as the
+    # AGPL requires. Whoever runs a modified workbench points it at theirs.
+    source_url: str = SOURCE_URL
 
     @property
     def oidc(self) -> bool:
@@ -93,9 +107,8 @@ class Config:
         password_hash = env.get("WORKBENCH_PASSWORD_HASH", "").strip()
         if not issuer and not password_hash:
             raise ConfigError("WORKBENCH_PASSWORD_HASH is required without WORKBENCH_OIDC_ISSUER (local mode)")
-        here = Path(__file__).resolve().parents[2]
-        prompt = env.get("WORKBENCH_PROMPT_FILE") or str(here / "prompts" / "planning-session.md")
-        frontend = env.get("WORKBENCH_FRONTEND_DIR") or str(here / "frontend" / "dist")
+        prompt = env.get("WORKBENCH_PROMPT_FILE") or str(bundled("prompts/planning-session.md", "prompts/planning-session.md"))
+        frontend = env.get("WORKBENCH_FRONTEND_DIR") or str(bundled("frontend", "frontend/dist"))
         return cls(
             home=home,
             store=store,
@@ -120,4 +133,5 @@ class Config:
             oidc_planner_group=env.get("WORKBENCH_OIDC_PLANNER_GROUP", "").strip(),
             oidc_approver_group=env.get("WORKBENCH_OIDC_APPROVER_GROUP", "").strip(),
             allow_local_mode=env.get("WORKBENCH_ALLOW_LOCAL_MODE", "") == "1",
+            source_url=env.get("WORKBENCH_SOURCE_URL", "").strip() or SOURCE_URL,
         )
