@@ -1,0 +1,4 @@
+[submodule "sortie"]
+	path = sortie
+	url = https://github.com/briancappello/sortie.git
+	branch = plan-bench
