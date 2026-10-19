@@ -1,0 +1,11 @@
+# Code intelligence index; each checkout builds its own.
+.codegraph/
+
+# Local development state (dev/dev.sh) and binaries it builds.
+/.dev/
+/.bin/
+dev/.env
+
+# Editors
+.idea/
+.vscode/
