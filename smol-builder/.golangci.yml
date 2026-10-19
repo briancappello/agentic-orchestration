@@ -1,0 +1,46 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - copyloopvar
+    - errcheck
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - modernize
+    - noctx
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+  settings:
+    errcheck:
+      exclude-functions:
+        # Diagnostics to stderr have nowhere to report their own failure.
+        - fmt.Fprintf
+        - fmt.Fprintln
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
+          - noctx
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/briancappello/agentic-orchestration/smol-builder
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
