@@ -38,6 +38,22 @@ def sign_in(client: TestClient) -> None:
 
 
 @pytest.fixture
+def open_registry(tmp_path: Path):
+    """Open the registry at tmp_path/wb.db, closing every one opened when the test ends."""
+    from workbench.registry import Registry
+
+    opened: list[Registry] = []
+
+    def open_() -> Registry:
+        opened.append(Registry(tmp_path / "wb.db"))
+        return opened[-1]
+
+    yield open_
+    for reg in opened:
+        reg.close()
+
+
+@pytest.fixture
 def config(store) -> Config:
     store.plan([])
     return make_config(store.root)

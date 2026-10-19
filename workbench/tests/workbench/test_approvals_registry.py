@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from workbench.registry import Registry
 
-
-def test_approve_withdraw_and_cascade(tmp_path):
-    reg = Registry(tmp_path / "wb.db")
+def test_approve_withdraw_and_cascade(open_registry):
+    reg = open_registry()
     with reg.reserve("billing", "Billing", "BIL", "projects/billing") as p:
         pass
     reg.approve(p.id, {"billing/a": "sha256:1", "billing/b": "sha256:2"}, "iss|ana", "Ana")
@@ -22,8 +20,8 @@ def test_approve_withdraw_and_cascade(tmp_path):
     assert reg.approvals(p.id) == {} and reg.rereviews(p.id) == {}
 
 
-def test_worker_commands_are_kept_per_story_and_deleted_with_the_project(tmp_path):
-    reg = Registry(tmp_path / "wb.db")
+def test_worker_commands_are_kept_per_story_and_deleted_with_the_project(open_registry):
+    reg = open_registry()
     with reg.reserve("billing", "Billing", "BIL", "projects/billing") as p:
         pass
     with reg.reserve("other", "Other", "OTH", "projects/other") as q:

@@ -195,13 +195,13 @@ class SessionManager:
             env = {**OPENSPEC_ENV, **env}
             src = Path(__file__).resolve().parents[1]
             env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(src), env.get("PYTHONPATH", "")]))
-            self._child = subprocess.Popen(
-                [sys.executable, "-m", "workbench.session_driver", str(self.runtime_dir)],
-                cwd=self.store, env=env, start_new_session=True,
-                stdin=subprocess.DEVNULL,
-                stdout=open(self.runtime_dir / "driver.log", "ab"),  # noqa: SIM115
-                stderr=subprocess.STDOUT,
-            )
+            # The driver keeps its own copy of the log; ours closes once it has started.
+            with open(self.runtime_dir / "driver.log", "ab") as driver_log:
+                self._child = subprocess.Popen(
+                    [sys.executable, "-m", "workbench.session_driver", str(self.runtime_dir)],
+                    cwd=self.store, env=env, start_new_session=True,
+                    stdin=subprocess.DEVNULL, stdout=driver_log, stderr=subprocess.STDOUT,
+                )
             await self._wait_ready()
             log.info("planning session %s started; runtime directory %s", key, self.runtime_dir)
             return self.status()

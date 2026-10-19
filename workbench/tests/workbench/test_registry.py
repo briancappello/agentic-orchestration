@@ -3,26 +3,28 @@ from __future__ import annotations
 import sqlite3
 import subprocess
 import threading
+from contextlib import closing
 
 import pytest
 
 import planlib
-from workbench.registry import Registry, RegistryError, check_new, suggest_slug
+from workbench.registry import RegistryError, check_new, suggest_slug
 from workbench.scaffold import ScaffoldError, scaffold_store, upgrade_schemas
 
 
-def test_migrates_once_and_reopens(tmp_path):
-    reg = Registry(tmp_path / "wb.db")
+def test_migrates_once_and_reopens(tmp_path, open_registry):
+    reg = open_registry()
     with reg.reserve("billing", "Billing", "BILL", "projects/billing"):
         pass
     reg.close()
-    again = Registry(tmp_path / "wb.db")
+    again = open_registry()
     assert [p.slug for p in again.list()] == ["billing"]
-    assert sqlite3.connect(tmp_path / "wb.db").execute("PRAGMA user_version").fetchone()[0] == 3
+    with closing(sqlite3.connect(tmp_path / "wb.db")) as db:
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
 
 
-def test_slug_tracker_key_and_store_are_unique(tmp_path):
-    reg = Registry(tmp_path / "wb.db")
+def test_slug_tracker_key_and_store_are_unique(open_registry):
+    reg = open_registry()
     with reg.reserve("billing", "Billing", "BILL", "projects/billing"):
         pass
     for args, code in [
@@ -36,8 +38,8 @@ def test_slug_tracker_key_and_store_are_unique(tmp_path):
         assert err.value.code == code and err.value.status == 409
 
 
-def test_a_failed_block_rolls_the_insert_back(tmp_path):
-    reg = Registry(tmp_path / "wb.db")
+def test_a_failed_block_rolls_the_insert_back(open_registry):
+    reg = open_registry()
     with pytest.raises(RuntimeError):
         with reg.reserve("billing", "Billing", "BILL", "projects/billing"):
             raise RuntimeError("tracker down")
@@ -47,8 +49,8 @@ def test_a_failed_block_rolls_the_insert_back(tmp_path):
     assert reg.get("billing").name == "Billing"
 
 
-def test_a_concurrent_create_of_the_same_slug_waits_then_fails(tmp_path):
-    reg = Registry(tmp_path / "wb.db")
+def test_a_concurrent_create_of_the_same_slug_waits_then_fails(open_registry):
+    reg = open_registry()
     inside, release, results = threading.Event(), threading.Event(), []
 
     def first():
@@ -78,16 +80,16 @@ def test_a_concurrent_create_of_the_same_slug_waits_then_fails(tmp_path):
     assert results == ["first", "slug_taken"]
 
 
-def test_the_database_refuses_a_bad_slug(tmp_path):
-    reg = Registry(tmp_path / "wb.db")
+def test_the_database_refuses_a_bad_slug(open_registry):
+    reg = open_registry()
     with pytest.raises(RegistryError) as err:
         with reg.reserve("Bad Slug", "x", "X", "projects/x"):
             pass
     assert "CHECK constraint" in err.value.message and reg.list() == []
 
 
-def test_rename_changes_only_the_name(tmp_path):
-    reg = Registry(tmp_path / "wb.db")
+def test_rename_changes_only_the_name(open_registry):
+    reg = open_registry()
     with reg.reserve("billing", "Billing", "BILL", "projects/billing"):
         pass
     p = reg.rename("billing", "  Billing   v2 ")

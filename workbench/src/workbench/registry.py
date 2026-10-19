@@ -90,10 +90,28 @@ class Registry:
     def __init__(self, path: Path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
-        self._db = self._connect()
-        self._db.execute("PRAGMA journal_mode=WAL")
-        self._migrate()
+        # Re-entrant: the first use opens and migrates the database under it.
+        self._lock = threading.RLock()
+        self._conn: sqlite3.Connection | None = None
+
+    def __enter__(self) -> "Registry":
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self.close()
+
+    @property
+    def _db(self) -> sqlite3.Connection:
+        """The connection, opened and migrated on first use, so a registry
+        that is built but never used, such as an app that never starts,
+        holds no database open."""
+        with self._lock:
+            if self._conn is None:
+                conn = self._connect()
+                conn.execute("PRAGMA journal_mode=WAL")
+                self._conn = conn
+                self._migrate()
+            return self._conn
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=60, check_same_thread=False, isolation_level=None)
@@ -119,7 +137,9 @@ class Registry:
 
     def close(self) -> None:
         with self._lock:
-            self._db.close()
+            if self._conn is not None:
+                self._conn.close()
+                self._conn = None
 
     def list(self) -> list[Project]:
         with self._lock:
@@ -223,6 +243,7 @@ class Registry:
         the block finishes; an exception rolls the insert back. The row holds
         the slug, the tracker key and the store path from the moment it is
         inserted, so a concurrent create of the same values waits, then fails."""
+        self._db  # migrate first: the insert runs on its own connection
         db = self._connect()
         try:
             db.execute("BEGIN IMMEDIATE")

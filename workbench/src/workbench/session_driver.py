@@ -149,11 +149,12 @@ class Driver:
             "-handback-grace", "24h",
             "--", *self.spec["agent_command"],
         ]
-        self.proc = await asyncio.create_subprocess_exec(
-            *argv, cwd=self.spec["store"],
-            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-            stderr=open(self.runtime / f"{self.key}.stderr", "wb"),  # noqa: SIM115
-        )
+        # The broker keeps its own copy of the stderr file; ours closes once it has started.
+        with open(self.runtime / f"{self.key}.stderr", "wb") as stderr:
+            self.proc = await asyncio.create_subprocess_exec(
+                *argv, cwd=self.spec["store"],
+                stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=stderr,
+            )
         self.save(broker_pid=self.proc.pid, token_file=str(token_file))
 
         deadline = time.monotonic() + REGISTRY_TIMEOUT
