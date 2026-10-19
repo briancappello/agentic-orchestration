@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -47,12 +48,17 @@ def project(app, slug: str = SLUG):
     return app.state.projects.runtimes[slug]
 
 
-def polled(app, slug: str = SLUG, timeout: float = 3.0) -> None:
-    """Wait for the project's first Sortie poll. The app starts polling in the
-    background, so a test that reads tracker state right after startup must wait."""
-    import time
+def settle(client: TestClient, slug: str = SLUG) -> None:
+    """Bring the project up to date now: read the store, then poll Sortie once.
 
-    deadline = time.monotonic() + timeout
-    while project(app, slug).hub.tracker is None and time.monotonic() < deadline:
-        time.sleep(0.02)
-    assert project(app, slug).hub.tracker is not None, "no Sortie poll yet"
+    The app's file watcher and poll loop also do this, in the background and
+    at their own pace. Tests that are not about those loops call this
+    instead of waiting for them, so their outcome never depends on timing.
+    It runs on the app's event loop, as the poll loop does."""
+    rt = project(client.app, slug)
+
+    async def run() -> None:
+        await asyncio.to_thread(rt.plan.refresh)
+        await rt.hub.poll_once()
+
+    client.portal.call(run)

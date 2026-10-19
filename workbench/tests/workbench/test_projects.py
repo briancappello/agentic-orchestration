@@ -6,9 +6,9 @@ from fastapi.testclient import TestClient
 
 from workbench.app import create_app
 from tests.conftest import breakdown, deliverable
-from tests.workbench.conftest import P, make_config, project, sign_in
+from tests.workbench.conftest import P, make_config, project, settle, sign_in
 from tests.workbench.fake_sortie import FakeSortie
-from tests.workbench.test_watch import validate_offline, wait_for
+from tests.workbench.test_watch import validate_offline
 
 
 def make(store, fake=None, **config):
@@ -121,7 +121,8 @@ def test_two_projects_plan_and_sync_apart(store):
         change.mkdir()
         (change / "proposal.md").write_text("## Why\n\nwelcome\n")
         (change / "breakdown.yaml").write_text(yaml.safe_dump(breakdown(deliverable("greet"))))
-        assert wait_for(lambda: other.plan.graph and len(other.plan.graph["nodes"]) == 2, timeout=5)
+        settle(client, "onboarding")
+        settle(client)
 
         keys = lambda slug: {n["plan_key"] for n in client.get(f"/api/projects/{slug}/graph").json()["nodes"]}  # noqa: E731
         assert keys("onboarding") == {"welcome", "welcome/greet"}
@@ -139,9 +140,11 @@ def test_two_projects_plan_and_sync_apart(store):
         r = client.post(f"{P}/sync/apply", json={"preview_id": preview["preview_id"], "confirm": True})
         assert r.status_code == 409
 
-        assert wait_for(lambda: project(app, "onboarding").hub.doc["sortie"]["reachable"])
+        settle(client, "onboarding")
+        settle(client)
+        assert project(app, "onboarding").hub.doc["sortie"]["reachable"] is True
         assert project(app, "onboarding").hub.doc["sortie"]["dispatched"] is False
-        assert wait_for(lambda: project(app).hub.doc["sortie"]["reachable"])
+        assert project(app).hub.doc["sortie"]["reachable"] is True
         assert project(app).hub.doc["sortie"]["dispatched"] is True
 
 

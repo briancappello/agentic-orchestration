@@ -8,11 +8,11 @@ import yaml
 from fastapi.testclient import TestClient
 
 from tests.conftest import breakdown, deliverable
-from tests.workbench.conftest import P, make_config, polled, project, sign_in
+from tests.workbench.conftest import P, make_config, project, settle, sign_in
 from tests.workbench.fake_oidc import CLIENT_ID, CLIENT_SECRET, ISSUER, REDIRECT, FakeProvider
 from tests.workbench.fake_sortie import FakeSortie
 from tests.workbench.test_identity import sign_in_oidc
-from tests.workbench.test_watch import validate_offline, wait_for
+from tests.workbench.test_watch import validate_offline
 from workbench.app import create_app
 from workbench.oidc import OIDCClient
 
@@ -69,9 +69,11 @@ def test_frozen_story_edit_is_refused(store):
         sign_in(client)
         client.post(f"{P}/approve", json={"epic": "billing"})
         project(app).hub.frozen = {}
-        assert wait_for(lambda: status(app, "billing/b2")["plan_status"] == "frozen", timeout=3)
+        settle(client)
+        assert status(app, "billing/b2")["plan_status"] == "frozen"
         store.change("billing", breakdown(deliverable("b1", ["accounts/a3"]), deliverable("b2", title="Changed")))
-        assert wait_for(lambda: any(e["code"] == "frozen" for e in project(app).plan.errors), timeout=3)
+        settle(client)
+        assert any(e["code"] == "frozen" for e in project(app).plan.errors)
 
 
 def test_an_edit_to_a_released_story_pulls_it_back(store):
@@ -82,12 +84,15 @@ def test_an_edit_to_a_released_story_pulls_it_back(store):
     app = app_for(store, fake)
     with TestClient(app) as client:
         sign_in(client)
-        polled(app)
+        settle(client)
         client.post(f"{P}/approve", json={"epic": "billing"})
         assert status(app, "billing/b2")["plan_status"] == "released"
         store.change("billing", breakdown(deliverable("b1", ["accounts/a3"]), deliverable("b2", title="Edited")))
-        assert wait_for(lambda: fake.pulled_back == ["billing/b2"], timeout=3)
-        assert wait_for(lambda: status(app, "billing/b2")["plan_status"] == "draft", timeout=3)
+        settle(client)
+        assert fake.pulled_back == ["billing/b2"]
+        # The next poll sees the story back in the backlog.
+        settle(client)
+        assert status(app, "billing/b2")["plan_status"] == "draft"
 
 
 def test_cancel_sends_dependents_to_rereview(store):
@@ -119,7 +124,8 @@ def test_supersede_cancels_the_replaced_story_and_keeps_dependents(store):
         sign_in(client)
         client.post(f"{P}/approve", json={"epic": "billing"})
         store.change("billing", breakdown(deliverable("a3"), deliverable("a3b", supersedes="a3"), deliverable("b1", ["a3"])))
-        assert wait_for(lambda: "billing/a3b" in project(app).plan.stories, timeout=3)
+        settle(client)
+        assert "billing/a3b" in project(app).plan.stories
         assert client.post(f"{P}/stories/supersede", json={"key": "billing/a3b"}).json()["error"]["code"] == "replacement_draft"
         client.post(f"{P}/approve", json={"keys": ["billing/a3b"]})
         fake.issue("billing/a3")
@@ -151,7 +157,7 @@ def test_unverified_claim_needs_rereview(store):
     app = app_for(store, fake)
     with TestClient(app) as client:
         sign_in(client)
-        polled(app)
+        settle(client)
         assert status(app, "billing/b2")["rereview"] == {"reason": "unverified_no_change", "ref": "no_mirror"}
 
 

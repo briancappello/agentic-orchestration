@@ -9,10 +9,10 @@ from fastapi.testclient import TestClient
 from workbench.app import create_app
 from workbench.merge import merge
 from tests.conftest import breakdown, deliverable
-from tests.workbench.conftest import P, PASSWORD, make_config, project, sign_in
+from tests.workbench.conftest import P, PASSWORD, make_config, project, settle, sign_in
 from tests.workbench.live import live_server
 from tests.workbench.fake_sortie import FakeSortie
-from tests.workbench.test_watch import validate_offline, wait_for
+from tests.workbench.test_watch import validate_offline
 
 
 def by_key(doc):
@@ -35,8 +35,9 @@ def test_draft_beside_synced_and_orphan(store):
     app = create_app(make_config(store.root), validate=validate_offline, sortie=fake.client())
     with TestClient(app) as client:
         sign_in(client)
-        assert wait_for(lambda: project(app).hub.doc.get("sortie", {}).get("reachable"))
+        settle(client)
         doc = client.get(f"{P}/graph").json()
+        assert doc["sortie"]["reachable"] is True
 
     nodes = by_key(doc)
     assert nodes["billing/invoice"]["status"] == "synced"
@@ -58,7 +59,7 @@ def test_sortie_down_keeps_drafts(store):
     app = create_app(make_config(store.root), validate=validate_offline, sortie=fake.client())
     with TestClient(app) as client:
         sign_in(client)
-        assert wait_for(lambda: project(app).hub.doc.get("sortie", {}).get("error"))
+        settle(client)
         doc = client.get(f"{P}/graph").json()
     assert doc["sortie"]["reachable"] is False and "tracker down" in doc["sortie"]["error"]
     assert {n["status"] for n in doc["nodes"]} == {"draft"}
@@ -68,12 +69,14 @@ def test_polls_runtime_state(store):
     billing_store(store)
     fake = FakeSortie()
     fake.issue("billing", kind="epic")
-    app = create_app(make_config(store.root, poll_seconds=0.1), validate=validate_offline, sortie=fake.client())
+    app = create_app(make_config(store.root), validate=validate_offline, sortie=fake.client())
     with TestClient(app) as client:
         sign_in(client)
-        assert wait_for(lambda: by_key(project(app).hub.doc).get("billing", {}).get("status") == "synced")
+        settle(client)
+        assert by_key(project(app).hub.doc)["billing"]["status"] == "synced"
         fake.nodes[0]["runtime"] = {"status": "retrying", "attempt": 2}
-        assert wait_for(lambda: (by_key(project(app).hub.doc)["billing"]["runtime"] or {}).get("status") == "retrying")
+        settle(client)
+        assert by_key(project(app).hub.doc)["billing"]["runtime"]["status"] == "retrying"
 
 
 def test_events_stream_starts_with_the_graph(store):

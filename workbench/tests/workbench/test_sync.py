@@ -5,9 +5,9 @@ from fastapi.testclient import TestClient
 
 from workbench.app import create_app
 from tests.conftest import breakdown, deliverable
-from tests.workbench.conftest import P, make_config, project, sign_in
+from tests.workbench.conftest import P, make_config, project, settle, sign_in
 from tests.workbench.fake_sortie import FakeSortie
-from tests.workbench.test_watch import validate_offline, wait_for
+from tests.workbench.test_watch import validate_offline
 
 
 def setup(store, fake):
@@ -82,7 +82,8 @@ def test_approve_the_epic_then_edit_one_story(store):
         doc = planlib.load_store(store.root).breakdowns["billing"].doc
         doc["deliverables"].append(deliverable("vat"))
         store.change("billing", doc)
-        assert wait_for(lambda: approval().get("billing/vat") == "draft")
+        settle(client)
+        assert approval().get("billing/vat") == "draft"
         assert approval()["billing/invoice"] == "approved"
 
         assert client.post(f"{P}/approve", json={"keys": ["billing/nope"]}).status_code == 404
