@@ -20,7 +20,10 @@ planlib = "planlib.cli:main"
 workbench = "workbench.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = [
+    "httpx2>=2.14.0",
+    "pytest>=8",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -31,3 +34,5 @@ packages = ["src/planlib", "src/workbench"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# A warning fails the suite, so green means no warnings.
+filterwarnings = ["error"]
