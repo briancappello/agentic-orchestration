@@ -89,6 +89,7 @@ environment:
 | `-viewer-token-file PATH` | none | File holding the viewer token. Keep it at mode `0600`. |
 | `-public-url URL` | none | Address people use to reach the HTTP listener. Escalations link to it; an `https` URL makes the session cookie `Secure`. |
 | `-cookie-ttl D` | `12h` | Lifetime of a browser session cookie. |
+| `-source-url URL` | this repository | Where people can get the broker's source, served on `GET /source`. The broker is AGPL-3.0-or-later: if you run a modified broker for others, set this to your source. |
 | `-escalate-after D` | `30s` | How long a permission request or question waits for a viewer before Sortie is asked to call someone. With no viewer attached, the broker asks at once. |
 | `-permission-timeout D` | `10m` | How long a request waits for any answer before the driver decides. `0` waits without a bound. Under Sortie, the driver refuses every request. |
 | `-handback-grace D` | `60s` | How long people keep the session after the last viewer leaves. |
@@ -145,6 +146,7 @@ A refused command returns an `error` event naming the reason and changes nothing
 | `GET /state` | The current state. |
 | `POST /login` | With the bearer token: answers `204` and sets an `HttpOnly`, `SameSite=Strict` session cookie, so a browser's `EventSource` needs no header. Cookies live in memory and end when the broker exits. |
 | `POST /logout` | Ends the cookie's session. |
+| `GET /source` | Without a token: the broker's license and where to get its source, from `-source-url`. |
 
 ```sh
 curl -N -H "Authorization: Bearer $(cat viewer-token)" http://127.0.0.1:7700/events

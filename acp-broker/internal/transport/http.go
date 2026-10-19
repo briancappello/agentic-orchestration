@@ -47,11 +47,27 @@ type HTTPConfig struct {
 	// DefaultWriteTimeout.
 	WriteTimeout time.Duration
 
+	// SourceURL is where the people who use this broker can get its
+	// source, as the AGPL requires. Empty selects DefaultSourceURL.
+	SourceURL string
+
 	Logger *slog.Logger
 }
 
+// DefaultSourceURL is where the source of this broker is published.
+// Whoever runs a modified broker points SourceURL at theirs.
+const DefaultSourceURL = "https://github.com/briancappello/agentic-orchestration"
+
+// About is the answer to GET /source.
+type About struct {
+	Name      string `json:"name"`
+	License   string `json:"license"`
+	SourceURL string `json:"source_url"`
+}
+
 // HTTP serves the viewer protocol over HTTP: Server-Sent Events on
-// GET /events, one command per POST /commands, and GET /state.
+// GET /events, one command per POST /commands, and GET /state. GET /source
+// says, without a token, where to get the broker's source.
 type HTTP struct {
 	b        *broker.Broker
 	cfg      HTTPConfig
@@ -75,6 +91,9 @@ func NewHTTP(b *broker.Broker, cfg HTTPConfig) (*HTTP, error) {
 	if cfg.CookieTTL <= 0 {
 		cfg.CookieTTL = DefaultCookieTTL
 	}
+	if cfg.SourceURL == "" {
+		cfg.SourceURL = DefaultSourceURL
+	}
 	log := cfg.Logger
 	if log == nil {
 		log = slog.Default()
@@ -85,7 +104,12 @@ func NewHTTP(b *broker.Broker, cfg HTTPConfig) (*HTTP, error) {
 	h.mux.HandleFunc("GET /state", h.authed(h.state))
 	h.mux.HandleFunc("POST /login", h.login)
 	h.mux.HandleFunc("POST /logout", h.logout)
+	h.mux.HandleFunc("GET /source", h.source)
 	return h, nil
+}
+
+func (h *HTTP) source(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, About{Name: "acp-broker", License: "AGPL-3.0-or-later", SourceURL: h.cfg.SourceURL})
 }
 
 // Handler returns the transport's request handler.

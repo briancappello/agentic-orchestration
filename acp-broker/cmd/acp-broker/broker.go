@@ -38,6 +38,7 @@ type brokerFlags struct {
 	key, socket, logPath, registryDir    string
 	escalateAfter, permTimeout, handback time.Duration
 	httpAddr, tokenFile, publicURL       string
+	sourceURL                            string
 	cookieTTL                            time.Duration
 	replayEvents, replayBytes            int
 
@@ -60,6 +61,7 @@ func parseBrokerFlags(args []string) (brokerFlags, []string, error) {
 	fs.StringVar(&f.tokenFile, "viewer-token-file", "", "file holding the viewer token the HTTP listener requires")
 	fs.StringVar(&f.publicURL, "public-url", "", "URL people use to reach the HTTP listener; links escalations and makes the session cookie Secure when it is https")
 	fs.DurationVar(&f.cookieTTL, "cookie-ttl", transport.DefaultCookieTTL, "lifetime of a browser session cookie")
+	fs.StringVar(&f.sourceURL, "source-url", transport.DefaultSourceURL, "where people can get the source of this broker, served on GET /source; set it to yours if you run a modified broker")
 	fs.IntVar(&f.replayEvents, "replay-events", broker.DefaultReplayEvents, "events kept for viewers that attach late")
 	fs.IntVar(&f.replayBytes, "replay-bytes", broker.DefaultReplayBytes, "bytes of events kept for viewers that attach late")
 	fs.StringVar(&f.otlpEndpoint, "otlp-endpoint", "", "OTLP/HTTP endpoint, such as http://127.0.0.1:4318, to export each turn as a trace to (default: no telemetry)")
@@ -209,7 +211,7 @@ func runBroker(args []string) int {
 		go func() { _ = transport.ServeUnix(ln, b) }()
 		if f.httpAddr != "" {
 			srv, err := serveHTTP(ctx, b, f.httpAddr, transport.HTTPConfig{
-				Token: viewerToken, PublicURL: f.publicURL, CookieTTL: f.cookieTTL, Logger: logger,
+				Token: viewerToken, PublicURL: f.publicURL, CookieTTL: f.cookieTTL, SourceURL: f.sourceURL, Logger: logger,
 			})
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "acp-broker:", err)

@@ -190,6 +190,28 @@ func TestHTTP_Authentication(t *testing.T) {
 	}
 }
 
+func TestHTTP_AnyoneCanFindTheSource(t *testing.T) {
+	t.Parallel()
+
+	s := runSession(t, broker.Config{}, true)
+	for _, tt := range []struct{ name, configured, want string }{
+		{"default", "", transport.DefaultSourceURL},
+		{"a modified broker's own", "https://git.example.com/our/broker", "https://git.example.com/our/broker"},
+	} {
+		ts := httpServer(t, s.b, transport.HTTPConfig{SourceURL: tt.configured})
+		resp := request(t, http.MethodGet, ts.URL+"/source", nil, "")
+		var got transport.About
+		err := json.NewDecoder(resp.Body).Decode(&got)
+		_ = resp.Body.Close()
+		if err != nil || resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s: GET /source without a token = %d, %v", tt.name, resp.StatusCode, err)
+		}
+		if want := (transport.About{Name: "acp-broker", License: "AGPL-3.0-or-later", SourceURL: tt.want}); got != want {
+			t.Errorf("%s: GET /source = %+v, want %+v", tt.name, got, want)
+		}
+	}
+}
+
 func TestHTTP_CommandsAnswerWithTheirResult(t *testing.T) {
 	t.Parallel()
 
