@@ -1,0 +1,235 @@
+"""Each registered project at run time: its plan, its merged graph, its session, its syncs."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import shutil
+from pathlib import Path
+from typing import Any, Callable
+
+from fastapi import HTTPException
+
+from .config import Config
+from .hub import Hub
+from .plan_state import PlanState, watch
+from .registry import Project, Registry, RegistryError, check_new, suggest_slug
+from .scaffold import ScaffoldError, scaffold_store, upgrade_schemas
+from .sessions import SessionManager, runtime_base
+from .sortie import SortieClient, SortieError
+from .workers import WorkerRelay
+
+log = logging.getLogger(__name__)
+
+# Builds a project's session manager: (project, store, runtime directory).
+SessionFactory = Callable[[Project, Path, Path], SessionManager]
+
+
+class ProjectRuntime:
+    """One project's live state. Started when the project opens, stopped when
+    it closes; its planning session runs apart and survives both."""
+
+    def __init__(self, project: Project, store: Path, config: Config, sortie: SortieClient,
+                 sessions: SessionManager, validate=None, registry: Registry | None = None, broker_transport=None):
+        self.project = project
+        self.store = store
+        self.config = config
+        self.registry = registry
+        self.plan = PlanState(store, inputs=self.plan_inputs, **({"validate": validate} if validate else {}))
+        self.hub = Hub(self.plan, sortie.bind(project.huly_project), records=self.records)
+        self.sessions = sessions
+        # The brokers of the workers Sortie runs for this project's stories.
+        self.workers = WorkerRelay(sortie.bind(project.huly_project), transport=broker_transport)
+        # Sync previews waiting for confirmation, by preview id.
+        self.pending: dict[str, dict[str, Any]] = {}
+        self._stop = asyncio.Event()
+        self._tasks: list[asyncio.Task] = []
+
+    @property
+    def slug(self) -> str:
+        return self.project.slug
+
+    def records(self) -> tuple[dict[str, dict], dict[str, dict]]:
+        if self.registry is None:
+            return {}, {}
+        return self.registry.approvals(self.project.id), self.registry.rereviews(self.project.id)
+
+    def plan_inputs(self) -> tuple[dict[str, str], dict[str, str]]:
+        """What the validator needs: approved digests and the frozen set."""
+        approvals, _ = self.records()
+        return {k: r["digest"] for k, r in approvals.items()}, dict(self.hub.frozen)
+
+    def import_legacy_approvals(self) -> list[str]:
+        """Import approvals made in breakdown files under the old format, once:
+        each still-valid approved breakdown becomes batch 0 of its epic."""
+        if self.registry is None or not (self.store / "openspec").is_dir():
+            return []
+        import planlib
+
+        try:
+            store = planlib.load_store(self.store)
+        except planlib.PlanLoadError:
+            return []
+        approvals = self.registry.approvals(self.project.id)
+        imported = []
+        for change, bd in sorted(store.breakdowns.items()):
+            keys = {f"{change}/{d['id']}": planlib.story_digest(d) for d in bd.doc["deliverables"]}
+            if planlib.legacy_approved(bd.doc) and not any(k in approvals for k in keys):
+                self.registry.approve(self.project.id, keys, f"migration|{change}", "Imported approval")
+                imported.append(change)
+                log.info("project %s: imported the approval of %s from its breakdown", self.slug, change)
+        return imported
+
+    def upgrade_schemas(self) -> None:
+        try:
+            changed = upgrade_schemas(self.store)
+        except (OSError, ScaffoldError) as exc:
+            log.warning("project %s: could not update its planning schemas: %s", self.slug, exc)
+            return
+        if changed:
+            log.info("project %s: updated its planning schemas: %s", self.slug, ", ".join(changed))
+
+    async def start(self) -> None:
+        self.hub.bind(asyncio.get_running_loop())
+        await asyncio.to_thread(self.upgrade_schemas)
+        await asyncio.to_thread(self.import_legacy_approvals)
+        await asyncio.to_thread(self.plan.refresh)
+        if (self.store / "openspec").is_dir():
+            self._tasks.append(asyncio.create_task(watch(self.plan, self.config.debounce_ms, self._stop)))
+        else:
+            log.warning("project %s: store %s has no openspec/ directory; not watching it", self.slug, self.store)
+        self._tasks.append(asyncio.create_task(self.hub.poll_loop(self.config.poll_seconds, self._stop)))
+
+    async def stop(self) -> None:
+        self._stop.set()
+        for t in self._tasks:
+            t.cancel()
+        await asyncio.gather(*self._tasks, return_exceptions=True)
+        self._tasks.clear()
+        await self.sessions.aclose()
+        await self.workers.aclose()
+
+    def summary(self) -> dict[str, Any]:
+        doc = self.hub.doc or {}
+        nodes = doc.get("nodes") or []
+        snap = self.plan.snapshot()
+        sortie = doc.get("sortie") or {}
+        return {
+            **self.project.to_dict(),
+            "store_path": str(self.store),
+            "valid": snap["valid"],
+            "errors": len(snap["errors"]),
+            "epics": sum(1 for n in nodes if n.get("kind") == "epic"),
+            "stories": sum(1 for n in nodes if n.get("kind") == "story"),
+            "session_active": bool(self.sessions.status().get("active")),
+            "sortie": {"reachable": bool(sortie.get("reachable")), "dispatched": bool(sortie.get("dispatched"))},
+        }
+
+
+class ProjectManager:
+    """The registry plus a runtime for every registered project."""
+
+    def __init__(self, config: Config, registry: Registry, sortie: SortieClient,
+                 session_factory: SessionFactory | None = None, validate=None, broker_transport=None):
+        self.config = config
+        self.broker_transport = broker_transport
+        self.registry = registry
+        self.sortie = sortie
+        self.validate = validate
+        self.session_factory = session_factory or self._default_sessions
+        self.runtimes: dict[str, ProjectRuntime] = {}
+        self._lock = asyncio.Lock()
+
+    def _default_sessions(self, project: Project, store: Path, runtime_dir: Path) -> SessionManager:
+        c = self.config
+        return SessionManager(store, c.broker_command, c.agent_command, c.prompt_file,
+                              runtime_dir=runtime_dir, agent_model=c.agent_model)
+
+    def runtime_dir(self, project: Project) -> Path:
+        return (self.config.runtime_dir or runtime_base()) / project.slug
+
+    def get(self, slug: str) -> ProjectRuntime:
+        rt = self.runtimes.get(slug)
+        if rt is None:
+            raise HTTPException(status_code=404, detail={"code": "project_not_found", "message": f"no project {slug}"})
+        return rt
+
+    async def start(self) -> None:
+        if self.config.store is not None:
+            self.import_store(self.config.store, self.config.huly_project)
+        for project in self.registry.list():
+            await self._open(project)
+
+    def import_store(self, store: Path, huly_project: str) -> None:
+        """Register an existing store as a project, once."""
+        if self.registry.by_store(str(store)) is not None:
+            return
+        name = store.name
+        try:
+            slug, name, key = check_new(suggest_slug(name) or "project", name, huly_project)
+            with self.registry.reserve(slug, name, key, str(store)):
+                pass
+        except RegistryError as exc:
+            log.error("could not register WORKBENCH_STORE %s as a project: %s", store, exc.message)
+            return
+        log.info("registered %s as project %s, syncing into %s", store, slug, key)
+
+    async def _open(self, project: Project) -> ProjectRuntime:
+        store = project.store(self.config.home)
+        sessions = self.session_factory(project, store, self.runtime_dir(project))
+        rt = ProjectRuntime(project, store, self.config, self.sortie, sessions, self.validate, self.registry,
+                            broker_transport=self.broker_transport)
+        self.runtimes[project.slug] = rt
+        await rt.start()
+        return rt
+
+    async def stop(self) -> None:
+        for rt in list(self.runtimes.values()):
+            await rt.stop()
+        self.runtimes.clear()
+
+    async def create(self, slug: str, name: str, huly_project: str) -> tuple[ProjectRuntime, dict[str, Any]]:
+        """Reserve the project, make sure its tracker project exists, create
+        its store, and only then commit it. Any failure leaves no row and no
+        store; a tracker project that was created stays, and is reused by a
+        retry."""
+        slug, name, huly_project = check_new(slug, name, huly_project)
+        rel = Path("projects") / slug
+        store = self.config.home / rel
+        if store.exists():
+            raise RegistryError(409, "store_exists", f"{store} already exists; choose another slug", "slug")
+        async with self._lock:
+            with self.registry.reserve(slug, name, huly_project, str(rel)) as project:
+                try:
+                    tracker = await self.sortie.ensure_project(huly_project, name)
+                except SortieError as exc:
+                    raise RegistryError(502 if exc.status in (0, 502, 503) else 422, "tracker_" + exc.code,
+                                        f"Huly project {huly_project}: {exc.message}", "huly_project") from exc
+                try:
+                    await asyncio.to_thread(scaffold_store, store, name)
+                except ScaffoldError as exc:
+                    raise RegistryError(500, "store_failed", str(exc)) from exc
+            try:
+                rt = await self._open(self.registry.get(slug) or project)
+            except BaseException:
+                log.exception("project %s was created but could not be opened", slug)
+                raise
+        return rt, tracker
+
+    async def delete(self, slug: str) -> dict[str, Any]:
+        """End the project's session and forget the project. Its store and its
+        tracker project are kept."""
+        rt = self.get(slug)
+        async with self._lock:
+            await rt.sessions.stop()
+            await rt.stop()
+            self.runtimes.pop(slug, None)
+            self.registry.delete(slug)
+            shutil.rmtree(self.runtime_dir(rt.project), ignore_errors=True)
+        return {"deleted": slug, "store_path": str(rt.store), "huly_project": rt.project.huly_project}
+
+    def rename(self, slug: str, name: str) -> ProjectRuntime:
+        rt = self.get(slug)
+        rt.project = self.registry.rename(slug, name)
+        return rt
+

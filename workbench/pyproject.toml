@@ -1,0 +1,38 @@
+[project]
+name = "plan-workbench"
+version = "0.1.0"
+description = "Plan validator (planlib) and the plan workbench backend"
+requires-python = ">=3.12"
+dependencies = [
+    "pyyaml>=6",
+    "jsonschema>=4.22",
+    "networkx>=3.3",
+    "fastapi>=0.143.0",
+    "uvicorn>=0.54.0",
+    "httpx>=0.28.1",
+    "watchfiles>=1.3.0",
+    "itsdangerous>=2.2.0",
+    "joserfc>=1.0",
+]
+
+[project.scripts]
+planlib = "planlib.cli:main"
+workbench = "workbench.cli:main"
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.14.0",
+    "pytest>=8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/planlib", "src/workbench"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# A warning fails the suite, so green means no warnings.
+filterwarnings = ["error"]

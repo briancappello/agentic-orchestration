@@ -1,0 +1,74 @@
+/* Design tokens ported from the prototype's DESIGN.md ("The Conductor's Score"). */
+
+/* Self-hosted faces (SIL OFL 1.1); see public/fonts/README.md. */
+@font-face { font-family: "Instrument Sans"; src: url("/fonts/instrument-sans.woff2") format("woff2"); font-weight: 400 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Bodoni Moda"; src: url("/fonts/bodoni-moda-bold.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Bodoni Moda"; src: url("/fonts/bodoni-moda-italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("/fonts/jetbrains-mono-medium.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+:root {
+  --ink: #1d1d1f;
+  --ink-rule: #14161a;
+  --ink-raised: #2a2a2d;
+  --ink-edge: #3a3a3d;
+  --ink-mute: #a1a1a6;
+  --paper: #fbfbf8;
+  --strip: #f4f4f2;
+  --panel: #ffffff;
+  --line: #dcdcd7;
+  --hair: #e6e6e0;
+  --mute: #5d626b;
+  --done: #2f6f4e;
+  --done-tint: #eef4f0;
+  --amber: #c98a1a;
+  --amber-ink: #8a5a06;
+  --amber-tint: #fbf4e5;
+  --slate: #8a8f98;
+  --slate-ink: #6b7079;
+  --slate-tint: #f1f2f3;
+  --alert: #c4382f;
+
+  --font-sans: "Instrument Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-serif: "Bodoni Moda", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+
+  --r-swatch: 2px;
+  --r-tag: 3px;
+  --r-tab: 5px;
+  --r-card: 6px;
+  --r-button: 8px;
+  --r-well: 10px;
+  --r-pill: 999px;
+
+  --s-xs: 4px;
+  --s-sm: 8px;
+  --s-md: 12px;
+  --s-card-x: 14px;
+  --s-gutter: 20px;
+  --s-section: 22px;
+  --s-panel: 24px;
+  --s-row-gap: 44px;
+  --s-measure: 300px;
+
+  --card-w: 232px;
+  --card-h: 112px;
+
+  --shadow-lift: 0 8px 20px -12px rgba(20, 22, 26, 0.4);
+  --shadow-halo: 0 0 0 4px rgba(201, 138, 26, 0.18), 0 10px 24px -12px rgba(20, 22, 26, 0.4);
+  --shadow-pulse: 0 0 0 3px rgba(201, 138, 26, 0.25);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #app { height: 100%; }
+body {
+  background: var(--paper); color: var(--ink);
+  font: 13px/1.45 var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: #f3dfb4; color: var(--ink); }
+button, input, textarea { font: inherit; color: inherit; }
+button { background: none; border: 0; cursor: pointer; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}

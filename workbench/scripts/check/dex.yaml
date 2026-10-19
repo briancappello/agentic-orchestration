@@ -1,0 +1,20 @@
+# Dex for checking the workbench's OIDC sign-in and roles (scripts/check/ui.sh).
+# The mock connector signs in one fixed person, Kilgore Trout, with the
+# group "authors". ui.sh decides which role that group maps to.
+issuer: http://127.0.0.1:5556/dex
+storage:
+  type: memory
+web:
+  http: 0.0.0.0:5556
+oauth2:
+  skipApprovalScreen: true
+connectors:
+- type: mockCallback
+  id: mock
+  name: Example
+staticClients:
+- id: workbench
+  name: Plan workbench
+  secret: dex-client-secret-0123
+  redirectURIs:
+  - http://127.0.0.1:8799/api/auth/callback

@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenSpec change breakdown",
+  "description": "The deliverables of one OpenSpec change and the dependencies among them. Lives at openspec/changes/<change>/breakdown.yaml.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "deliverables"],
+  "properties": {
+    "schema_version": {
+      "description": "Version of this format. Readers refuse versions they do not support.",
+      "const": 1
+    },
+    "status": {
+      "description": "Deprecated. Approval is recorded per story by the plan workbench, never in this file. Read only to import approvals made before that.",
+      "enum": ["draft", "approved"]
+    },
+    "approved_digest": {
+      "description": "Deprecated, with status: the digest of an approval made under the old format.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "deliverables": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/deliverable" }
+    }
+  },
+  "$defs": {
+    "kebab": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "deliverable_ref": {
+      "description": "A deliverable id in the same change, or <change-name>/<id> for a deliverable in another change.",
+      "type": "string",
+      "pattern": "^([a-z0-9]+(-[a-z0-9]+)*/)?[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "requirement_ref": {
+      "description": "<capability-path>#<requirement name>, as OpenSpec reports the change's requirements.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9/_-]*#\\S.*$"
+    },
+    "deliverable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "kind", "depends_on", "covers", "acceptance_criteria"],
+      "properties": {
+        "id": { "$ref": "#/$defs/kebab" },
+        "title": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["story", "enabler"] },
+        "depends_on": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/deliverable_ref" }
+        },
+        "covers": {
+          "description": "Requirements this deliverable implements. Empty means the deliverable has no spec.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/requirement_ref" }
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "notes": { "type": "string" },
+        "review": {
+          "description": "How the work is reviewed before it merges: human (a person merges the pull request) or criteria (a separate agent checks the acceptance criteria). Default human.",
+          "enum": ["human", "criteria"]
+        },
+        "supersedes": {
+          "description": "The deliverable this one replaces, once that one has started. Its dependents move to this one.",
+          "$ref": "#/$defs/deliverable_ref"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "id": "billing",
+  "title": "billing",
+  "deltaCount": 3,
+  "deltas": [
+    {
+      "spec": "accounts",
+      "operation": "ADDED",
+      "description": "Add requirement: The system SHALL close an account on request.",
+      "requirement": {
+        "text": "The system SHALL close an account on request.",
+        "scenarios": [
+          {
+            "rawText": "- **WHEN** a person closes an account\n- **THEN** the account is closed"
+          }
+        ]
+      },
+      "requirements": [
+        {
+          "text": "The system SHALL close an account on request.",
+          "scenarios": [
+            {
+              "rawText": "- **WHEN** a person closes an account\n- **THEN** the account is closed"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "spec": "billing/invoicing",
+      "operation": "ADDED",
+      "description": "Add requirement: The system SHALL generate an invoice on the first day of each month:\n- one line per active subscription;\n- totals in the account currency.\nInvoices SHALL be immutable once sent.",
+      "requirement": {
+        "text": "The system SHALL generate an invoice on the first day of each month:\n- one line per active subscription;\n- totals in the account currency.\nInvoices SHALL be immutable once sent.",
+        "scenarios": [
+          {
+            "rawText": "- **WHEN** the clock reaches the first day of a month\n- **THEN** an invoice exists for every active account"
+          }
+        ]
+      },
+      "requirements": [
+        {
+          "text": "The system SHALL generate an invoice on the first day of each month:\n- one line per active subscription;\n- totals in the account currency.\nInvoices SHALL be immutable once sent.",
+          "scenarios": [
+            {
+              "rawText": "- **WHEN** the clock reaches the first day of a month\n- **THEN** an invoice exists for every active account"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "spec": "billing/invoicing",
+      "operation": "ADDED",
+      "description": "Add requirement: The system SHALL add tax lines computed with this rule:",
+      "requirement": {
+        "text": "The system SHALL add tax lines computed with this rule:",
+        "scenarios": [
+          {
+            "rawText": "- **WHEN** an invoice is generated\n- **THEN** it has tax lines"
+          }
+        ]
+      },
+      "requirements": [
+        {
+          "text": "The system SHALL add tax lines computed with this rule:",
+          "scenarios": [
+            {
+              "rawText": "- **WHEN** an invoice is generated\n- **THEN** it has tax lines"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "root": {
+    "path": "/tmp/opencode/scratchstore",
+    "source": "nearest"
+  }
+}

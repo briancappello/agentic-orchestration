@@ -1,0 +1,6 @@
+schema_version: 1
+changes:
+  - name: accounts-api
+    depends_on: []
+  - name: billing
+    depends_on: [accounts-api]

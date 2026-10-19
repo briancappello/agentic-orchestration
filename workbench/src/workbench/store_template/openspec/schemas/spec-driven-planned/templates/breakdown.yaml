@@ -1,0 +1,12 @@
+# Format: openspec/schemas/planning/breakdown.schema.json
+# Validate after every edit: planlib validate --store <store-root>
+schema_version: 1
+deliverables:
+  - id: first-deliverable
+    title: Short imperative title
+    kind: story
+    depends_on: []
+    covers:
+      - capability-path#Requirement name
+    acceptance_criteria:
+      - An observable, checkable outcome.
