@@ -15,6 +15,22 @@ and for the people who plan, watch, steer, and review that work.
 | `dev/` | The development setup: runs every component locally against a local tracker and forge. | Shell, Python |
 | `sortie/` | Git submodule: our fork of [Sortie](https://github.com/sortie-ai/sortie), the orchestrator. It is licensed separately, under Apache-2.0. | Go |
 
+See [docs/](docs/README.md) for how the parts fit and every guide.
+
+## Develop
+
+```sh
+git clone --recurse-submodules https://github.com/briancappello/agentic-orchestration.git
+make test        # every component's tests
+make lint        # linters, the license copies, and the specs
+dev/dev.sh       # the whole system locally; settings in dev/.env.example
+make dist        # release archives of the Go tools and the workbench wheel
+```
+
+Needs Go, `uv`, `npm`, the `openspec` CLI, and Docker for the local Huly
+and Gitea. Sortie is not in `go.work`: build it in `sortie/` with
+`GOWORK=off`, from its own `go.mod`.
+
 ## License
 
 Everything in this repository is licensed under the GNU Affero General

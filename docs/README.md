@@ -1,0 +1,25 @@
+# Documentation
+
+How the parts fit:
+
+```
+  people ──► workbench ──► Sortie ──► acp-broker ──► agent (ACP)
+     │          │            │             ▲
+     │          └─► tracker ◄┘             │
+     └──────────── watch and steer ────────┘
+```
+
+The workbench writes the approved plan into the tracker through Sortie.
+Sortie runs an agent session for each released story, with `acp-broker`
+in front of the agent. People watch and steer those sessions from the
+workbench, which reaches each broker over HTTP.
+
+| Guide | What it covers |
+|---|---|
+| [Operator guide](../workbench/docs/operator-guide.md) | Run the whole system: Huly, Sortie, the broker, and the workbench, with every setting. |
+| [ACP broker guide](../acp-broker/docs/guide.md) | The broker's flags, viewers, use with Sortie, and telemetry. |
+| [ACP broker notes](../acp-broker/docs/notes.md) | The upstream ACP work the broker depends on, and what each agent does. |
+| [smol-builder](../smol-builder/README.md) | Build the smolvm packs agents run in. |
+| [Sortie](../sortie/docs/README.md) | The orchestrator: our fork's documentation. |
+| [Specs](../specs/openspec/specs) | The requirements of every component, as OpenSpec specs. |
+| [Development setup](../dev/.env.example) | `dev/dev.sh` and its settings. |
