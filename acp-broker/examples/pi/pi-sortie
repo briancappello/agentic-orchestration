@@ -1,0 +1,11 @@
+#!/bin/sh
+# Runs pi the way Sortie needs it behind pi-acp. Point pi-acp at this script
+# with PI_ACP_PI_COMMAND.
+#
+# PI_SORTIE_AGENT_DIR is a pi agent directory just for Sortie runs. It holds
+# the models.json and settings.json (default provider and model) these runs
+# use, and keeps their sessions and extensions apart from your own pi setup.
+# The extension registers the MCP servers Sortie wrote in .sortie/mcp.json.
+here=$(dirname "$(readlink -f "$0")")
+PI_CODING_AGENT_DIR=${PI_SORTIE_AGENT_DIR:?set PI_SORTIE_AGENT_DIR} \
+	exec pi -e "$here/sortie-mcp.ts" "$@"

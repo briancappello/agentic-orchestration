@@ -1,0 +1,108 @@
+{
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "acp-broker"
+            }
+          },
+          {
+            "key": "service.version",
+            "value": {
+              "stringValue": "test"
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "acp-broker",
+            "version": "test"
+          },
+          "spans": [
+            {
+              "traceId": "aa000000000000000000000000000001",
+              "spanId": "bb00000000000002",
+              "name": "turn steer",
+              "kind": 1,
+              "startTimeUnixNano": "1791752400000000000",
+              "endTimeUnixNano": "1791752401000000000",
+              "attributes": [
+                {
+                  "key": "langfuse.session.id",
+                  "value": {
+                    "stringValue": "s1"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.name",
+                  "value": {
+                    "stringValue": "agent turn (steer)"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.origin",
+                  "value": {
+                    "stringValue": "steer"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.agent",
+                  "value": {
+                    "stringValue": "pi-acp"
+                  }
+                },
+                {
+                  "key": "acp.session.id",
+                  "value": {
+                    "stringValue": "s1"
+                  }
+                },
+                {
+                  "key": "acp.agent.name",
+                  "value": {
+                    "stringValue": "pi-acp"
+                  }
+                },
+                {
+                  "key": "langfuse.observation.type",
+                  "value": {
+                    "stringValue": "generation"
+                  }
+                },
+                {
+                  "key": "acp.turn.origin",
+                  "value": {
+                    "stringValue": "steer"
+                  }
+                },
+                {
+                  "key": "acp.turn.stop_reason",
+                  "value": {
+                    "stringValue": "end_turn"
+                  }
+                },
+                {
+                  "key": "acp.usage.reported",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "acp.steer.count",
+                  "value": {
+                    "intValue": "2"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

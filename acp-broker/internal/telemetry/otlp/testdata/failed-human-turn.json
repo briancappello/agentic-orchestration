@@ -1,0 +1,190 @@
+{
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "acp-broker"
+            }
+          },
+          {
+            "key": "service.version",
+            "value": {
+              "stringValue": "test"
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "acp-broker",
+            "version": "test"
+          },
+          "spans": [
+            {
+              "traceId": "cc000000000000000000000000000003",
+              "spanId": "dd00000000000004",
+              "name": "turn human",
+              "kind": 1,
+              "startTimeUnixNano": "1791752400000000000",
+              "endTimeUnixNano": "1791752401000000000",
+              "attributes": [
+                {
+                  "key": "langfuse.session.id",
+                  "value": {
+                    "stringValue": "D1"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.name",
+                  "value": {
+                    "stringValue": "agent turn (human)"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.issue",
+                  "value": {
+                    "stringValue": "LIVE-1"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.rule",
+                  "value": {
+                    "stringValue": "implement"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.chain_id",
+                  "value": {
+                    "stringValue": "c-42"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.dispatch_id",
+                  "value": {
+                    "stringValue": "D1"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.attempt",
+                  "value": {
+                    "stringValue": "2"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.origin",
+                  "value": {
+                    "stringValue": "human"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.agent",
+                  "value": {
+                    "stringValue": "opencode"
+                  }
+                },
+                {
+                  "key": "sortie.issue.identifier",
+                  "value": {
+                    "stringValue": "LIVE-1"
+                  }
+                },
+                {
+                  "key": "sortie.rule",
+                  "value": {
+                    "stringValue": "implement"
+                  }
+                },
+                {
+                  "key": "sortie.chain.id",
+                  "value": {
+                    "stringValue": "c-42"
+                  }
+                },
+                {
+                  "key": "sortie.dispatch.id",
+                  "value": {
+                    "stringValue": "D1"
+                  }
+                },
+                {
+                  "key": "sortie.attempt",
+                  "value": {
+                    "stringValue": "2"
+                  }
+                },
+                {
+                  "key": "acp.session.id",
+                  "value": {
+                    "stringValue": "s1"
+                  }
+                },
+                {
+                  "key": "acp.agent.name",
+                  "value": {
+                    "stringValue": "opencode"
+                  }
+                },
+                {
+                  "key": "acp.agent.version",
+                  "value": {
+                    "stringValue": "1.18.29"
+                  }
+                },
+                {
+                  "key": "langfuse.observation.type",
+                  "value": {
+                    "stringValue": "generation"
+                  }
+                },
+                {
+                  "key": "acp.turn.origin",
+                  "value": {
+                    "stringValue": "human"
+                  }
+                },
+                {
+                  "key": "acp.turn.cancelled_for",
+                  "value": {
+                    "stringValue": "interrupt"
+                  }
+                },
+                {
+                  "key": "gen_ai.request.model",
+                  "value": {
+                    "stringValue": "haiku"
+                  }
+                },
+                {
+                  "key": "langfuse.observation.model.name",
+                  "value": {
+                    "stringValue": "haiku"
+                  }
+                },
+                {
+                  "key": "acp.usage.reported",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "acp.unfinished",
+                  "value": {
+                    "boolValue": true
+                  }
+                }
+              ],
+              "status": {
+                "code": 2,
+                "message": "model overloaded"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

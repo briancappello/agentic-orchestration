@@ -1,0 +1,502 @@
+{
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "acp-broker"
+            }
+          },
+          {
+            "key": "service.version",
+            "value": {
+              "stringValue": "test"
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "acp-broker",
+            "version": "test"
+          },
+          "spans": [
+            {
+              "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+              "spanId": "0101010101010101",
+              "parentSpanId": "00f067aa0ba902b7",
+              "name": "tool read",
+              "kind": 1,
+              "startTimeUnixNano": "1791752401000000000",
+              "endTimeUnixNano": "1791752402000000000",
+              "attributes": [
+                {
+                  "key": "langfuse.session.id",
+                  "value": {
+                    "stringValue": "D1"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.name",
+                  "value": {
+                    "stringValue": "agent turn (driver)"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.issue",
+                  "value": {
+                    "stringValue": "LIVE-1"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.rule",
+                  "value": {
+                    "stringValue": "implement"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.chain_id",
+                  "value": {
+                    "stringValue": "c-42"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.dispatch_id",
+                  "value": {
+                    "stringValue": "D1"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.attempt",
+                  "value": {
+                    "stringValue": "2"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.origin",
+                  "value": {
+                    "stringValue": "driver"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.agent",
+                  "value": {
+                    "stringValue": "opencode"
+                  }
+                },
+                {
+                  "key": "sortie.issue.identifier",
+                  "value": {
+                    "stringValue": "LIVE-1"
+                  }
+                },
+                {
+                  "key": "sortie.rule",
+                  "value": {
+                    "stringValue": "implement"
+                  }
+                },
+                {
+                  "key": "sortie.chain.id",
+                  "value": {
+                    "stringValue": "c-42"
+                  }
+                },
+                {
+                  "key": "sortie.dispatch.id",
+                  "value": {
+                    "stringValue": "D1"
+                  }
+                },
+                {
+                  "key": "sortie.attempt",
+                  "value": {
+                    "stringValue": "2"
+                  }
+                },
+                {
+                  "key": "acp.session.id",
+                  "value": {
+                    "stringValue": "s1"
+                  }
+                },
+                {
+                  "key": "acp.agent.name",
+                  "value": {
+                    "stringValue": "opencode"
+                  }
+                },
+                {
+                  "key": "acp.agent.version",
+                  "value": {
+                    "stringValue": "1.18.29"
+                  }
+                },
+                {
+                  "key": "langfuse.observation.type",
+                  "value": {
+                    "stringValue": "tool"
+                  }
+                },
+                {
+                  "key": "acp.tool.call_id",
+                  "value": {
+                    "stringValue": "call_1"
+                  }
+                },
+                {
+                  "key": "acp.tool.kind",
+                  "value": {
+                    "stringValue": "read"
+                  }
+                },
+                {
+                  "key": "acp.tool.title",
+                  "value": {
+                    "stringValue": "Read main.go"
+                  }
+                },
+                {
+                  "key": "acp.tool.status",
+                  "value": {
+                    "stringValue": "completed"
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+              "spanId": "0202020202020202",
+              "parentSpanId": "00f067aa0ba902b7",
+              "name": "tool execute",
+              "kind": 1,
+              "startTimeUnixNano": "1791752403000000000",
+              "endTimeUnixNano": "1791752404000000000",
+              "attributes": [
+                {
+                  "key": "langfuse.session.id",
+                  "value": {
+                    "stringValue": "D1"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.name",
+                  "value": {
+                    "stringValue": "agent turn (driver)"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.issue",
+                  "value": {
+                    "stringValue": "LIVE-1"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.rule",
+                  "value": {
+                    "stringValue": "implement"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.chain_id",
+                  "value": {
+                    "stringValue": "c-42"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.dispatch_id",
+                  "value": {
+                    "stringValue": "D1"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.attempt",
+                  "value": {
+                    "stringValue": "2"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.origin",
+                  "value": {
+                    "stringValue": "driver"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.agent",
+                  "value": {
+                    "stringValue": "opencode"
+                  }
+                },
+                {
+                  "key": "sortie.issue.identifier",
+                  "value": {
+                    "stringValue": "LIVE-1"
+                  }
+                },
+                {
+                  "key": "sortie.rule",
+                  "value": {
+                    "stringValue": "implement"
+                  }
+                },
+                {
+                  "key": "sortie.chain.id",
+                  "value": {
+                    "stringValue": "c-42"
+                  }
+                },
+                {
+                  "key": "sortie.dispatch.id",
+                  "value": {
+                    "stringValue": "D1"
+                  }
+                },
+                {
+                  "key": "sortie.attempt",
+                  "value": {
+                    "stringValue": "2"
+                  }
+                },
+                {
+                  "key": "acp.session.id",
+                  "value": {
+                    "stringValue": "s1"
+                  }
+                },
+                {
+                  "key": "acp.agent.name",
+                  "value": {
+                    "stringValue": "opencode"
+                  }
+                },
+                {
+                  "key": "acp.agent.version",
+                  "value": {
+                    "stringValue": "1.18.29"
+                  }
+                },
+                {
+                  "key": "langfuse.observation.type",
+                  "value": {
+                    "stringValue": "tool"
+                  }
+                },
+                {
+                  "key": "acp.tool.call_id",
+                  "value": {
+                    "stringValue": "call_2"
+                  }
+                },
+                {
+                  "key": "acp.tool.kind",
+                  "value": {
+                    "stringValue": "execute"
+                  }
+                },
+                {
+                  "key": "acp.tool.title",
+                  "value": {
+                    "stringValue": "go test ./..."
+                  }
+                },
+                {
+                  "key": "acp.tool.status",
+                  "value": {
+                    "stringValue": "failed"
+                  }
+                }
+              ],
+              "status": {
+                "code": 2,
+                "message": "tool call failed"
+              }
+            },
+            {
+              "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+              "spanId": "00f067aa0ba902b7",
+              "name": "turn driver",
+              "kind": 1,
+              "startTimeUnixNano": "1791752400000000000",
+              "endTimeUnixNano": "1791752405000000000",
+              "attributes": [
+                {
+                  "key": "langfuse.session.id",
+                  "value": {
+                    "stringValue": "D1"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.name",
+                  "value": {
+                    "stringValue": "agent turn (driver)"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.issue",
+                  "value": {
+                    "stringValue": "LIVE-1"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.rule",
+                  "value": {
+                    "stringValue": "implement"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.chain_id",
+                  "value": {
+                    "stringValue": "c-42"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.dispatch_id",
+                  "value": {
+                    "stringValue": "D1"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.attempt",
+                  "value": {
+                    "stringValue": "2"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.origin",
+                  "value": {
+                    "stringValue": "driver"
+                  }
+                },
+                {
+                  "key": "langfuse.trace.metadata.agent",
+                  "value": {
+                    "stringValue": "opencode"
+                  }
+                },
+                {
+                  "key": "sortie.issue.identifier",
+                  "value": {
+                    "stringValue": "LIVE-1"
+                  }
+                },
+                {
+                  "key": "sortie.rule",
+                  "value": {
+                    "stringValue": "implement"
+                  }
+                },
+                {
+                  "key": "sortie.chain.id",
+                  "value": {
+                    "stringValue": "c-42"
+                  }
+                },
+                {
+                  "key": "sortie.dispatch.id",
+                  "value": {
+                    "stringValue": "D1"
+                  }
+                },
+                {
+                  "key": "sortie.attempt",
+                  "value": {
+                    "stringValue": "2"
+                  }
+                },
+                {
+                  "key": "acp.session.id",
+                  "value": {
+                    "stringValue": "s1"
+                  }
+                },
+                {
+                  "key": "acp.agent.name",
+                  "value": {
+                    "stringValue": "opencode"
+                  }
+                },
+                {
+                  "key": "acp.agent.version",
+                  "value": {
+                    "stringValue": "1.18.29"
+                  }
+                },
+                {
+                  "key": "langfuse.observation.type",
+                  "value": {
+                    "stringValue": "generation"
+                  }
+                },
+                {
+                  "key": "acp.turn.origin",
+                  "value": {
+                    "stringValue": "driver"
+                  }
+                },
+                {
+                  "key": "acp.turn.stop_reason",
+                  "value": {
+                    "stringValue": "end_turn"
+                  }
+                },
+                {
+                  "key": "gen_ai.request.model",
+                  "value": {
+                    "stringValue": "anthropic/claude-haiku-5-5"
+                  }
+                },
+                {
+                  "key": "langfuse.observation.model.name",
+                  "value": {
+                    "stringValue": "anthropic/claude-haiku-5-5"
+                  }
+                },
+                {
+                  "key": "langfuse.observation.usage_details",
+                  "value": {
+                    "stringValue": "{\"cache_creation_input_tokens\":307,\"cache_read_input_tokens\":53643,\"input\":4,\"output\":102,\"total\":54056}"
+                  }
+                },
+                {
+                  "key": "gen_ai.usage.input_tokens",
+                  "value": {
+                    "intValue": "4"
+                  }
+                },
+                {
+                  "key": "gen_ai.usage.output_tokens",
+                  "value": {
+                    "intValue": "102"
+                  }
+                }
+              ],
+              "events": [
+                {
+                  "timeUnixNano": "1791752402500000000",
+                  "name": "steer",
+                  "attributes": [
+                    {
+                      "key": "acp.steer.outcome",
+                      "value": {
+                        "stringValue": "injected"
+                      }
+                    },
+                    {
+                      "key": "acp.steer.count",
+                      "value": {
+                        "intValue": "2"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
