@@ -1,6 +1,6 @@
 ---
 # Sortie under plan control, for the plan workbench's live run.
-# scripts/live/live.sh renders the ${LIVE_*} placeholders.
+# dev/live/live.sh renders the ${LIVE_*} placeholders.
 tracker:
   kind: huly
   endpoint: ${LIVE_HULY_URL}
@@ -10,7 +10,7 @@ tracker:
   terminal_states: [Done, Canceled]
   in_progress_state: In Progress
   # The state a story waits in while its pull request is reviewed: neither
-  # active, terminal, nor the backlog state (scripts/dev/huly_project.py adds it).
+  # active, terminal, nor the backlog state (dev/huly_project.py adds it).
   handoff_state: In Review
   # Plan control: sync releases approved stories from Backlog to Todo.
   release_state: Todo

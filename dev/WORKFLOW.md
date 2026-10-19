@@ -1,6 +1,6 @@
 ---
 # Sortie for development, under plan control, with the mock agent.
-# scripts/dev.sh renders the ${DEV_*} placeholders.
+# dev/dev.sh renders the ${DEV_*} placeholders.
 tracker:
   kind: huly
   endpoint: ${DEV_HULY_URL}
@@ -10,7 +10,7 @@ tracker:
   terminal_states: [Done, Canceled]
   in_progress_state: In Progress
   # Where a story waits while its pull request is reviewed: neither active,
-  # terminal, nor the backlog state (scripts/dev/huly_project.py adds it).
+  # terminal, nor the backlog state (dev/huly_project.py adds it).
   handoff_state: In Review
   # Plan control: a sync releases approved stories from Backlog to Todo.
   release_state: Todo
@@ -67,8 +67,11 @@ hooks:
     python3 "$SORTIE_FORGE_KIT/open_pr.py"
   timeout_ms: 120000
 
+# DEV_AGENT=mock (the default) runs Sortie's mock agent. DEV_AGENT=acp runs
+# dev/mock_acp_agent.py behind acp-broker, so workers can be watched.
 agent:
-  kind: mock
+  kind: ${DEV_AGENT_KIND}
+  command: ${DEV_AGENT_COMMAND}
   max_turns: 3
   max_concurrent_agents: 2
 

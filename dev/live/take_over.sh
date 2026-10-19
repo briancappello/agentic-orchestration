@@ -3,7 +3,7 @@
 # a person can watch, steer, and hand back in the workbench before the agent
 # finishes (small stories take an agent seconds).
 #
-#   scripts/live/take_over.sh LIVE-7      wait up to 10 minutes for LIVE-7's worker
+#   dev/live/take_over.sh LIVE-7      wait up to 10 minutes for LIVE-7's worker
 #
 # Goes through the workbench, signed in with the live run's password, so the
 # command is relayed and recorded like one sent from the page. Then open the

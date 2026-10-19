@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # A local Gitea: the forge Sortie's workers push to, and whose merges finish
-# stories under plan control. scripts/dev.sh and scripts/live/live.sh run it.
+# stories under plan control. dev/dev.sh and dev/live/live.sh run it.
 #
-#   scripts/forge/gitea.sh up      start it and seed the repository, if needed; print exports
-#   scripts/forge/gitea.sh down    remove the container and all its repositories
+#   dev/forge/gitea.sh up      start it and seed the repository, if needed; print exports
+#   dev/forge/gitea.sh down    remove the container and all its repositories
 #
 # Idempotent: "up" reuses a running container and creates only what is missing.
 # Settings: GITEA_HOME (where the token file lives), GITEA_REPO (the repository,
-# seeded from scripts/forge/repo/), GITEA_PORT (3001).
+# seeded from dev/forge/repo/), GITEA_PORT (3001).
 # Prints, on stdout, the exports the caller evaluates: FORGE_URL, FORGE_PROJECT
 # (owner/repo), and FORGE_TOKEN (also in $GITEA_HOME/gitea-token, mode 0600).
 set -euo pipefail
