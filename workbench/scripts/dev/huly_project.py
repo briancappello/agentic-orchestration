@@ -1,6 +1,6 @@
 """Ensure, or empty, the Huly project the dev stack plans into.
 
-Usage: huly_project.py <front-url> <workspace> <email> <password> <identifier> [--reset]
+Usage: huly_project.py <front-url> <workspace> <email> <password> <identifier> [--reset | --remove]
 
 Prints a login token on stdout. Creates the project (a classic project) when
 it does not exist. Gives the project's space type what the plan workflow
@@ -8,7 +8,9 @@ needs: the task types Epic and Story, and the status In Review (Sortie's
 handoff state) in every task type. Every step checks first, so a run on a
 set-up workspace changes nothing; huly_clean_check.py proves both from a
 clean slate. A space type is shared: the change applies to every project of
-that type. With --reset, removes every issue in the project. Standard library only.
+that type. With --reset, removes every issue in the project. With --remove, removes its
+issues and then the project itself, as Huly's own "delete project" does
+(archive, then remove), and prints nothing. Standard library only.
 """
 
 from __future__ import annotations
@@ -109,6 +111,7 @@ def ensure_space_type(find, tx, type_id: str) -> None:
 def main() -> int:
     front, workspace, email, password, ident = sys.argv[1:6]
     reset = "--reset" in sys.argv[6:]
+    remove = "--remove" in sys.argv[6:]
     front = front.rstrip("/")
 
     cfg = get(front + "/config.json")
@@ -132,6 +135,19 @@ def main() -> int:
         post(f"{ep}/api/v1/tx/{ws}", t, wt)
 
     projects = find("tracker:class:Project", {"identifier": {"$in": [ident]}})
+    if remove:
+        if not projects:
+            print(f"no Huly project {ident}", file=sys.stderr)
+            return 0
+        project = projects[0]["_id"]
+        issues = find("tracker:class:Issue", {"space": {"$in": [project]}})
+        issues.sort(key=lambda i: -len(i.get("parents") or []))
+        for issue in issues:
+            tx("core:class:TxRemoveDoc", "tracker:class:Issue", issue["_id"], project)
+        tx("core:class:TxUpdateDoc", "tracker:class:Project", project, "core:space:Space", operations={"archived": True})
+        tx("core:class:TxRemoveDoc", "tracker:class:Project", project, "core:space:Space")
+        print(f"removed Huly project {ident} and its {len(issues)} issues", file=sys.stderr)
+        return 0
     if projects:
         project = projects[0]["_id"]
     else:
