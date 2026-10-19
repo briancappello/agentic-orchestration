@@ -41,6 +41,9 @@ class Hub:
         self._loop = loop
 
     async def poll_once(self) -> None:
+        # Catch store edits the file watcher missed.
+        if await asyncio.to_thread(self.plan.stale):
+            await asyncio.to_thread(self.plan.refresh)
         try:
             graph = await self.sortie.plan_graph()
         except SortieError as exc:

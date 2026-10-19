@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -37,12 +39,46 @@ class PlanState:
         self.version = 0
         self.validated_at = 0.0
         self._listeners: list[Callable[[], None]] = []
+        # The watcher, the poller and the stale check all refresh, each from
+        # its own thread. One refresh at a time, so a slow one that read the
+        # files before an edit cannot finish last and undo a newer one.
+        self._lock = threading.RLock()
+        # The files under openspec/ as the last refresh saw them.
+        self._seen: tuple | None = None
 
     def on_change(self, listener: Callable[[], None]) -> None:
         self._listeners.append(listener)
 
+    def fingerprint(self) -> tuple:
+        """The path, modification time and size of every file under openspec/."""
+        root = self.store / "openspec"
+        out = []
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames.sort()
+            for name in sorted(filenames):
+                path = os.path.join(dirpath, name)
+                try:
+                    st = os.stat(path)
+                except FileNotFoundError:
+                    continue
+                out.append((os.path.relpath(path, root), st.st_mtime_ns, st.st_size))
+        return tuple(out)
+
+    def stale(self) -> bool:
+        """Whether a file changed since the last refresh read the store.
+
+        The watcher can miss events: a file written into a directory just
+        created lands before the watch on that directory exists."""
+        return self.fingerprint() != self._seen
+
     def refresh(self) -> None:
         """Validate the store now and keep the result."""
+        with self._lock:
+            self._refresh()
+
+    def _refresh(self) -> None:
+        # Taken before reading: an edit made while validating shows as stale.
+        self._seen = self.fingerprint()
         try:
             approvals, frozen = self._inputs()
             result = self._validate(self.store, approvals=approvals, frozen=frozen)
