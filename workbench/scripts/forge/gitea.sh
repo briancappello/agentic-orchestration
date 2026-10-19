@@ -1,32 +1,34 @@
 #!/usr/bin/env bash
-# A local Gitea for the live run: the forge Sortie's agents push to and whose
-# merges finish stories (scripts/live/live.sh runs this).
+# A local Gitea: the forge Sortie's workers push to, and whose merges finish
+# stories under plan control. scripts/dev.sh and scripts/live/live.sh run it.
 #
-#   scripts/live/gitea.sh up      start it and seed the repository, if needed; print exports
-#   scripts/live/gitea.sh down    remove the container and its data
+#   scripts/forge/gitea.sh up      start it and seed the repository, if needed; print exports
+#   scripts/forge/gitea.sh down    remove the container and all its repositories
 #
 # Idempotent: "up" reuses a running container and creates only what is missing.
-# Prints, on stdout, the exports live.sh evaluates: the URL, the owner/repo,
-# and an access token (in $LIVE_HOME/gitea-token, mode 0600).
+# Settings: GITEA_HOME (where the token file lives), GITEA_REPO (the repository,
+# seeded from scripts/forge/repo/), GITEA_PORT (3001).
+# Prints, on stdout, the exports the caller evaluates: FORGE_URL, FORGE_PROJECT
+# (owner/repo), and FORGE_TOKEN (also in $GITEA_HOME/gitea-token, mode 0600).
 set -euo pipefail
 
 CMD=${1:-}
 HERE=$(cd "$(dirname "$0")" && pwd)
-LIVE_HOME=${LIVE_HOME:-$HOME/.cache/plan-workbench-live}
+GITEA_HOME=${GITEA_HOME:-$HOME/.cache/plan-workbench-live}
 NAME=plan-workbench-live-gitea
 IMAGE=docker.io/gitea/gitea:1.27.3
 PORT=${GITEA_PORT:-3001}
 URL=http://127.0.0.1:$PORT
 USER_=sortie
 PASS=Live-Gitea-Pw1
-REPO=live-lab
+REPO=${GITEA_REPO:-live-lab}
 
 log() { printf 'gitea.sh: %s\n' "$*" >&2; }
 
 case $CMD in
 down)
   docker rm -f "$NAME" >/dev/null 2>&1 || true
-  rm -f "$LIVE_HOME/gitea-token"
+  rm -f "$GITEA_HOME/gitea-token"
   log "removed"
   exit 0
   ;;
@@ -34,7 +36,7 @@ up) ;;
 *) echo "usage: $0 up|down" >&2; exit 2 ;;
 esac
 
-mkdir -p "$LIVE_HOME"
+mkdir -p "$GITEA_HOME"
 if ! docker ps --format '{{.Names}}' | grep -qx "$NAME"; then
   docker rm -f "$NAME" >/dev/null 2>&1 || true
   log "starting $IMAGE on $URL"
@@ -55,7 +57,7 @@ if ! curl -sf -o /dev/null -u "$USER_:$PASS" "$URL/api/v1/user"; then
     --email sortie@example.com --admin --must-change-password=false >/dev/null
 fi
 
-TOKEN_FILE=$LIVE_HOME/gitea-token
+TOKEN_FILE=$GITEA_HOME/gitea-token
 if [[ ! -s $TOKEN_FILE ]] || ! curl -sf -o /dev/null -H "Authorization: token $(cat "$TOKEN_FILE")" "$URL/api/v1/user"; then
   log "creating an access token"
   curl -sf -u "$USER_:$PASS" -H 'Content-Type: application/json' -X POST "$URL/api/v1/users/$USER_/tokens" \
@@ -79,4 +81,4 @@ if ! curl -sf -o /dev/null -H "Authorization: token $TOKEN" "$URL/api/v1/repos/$
   rm -rf "$tmp"
 fi
 
-echo "export LIVE_GITEA_URL=$URL LIVE_GITEA_PROJECT=$USER_/$REPO LIVE_GITEA_TOKEN=$TOKEN"
+echo "export FORGE_URL=$URL FORGE_PROJECT=$USER_/$REPO FORGE_TOKEN=$TOKEN"

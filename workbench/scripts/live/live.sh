@@ -8,7 +8,7 @@
 # Sets up, each step idempotent:
 #   - Huly project LIVE in workspace "sortie", with its space type ready for
 #     plan control (scripts/dev/huly_project.py);
-#   - Gitea on 127.0.0.1:3001 with the repository sortie/live-lab (gitea.sh);
+#   - Gitea on 127.0.0.1:3001 with the repository sortie/live-lab (scripts/forge/gitea.sh);
 #   - a spec store holding the OpenSpec change "pricing" (store/), which the
 #     planning agent breaks into stories;
 #   - Sortie on 127.0.0.1:7679, from WORKFLOW.md, running `opencode acp`
@@ -17,7 +17,7 @@
 # Then: plan, approve, and sync in the workbench; watch and steer the workers;
 # review and merge their pull requests in Gitea; Sortie moves merged stories
 # to Done and releases what they unblock. Ctrl-C stops Sortie and the
-# workbench; Gitea keeps running (gitea.sh down removes it).
+# workbench; Gitea keeps running (scripts/forge/gitea.sh down removes it).
 #
 # Needs: Docker (Huly in ~/dev/huly-selfhost, or already running), Go, uv,
 # npm, the openspec CLI, and opencode signed in to Anthropic.
@@ -27,6 +27,7 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 KIT=$ROOT/scripts/live
+FORGE=$ROOT/scripts/forge
 export LIVE_HOME=${LIVE_HOME:-$HOME/.cache/plan-workbench-live}
 SORTIE_SRC=${SORTIE_SRC:-$HOME/dev/sortie}
 HULY_URL=${HULY_URL:-http://localhost:8087}
@@ -46,7 +47,7 @@ for port in $SORTIE_PORT $WB_PORT; do ss -ltn | grep -q ":$port " && die "port $
 
 if [[ -n $RESET ]]; then
   say "Resetting the live run"
-  "$KIT/gitea.sh" down
+  GITEA_HOME=$LIVE_HOME "$FORGE/gitea.sh" down
   rm -rf "$LIVE_HOME"
 fi
 mkdir -p "$LIVE_HOME/bin" "$LIVE_HOME/sortie"
@@ -68,7 +69,7 @@ HULY_TOKEN=$(python3 "$ROOT/scripts/dev/huly_project.py" "$HULY_URL" "$HULY_WORK
   "$LIVE_PROJECT" ${RESET:+--reset}) || die "could not prepare Huly project $LIVE_PROJECT"
 
 say "Preparing Gitea"
-eval "$("$KIT/gitea.sh" up)"
+eval "$(GITEA_HOME=$LIVE_HOME GITEA_REPO=live-lab "$FORGE/gitea.sh" up)"
 
 for f in sortie-token viewer-token; do
   [[ -s $LIVE_HOME/$f ]] || { openssl rand -hex 24 > "$LIVE_HOME/$f"; chmod 600 "$LIVE_HOME/$f"; }
@@ -95,13 +96,8 @@ fi
 say "Rendering Sortie's workflow"
 LIVE_HULY_URL=$HULY_URL LIVE_HULY_TOKEN=$HULY_TOKEN LIVE_HULY_PROJECT=$LIVE_PROJECT LIVE_HULY_WORKSPACE=$HULY_WORKSPACE \
 LIVE_SORTIE_PORT=$SORTIE_PORT LIVE_SORTIE_TOKEN=$(cat "$LIVE_HOME/sortie-token") \
-  python3 - "$KIT/WORKFLOW.md" "$LIVE_HOME/sortie/WORKFLOW.md" <<'EOF'
-import os, re, sys
-text = open(sys.argv[1]).read()
-out = re.sub(r"\$\{(LIVE_[A-Z_]+)\}", lambda m: os.environ[m.group(1)], text)
-open(sys.argv[2], "w").write(out)
-os.chmod(sys.argv[2], 0o600)
-EOF
+LIVE_FORGE_URL=$FORGE_URL LIVE_FORGE_PROJECT=$FORGE_PROJECT LIVE_FORGE_TOKEN=$FORGE_TOKEN \
+  python3 "$FORGE/render.py" "$KIT/WORKFLOW.md" "$LIVE_HOME/sortie/WORKFLOW.md"
 (cd "$LIVE_HOME/sortie" && sortie validate WORKFLOW.md) || die "Sortie refused the workflow"
 
 PIDS=()
@@ -116,8 +112,8 @@ prefix() { sed -u "s/^/[$1] /"; }
 
 say "Starting Sortie on 127.0.0.1:$SORTIE_PORT"
 # Hooks see SORTIE_* variables only: the forge coordinates go to them that way.
-(cd "$LIVE_HOME/sortie" && exec env SORTIE_LIVE_KIT="$KIT" SORTIE_LIVE_REMOTE="$LIVE_GITEA_URL/$LIVE_GITEA_PROJECT.git" \
-  SORTIE_LIVE_GITEA_URL="$LIVE_GITEA_URL" SORTIE_LIVE_GITEA_PROJECT="$LIVE_GITEA_PROJECT" SORTIE_LIVE_GITEA_TOKEN="$LIVE_GITEA_TOKEN" \
+(cd "$LIVE_HOME/sortie" && exec env SORTIE_FORGE_KIT="$FORGE" SORTIE_FORGE_REMOTE="$FORGE_URL/$FORGE_PROJECT.git" \
+  SORTIE_FORGE_URL="$FORGE_URL" SORTIE_FORGE_PROJECT="$FORGE_PROJECT" SORTIE_FORGE_TOKEN="$FORGE_TOKEN" \
   sortie WORKFLOW.md) > >(prefix sortie) 2>&1 &
 PIDS+=("$!")
 
@@ -131,5 +127,5 @@ say "Starting the workbench on http://127.0.0.1:$WB_PORT"
 PIDS+=("$!")
 
 for _ in $(seq 60); do curl -sf -o /dev/null "http://127.0.0.1:$WB_PORT/api/auth/mode" && break; sleep 1; done
-say "Ready: workbench http://127.0.0.1:$WB_PORT (password \"live\"), Gitea $LIVE_GITEA_URL/$LIVE_GITEA_PROJECT (sortie / Live-Gitea-Pw1), Huly $HULY_URL/workbench/$HULY_WORKSPACE/tracker   Ctrl-C to stop"
+say "Ready: workbench http://127.0.0.1:$WB_PORT (password \"live\"), Gitea $FORGE_URL/$FORGE_PROJECT (sortie / Live-Gitea-Pw1), Huly $HULY_URL/workbench/$HULY_WORKSPACE/tracker   Ctrl-C to stop"
 wait

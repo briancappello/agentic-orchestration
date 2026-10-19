@@ -31,9 +31,9 @@ reactions:
     poll_interval_ms: 30000
 
 gitea:
-  endpoint: ${LIVE_GITEA_URL}
-  api_key: ${LIVE_GITEA_TOKEN}
-  project: ${LIVE_GITEA_PROJECT}
+  endpoint: ${LIVE_FORGE_URL}
+  api_key: ${LIVE_FORGE_TOKEN}
+  project: ${LIVE_FORGE_PROJECT}
 
 server:
   port: ${LIVE_SORTIE_PORT}
@@ -46,10 +46,10 @@ workspace:
   root: ${LIVE_HOME}/workspaces
 
 # The forge work is the hooks' job, so the agent only changes code. Hooks see
-# SORTIE_* variables only; live.sh exports the Gitea coordinates that way.
+# SORTIE_* variables only; live.sh exports the forge coordinates that way.
 hooks:
   after_create: |
-    git clone -q "$SORTIE_LIVE_REMOTE" .
+    git clone -q "$SORTIE_FORGE_REMOTE" .
     echo .sortie/ >> .git/info/exclude
     git config user.name "Sortie ($SORTIE_ISSUE_IDENTIFIER)"
     git config user.email sortie@localhost
@@ -62,7 +62,7 @@ hooks:
       git checkout -q -B "$branch" origin/main
     fi
   after_run: |
-    python3 "$SORTIE_LIVE_KIT/open_pr.py"
+    python3 "$SORTIE_FORGE_KIT/open_pr.py"
   timeout_ms: 120000
 
 agent:

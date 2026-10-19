@@ -1,9 +1,11 @@
-"""The live run's after_run hook: commit the agent's work, push the story's
-branch, open its pull request (or find the open one), and write
+"""Sortie's after_run hook for the local forge: commit the agent's work, push
+the story's branch, open its pull request (or find the open one), and write
 .sortie/scm.json so Sortie's merge-completion reaction watches it.
 
 Runs in the issue's workspace. Reads SORTIE_ISSUE_IDENTIFIER and the
-SORTIE_LIVE_GITEA_* variables live.sh exports (hooks see SORTIE_* only).
+SORTIE_FORGE_* variables the launcher exports (hooks see SORTIE_* only).
+With SORTIE_FORGE_PLACEHOLDER=1, a run that changed nothing (the mock agent)
+commits a note under dev-notes/, so the story still gets a pull request.
 The token goes into one git command's header, never into the checkout.
 Standard library only.
 """
@@ -21,9 +23,9 @@ import urllib.request
 from pathlib import Path
 
 ident = os.environ["SORTIE_ISSUE_IDENTIFIER"]
-url = os.environ["SORTIE_LIVE_GITEA_URL"].rstrip("/")
-project = os.environ["SORTIE_LIVE_GITEA_PROJECT"]
-token = os.environ["SORTIE_LIVE_GITEA_TOKEN"]
+url = os.environ["SORTIE_FORGE_URL"].rstrip("/")
+project = os.environ["SORTIE_FORGE_PROJECT"]
+token = os.environ["SORTIE_FORGE_TOKEN"]
 owner, repo = project.split("/", 1)
 branch = f"sortie/{ident}"
 
@@ -43,6 +45,12 @@ def main() -> int:
     git("add", "-A")
     if subprocess.run(["git", "diff", "--cached", "--quiet"]).returncode:
         git("commit", "-qm", f"{ident}: changes from Sortie's agent")
+    if not git("rev-list", "origin/main..HEAD") and os.environ.get("SORTIE_FORGE_PLACEHOLDER") == "1":
+        note = Path("dev-notes") / f"{ident}.md"
+        note.parent.mkdir(exist_ok=True)
+        note.write_text(f"# {ident}\n\nA placeholder change from Sortie's mock agent, so the story gets a pull request.\n")
+        git("add", str(note))
+        git("commit", "-qm", f"{ident}: placeholder from the mock agent")
     if not git("rev-list", "origin/main..HEAD"):
         print(f"open_pr: {ident} has no commits over main; nothing to propose")
         return 0
