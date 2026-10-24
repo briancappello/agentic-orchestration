@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 from typing import Any, Callable
@@ -76,6 +77,18 @@ def make_store(tmp_path: Path) -> Callable[[str], StoreBuilder]:
         return StoreBuilder(tmp_path / name)
 
     return make
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """With WORKBENCH_TEST_NO_SKIP=1, as in CI, a skipped test fails the run:
+    a missing broker, Sortie checkout, or openspec CLI must not pass as green."""
+    if os.environ.get("WORKBENCH_TEST_NO_SKIP") != "1" or exitstatus != pytest.ExitCode.OK:
+        return
+    reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+    skipped = reporter.stats.get("skipped", []) if reporter else []
+    if skipped:
+        reporter.write_line(f"WORKBENCH_TEST_NO_SKIP=1: {len(skipped)} test(s) skipped; see the skip reasons", red=True)
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 
 @pytest.fixture(autouse=True)
