@@ -1,0 +1,97 @@
+# Test and lint every component on each pull request and push to main.
+# The jobs call the same Makefile targets as a local `make test lint`.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GOLANGCI_LINT_VERSION: v2.14.0
+  OPENSPEC_VERSION: 1.13.0
+
+jobs:
+  go:
+    name: Go (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [acp-broker, smol-builder]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache-dependency-path: "*/go.sum"
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          install-only: true
+      - run: make -C ${{ matrix.module }} test
+      - run: make -C ${{ matrix.module }} lint LINTER=golangci-lint
+
+  workbench:
+    name: Workbench
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # The session tests need the broker, and the schema contract test
+      # needs the sortie/ submodule: without either they would skip.
+      WORKBENCH_TEST_BROKER: ${{ github.workspace }}/acp-broker/bin/acp-broker
+      WORKBENCH_TEST_NO_SKIP: "1"
+      PYTEST_ADDOPTS: -rs
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+          cache-dependency-path: "*/go.sum"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: workbench/frontend/package-lock.json
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          # The oldest Python that pyproject.toml allows.
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: workbench/uv.lock
+      - run: npm install -g @fission-ai/openspec@${{ env.OPENSPEC_VERSION }}
+      - run: make -C acp-broker build
+      - run: npm ci
+        working-directory: workbench/frontend
+      - run: make -C workbench test
+      - run: make -C workbench lint
+      - run: make -C workbench wheel
+
+  repo:
+    name: Licenses and specs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - run: npm install -g @fission-ai/openspec@${{ env.OPENSPEC_VERSION }}
+      - run: make licenses specs
