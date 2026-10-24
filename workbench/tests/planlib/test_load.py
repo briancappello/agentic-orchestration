@@ -117,13 +117,14 @@ def test_fixture_schemas_match_the_store_template():
         assert json.loads(f.read_text()) == json.loads((STORE_SCHEMAS / f.name).read_text()), f.name
 
 
-SORTIE_SRC = os.environ.get("SORTIE_SRC") or str(Path.home() / "dev" / "sortie")
+# The repository's sortie/ submodule, unless SORTIE_SRC names another checkout.
+SORTIE_SRC = os.environ.get("SORTIE_SRC") or str(Path(__file__).resolve().parents[3] / "sortie")
 SORTIE_GRAPH_SCHEMA = Path(SORTIE_SRC) / "internal/plan/testdata/plan-graph.schema.json"
 
 
 @pytest.mark.skipif(
     "SORTIE_SRC" not in os.environ and not SORTIE_GRAPH_SCHEMA.parent.is_dir(),
-    reason="no Sortie checkout: set SORTIE_SRC to check the plan graph schema against Sortie's",
+    reason="no Sortie checkout: run `git submodule update --init`, or set SORTIE_SRC",
 )
 def test_plan_graph_schema_matches_sorties():
     """The plan graph schema is the contract with Sortie, which publishes
