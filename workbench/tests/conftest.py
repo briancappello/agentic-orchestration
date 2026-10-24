@@ -87,6 +87,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     reporter = session.config.pluginmanager.get_plugin("terminalreporter")
     skipped = reporter.stats.get("skipped", []) if reporter else []
     if skipped:
+        reporter.ensure_newline()
         reporter.write_line(f"WORKBENCH_TEST_NO_SKIP=1: {len(skipped)} test(s) skipped; see the skip reasons", red=True)
         session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
