@@ -47,7 +47,12 @@ jobs:
       - name: Publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+        # Without a start tag GitHub compares with the newest tag of any
+        # module, so a module's first release gets its own history instead.
         run: |
-          notes=(--generate-notes)
-          if [ -n "$PREV_TAG" ]; then notes+=(--notes-start-tag "$PREV_TAG"); fi
+          if [ -n "$PREV_TAG" ]; then
+            notes=(--generate-notes --notes-start-tag "$PREV_TAG")
+          else
+            notes=(--notes "First release of $MODULE. Its history: https://github.com/$GITHUB_REPOSITORY/commits/$TAG/$MODULE")
+          fi
           gh release create "$TAG" "$MODULE"/dist/* --title "$MODULE $VERSION" "${notes[@]}" --verify-tag
