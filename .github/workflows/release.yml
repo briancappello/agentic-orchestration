@@ -24,6 +24,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Every tag, to find the module's previous release.
+          fetch-depth: 0
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
@@ -33,9 +35,19 @@ jobs:
         run: |
           echo "MODULE=${TAG%%/*}" >> "$GITHUB_ENV"
           echo "VERSION=${TAG#*/}" >> "$GITHUB_ENV"
+      # GitHub does not find a module's previous release among the other
+      # modules' tags, so its notes would list the whole history.
+      - name: Find the module's previous release tag
+        run: |
+          prev=$(git tag --list "$MODULE/v*" --sort=v:refname | grep -B1 -x -F "$TAG" | grep -v -x -F "$TAG" || true)
+          echo "PREV_TAG=$prev" >> "$GITHUB_ENV"
+          echo "previous tag: ${prev:-none}"
       - run: make -C "$MODULE" test
       - run: make -C "$MODULE" dist VERSION="$VERSION"
       - name: Publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$TAG" "$MODULE"/dist/* --title "$MODULE $VERSION" --generate-notes --verify-tag
+        run: |
+          notes=(--generate-notes)
+          if [ -n "$PREV_TAG" ]; then notes+=(--notes-start-tag "$PREV_TAG"); fi
+          gh release create "$TAG" "$MODULE"/dist/* --title "$MODULE $VERSION" "${notes[@]}" --verify-tag
