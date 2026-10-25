@@ -12,7 +12,8 @@ from tests.conftest import FIXTURES
 
 CAPTURED = FIXTURES / "openspec-1.13"
 # A real, larger change: plan-to-tracker-dag as archived in the platform spec store.
-REAL_CHANGE = Path.home() / "dev" / "agent-platform-specs" / "openspec/changes/archive/2026-10-16-plan-to-tracker-dag"
+# An archived change in the repository's own spec store, specs/.
+REAL_CHANGE = Path(__file__).resolve().parents[3] / "specs/openspec/changes/archive/2026-10-16-plan-to-tracker-dag"
 HAS_OPENSPEC = shutil.which("openspec") is not None
 
 
@@ -88,10 +89,7 @@ def test_real_openspec_on_captured_change(billing_store):
     assert names["billing/invoicing"] == {"Monthly invoice", "Tax lines"}
 
 
-@pytest.mark.skipif(
-    not HAS_OPENSPEC or not REAL_CHANGE.is_dir(),
-    reason="openspec or the platform spec store is not available",
-)
+@pytest.mark.skipif(not HAS_OPENSPEC, reason="openspec not installed")
 def test_real_change_in_store(store):
     shutil.copytree(REAL_CHANGE, store.root / "openspec" / "changes" / "plan-to-tracker-dag")
     (store.root / "openspec" / "config.yaml").write_text("schema: spec-driven\n")
