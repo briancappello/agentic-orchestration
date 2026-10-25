@@ -23,7 +23,7 @@ env:
 jobs:
   go:
     name: Go (${{ matrix.module }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -46,7 +46,7 @@ jobs:
 
   workbench:
     name: Workbench
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     env:
       # The session tests need the broker, and the schema contract test
@@ -84,7 +84,7 @@ jobs:
 
   repo:
     name: Licenses and specs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
