@@ -3,6 +3,7 @@ package broker_test
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"maps"
 	"net/http"
@@ -315,18 +316,50 @@ func TestTelemetry_UpdatesOutsideATurnAreCountedNotRecorded(t *testing.T) {
 	t.Parallel()
 
 	rec := telemetry.NewRecorder(telemetry.Options{})
-	s := startBroker(t, broker.Config{Telemetry: rec})
+	// The agent's output reaches the broker late, as on a loaded host: a
+	// pipe write returns once the broker's reader has the bytes, before the
+	// broker's loop has seen them.
+	s := startBrokerWrapped(t, broker.Config{Telemetry: rec}, func(r io.Reader) io.Reader {
+		return lateReader{r: r, marker: "late", delay: 50 * time.Millisecond}
+	})
+	ve := viewerEvents{t, s.b.Attach()}
 	s.agent.send(toolUpdate("tool_call", "late", map[string]any{"title": "late", "kind": "read", "status": "completed"}))
 	s.agent.send(agentText("late text"))
+	// The broker relays an update to viewers once it has recorded it, so
+	// both are recorded outside a turn before the driver starts one.
+	for range 2 {
+		ve.nextWhere(func(e broker.Event) bool { return e.Type == "update" })
+	}
 	// A turn afterwards is unaffected by them.
 	startDriverTurn(t, s, 2)
 	s.agent.send(endTurn(2))
 	s.driver.next()
 	s.cancel()
-	time.Sleep(20 * time.Millisecond)
+	// The recorder belongs to the broker's goroutine until Run returns.
+	select {
+	case <-s.b.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("broker did not stop")
+	}
 	if got := rec.OutsideTurn(); got != 2 {
 		t.Errorf("updates outside a turn = %d, want 2", got)
 	}
+}
+
+// lateReader delays handing over a read that holds marker, after the
+// underlying read returned.
+type lateReader struct {
+	r      io.Reader
+	marker string
+	delay  time.Duration
+}
+
+func (l lateReader) Read(p []byte) (int, error) {
+	n, err := l.r.Read(p)
+	if strings.Contains(string(p[:n]), l.marker) {
+		time.Sleep(l.delay)
+	}
+	return n, err
 }
 
 func TestTelemetry_SessionLabelsOnEverySpan(t *testing.T) {
