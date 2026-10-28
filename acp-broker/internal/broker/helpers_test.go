@@ -21,11 +21,22 @@ type started struct {
 // startBroker runs a broker for cfg on pipes and creates session "s1".
 func startBroker(t *testing.T, cfg broker.Config) *started {
 	t.Helper()
+	return startBrokerWrapped(t, cfg, nil)
+}
+
+// startBrokerWrapped is startBroker with the broker reading the agent's
+// output through wrap, when wrap is non-nil.
+func startBrokerWrapped(t *testing.T, cfg broker.Config, wrap func(io.Reader) io.Reader) *started {
+	t.Helper()
 	driverInR, driverInW := io.Pipe()
 	driverOutR, driverOutW := io.Pipe()
 	agentInR, agentInW := io.Pipe()
 	agentOutR, agentOutW := io.Pipe()
-	cfg.DriverIn, cfg.DriverOut, cfg.AgentIn, cfg.AgentOut = driverInR, driverOutW, agentInW, agentOutR
+	var agentOut io.Reader = agentOutR
+	if wrap != nil {
+		agentOut = wrap(agentOutR)
+	}
+	cfg.DriverIn, cfg.DriverOut, cfg.AgentIn, cfg.AgentOut = driverInR, driverOutW, agentInW, agentOut
 	b := broker.New(cfg)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
