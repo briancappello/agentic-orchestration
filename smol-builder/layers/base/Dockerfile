@@ -5,7 +5,7 @@ FROM docker.io/library/debian:trixie-slim@sha256:918311b7b6c4c6f68b232ba51658492
 # A C toolchain is in the base because rust, cgo, and native npm/pip builds need it.
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      ca-certificates curl git xz-utils procps jq ripgrep make build-essential pkg-config \
+      ca-certificates curl git xz-utils procps jq ripgrep make build-essential pkg-config socat \
  && rm -rf /var/lib/apt/lists/*
 
 ARG OPENCODE_VERSION=1.18.29

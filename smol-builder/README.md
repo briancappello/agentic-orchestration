@@ -55,7 +55,7 @@ Every input is pinned. Base images are pinned by digest. Every download is pinne
 
 | Layer | Provides | Pins |
 |---|---|---|
-| `base` | Debian trixie-slim; `git`, a C toolchain (`build-essential`, `pkg-config`, `make`), `curl`, `jq`, `ripgrep`, `xz-utils`, `procps`; opencode with a policy-only config; `WORKDIR /workspace` | `debian:trixie-slim@sha256:918311b7b6c4c6f68b232ba516584925f6c78ad82b6fd534b98979df6438e483`; opencode 1.18.29, SHA-256 `ea800b7ff56226b70952126c9fc1e2517ca4c4b5682fd9d3f9e87449697a1194` |
+| `base` | Debian trixie-slim; `git`, a C toolchain (`build-essential`, `pkg-config`, `make`), `curl`, `jq`, `ripgrep`, `xz-utils`, `procps`, `socat` (which carries Sortie's tool server into a VM); opencode with a policy-only config; `WORKDIR /workspace` | `debian:trixie-slim@sha256:918311b7b6c4c6f68b232ba516584925f6c78ad82b6fd534b98979df6438e483`; opencode 1.18.29, SHA-256 `ea800b7ff56226b70952126c9fc1e2517ca4c4b5682fd9d3f9e87449697a1194` |
 | `go` | Go in `/usr/local/go`, `GOPATH=/root/go` | Go 1.27.2, SHA-256 `ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5` |
 | `node` | Node.js LTS and npm in `/opt/node` | Node 24.21.0, SHA-256 `fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6` |
 | `python` | uv and CPython in `/opt/uv-python` | uv 0.13.0, SHA-256 `1468ebd5a5541121837c5a2817b9972ba6090fa6caa3d142620850a47fb75154`; CPython 3.14.6, checked by uv against its own pinned hashes |
