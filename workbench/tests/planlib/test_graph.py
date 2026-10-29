@@ -152,3 +152,28 @@ def test_graph_version_follows_the_store_schema(store):
     schema.write_text(json.dumps(doc))
     r = validate(store.root, show=no_openspec)
     assert r.errors == [] and r.graph["schema_version"] == 1
+
+
+def test_a_story_carries_the_requirements_it_covers(store):
+    """The agent works in another repository than the spec store, so the
+    story's body holds the covered requirements, scenarios included."""
+    store.plan([("billing", [])])
+    d = store.change("billing", breakdown(deliverable("invoice", covers=["billing#Monthly invoice"])))
+    spec = d / "specs" / "billing"
+    spec.mkdir(parents=True)
+    (spec / "spec.md").write_text(
+        "## ADDED Requirements\n\n### Requirement: Monthly invoice\nThe system SHALL invoice monthly.\n\n"
+        "#### Scenario: First of the month\n- **WHEN** the month starts\n- **THEN** an invoice exists\n\n"
+        "### Requirement: Not covered\nIt SHALL be left out.\n\n#### Scenario: s\n- **WHEN** x\n- **THEN** y\n"
+    )
+    payload = {"deltas": [
+        {"spec": "billing", "operation": "ADDED", "requirement": {"text": "The system SHALL invoice monthly."}},
+        {"spec": "billing", "operation": "ADDED", "requirement": {"text": "It SHALL be left out."}},
+    ]}
+    r = validate(store.root, show=lambda *_: payload)
+    assert r.errors == []
+    body = by_key(r.graph)["billing/invoice"]["body"]
+    assert "## Spec (OpenSpec change `billing`)" in body
+    assert "### billing: Monthly invoice\n\nThe system SHALL invoice monthly." in body
+    assert "#### Scenario: First of the month\n- **WHEN** the month starts\n- **THEN** an invoice exists" in body
+    assert "left out" not in body

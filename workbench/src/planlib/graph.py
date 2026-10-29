@@ -11,7 +11,7 @@ import networkx as nx
 from .approval import story_digest
 from .checks import NamesFor, resolve_ref
 from .errors import PlanError
-from .requirements import RequirementsError
+from .requirements import RequirementsError, requirement_details
 from .schemas import Schemas
 from .store import CHANGES_DIR, PLAN_FILE, LoadedStore
 
@@ -51,6 +51,8 @@ def build_graph(store: LoadedStore, names_for: NamesFor, schemas: Schemas,
     nodes: list[dict[str, Any]] = []
     parents: list[dict[str, str]] = []
     blocks: list[dict[str, str]] = []
+    # Each change's requirements, read once, for the bodies of the stories that cover them.
+    details: dict[str, dict] = {}
 
     planned = [e["name"] for e in store.plan["changes"]]
     epic_graph = nx.DiGraph()
@@ -121,7 +123,7 @@ def build_graph(store: LoadedStore, names_for: NamesFor, schemas: Schemas,
                     "kind": "story",
                     "change": change,
                     "title": d["title"],
-                    "body": _story_body(d),
+                    "body": _story_body(d, store, change, details),
                     "approval": story_approval[key],
                     "has_spec": bool(d["covers"]),
                     "depth": story_depth[key],
@@ -170,11 +172,32 @@ def _epic_body(store: LoadedStore, change: str) -> str:
     return body
 
 
-def _story_body(d: dict) -> str:
+def _story_body(d: dict, store: LoadedStore, change: str, details: dict[str, dict]) -> str:
     parts = []
     if d.get("notes"):
         parts.append(d["notes"].strip())
     parts.append("## Acceptance criteria\n\n" + "\n".join(f"- {c}" for c in d["acceptance_criteria"]))
     if d["covers"]:
         parts.append("## Covers\n\n" + "\n".join(f"- `{c}`" for c in d["covers"]))
+        # The agent works in another repository, so the story carries the
+        # requirements it implements, scenarios included.
+        if change not in details:
+            details[change] = requirement_details(store.root, change)
+        spec = _covered_spec(d["covers"], details[change])
+        if spec:
+            parts.append(f"## Spec (OpenSpec change `{change}`)\n\n" + spec)
     return "\n\n".join(parts)
+
+
+def _covered_spec(covers: list[str], capabilities: dict[str, list[dict]]) -> str:
+    out = []
+    for ref in covers:
+        capability, _, name = ref.partition("#")
+        req = next((r for r in capabilities.get(capability, []) if r["name"] == name), None)
+        if req is None:
+            continue
+        block = [f"### {capability}: {name}", "", req["text"]]
+        for s in req["scenarios"]:
+            block += ["", f"#### Scenario: {s['name']}"] + [f"- **{st['keyword']}** {st['text']}" for st in s["steps"]]
+        out.append("\n".join(block))
+    return "\n\n".join(out)
