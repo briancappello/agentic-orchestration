@@ -1,0 +1,13 @@
+#!/bin/sh
+# The one ACP agent command of the stage-0 workflow. Sortie sets SORTIE_RULE
+# to the dispatch rule a run was dispatched under: a rule whose name starts
+# with "claude" runs Claude Code (claude-agent-acp), anything else opencode.
+case "${SORTIE_RULE:-}" in
+  claude*) agent=claude ;;
+  *) agent=opencode ;;
+esac
+if [ "${1:-}" = --which ]; then echo "$agent"; exit 0; fi
+case "$agent" in
+  claude) exec claude-agent-acp "$@" ;;
+  *) exec opencode acp "$@" ;;
+esac
