@@ -36,6 +36,12 @@ the pull request merges, Sortie moves the story to `Done`.
   then it runs Claude Code.
   `pack/agent-acp` picks one from `SORTIE_RULE`. Both use the operator's
   Claude subscription. No other model provider is configured.
+- **No permission prompts.** The VM is the sandbox, so neither harness asks
+  before acting: opencode's `permission` allows everything except `webfetch`
+  (`pack/opencode.json`; opencode 1.x otherwise asks for `external_directory`
+  and `doom_loop`), and Claude Code runs with `bypassPermissions`
+  (`pack/claude-settings.json`). Sortie refuses consent on unattended runs,
+  so a prompt would hold the run until acp-broker's 10-minute timeout.
 - **Parallel agents.** `STAGE0_MAX_AGENTS` in `stage0.env` (default 3) caps
   agents at once; each VM takes 4 vCPU and 8 GiB. All of them share one
   Claude subscription and its rate limits.
