@@ -4,31 +4,25 @@ import SyncHarness from "./SyncHarness.svelte";
 import GraphHarness from "./GraphHarness.svelte";
 import ChatHarness from "./ChatHarness.svelte";
 import { planDoc } from "./fixtures";
-import type { SyncPreviewResponse } from "../src/lib/api";
 import type { SyncClient } from "../src/lib/sync";
 import { errorTarget } from "../src/lib/sync";
 import { GraphModel } from "../src/lib/model";
 import type { SessionClient } from "../src/lib/session";
 import { session as identity } from "../src/lib/identity.svelte";
-import type { GraphNode } from "../src/lib/types";
+import type { GraphNode, SyncStatus as SyncStatusT } from "../src/lib/types";
 
 class FakeSync implements SyncClient {
-  applied: string[] = [];
   approved: { keys?: string[]; epic?: string }[] = [];
   calls: string[] = [];
-  constructor(public missing: string[] = []) {}
-  async preview(): Promise<SyncPreviewResponse> {
-    return {
-      preview_id: "p1", can_apply: this.missing.length === 0, capabilities: [],
-      preview: { counts: { creates: 7, updates: 1, parents: 0, relations_added: 3, relations_removed: 1, orphans: 1, releases: 2 }, missing_capabilities: this.missing, skipped_drafts: ["billing"],
-        releases: [{ plan_key: "billing/a1", identifier: "PLAT-1", to: "Todo" }, { plan_key: "billing/a2", to: "Todo" }] },
-    };
-  }
-  async apply(id: string) { this.applied.push(id); return { result: { created: [1, 2, 3, 4, 5, 6, 7], updated: [1], parents_set: [], relations_added: [1, 2, 3], relations_removed: [1] } }; }
+  async retry() { this.calls.push("retry"); return status({ state: "syncing" }); }
   async approve(t: { keys?: string[]; epic?: string }) { this.approved.push(t); return {}; }
   async pullBack(k: string) { this.calls.push(`pull-back ${k}`); return {}; }
   async cancel(k: string) { this.calls.push(`cancel ${k}`); return {}; }
   async supersede(k: string) { this.calls.push(`supersede ${k}`); return {}; }
+}
+
+function status(extra: Partial<SyncStatusT> = {}): SyncStatusT {
+  return { state: "synced", synced_at: 1_800_000_000, failed_at: null, reason: null, result: null, retry_at: null, runs: 1, ...extra };
 }
 
 let app: ReturnType<typeof mount> | undefined;
@@ -40,33 +34,61 @@ afterEach(() => {
 async function settle() { for (let i = 0; i < 6; i++) { await tick(); await Promise.resolve(); } flushSync(); }
 const $ = <T extends Element = HTMLElement>(s: string) => document.querySelector<T>(s);
 
-describe("sync dialog", () => {
-  it("shows the preview counts and applies only after the confirm", async () => {
-    const sync = new FakeSync();
-    app = mount(SyncHarness, { target: document.body, props: { sync } });
-    await settle();
-    expect($("[data-count='creates']")!.textContent).toBe("7");
-    expect($("[data-count='updates']")!.textContent).toBe("1");
-    expect($("[data-count='relations_added']")!.textContent).toBe("3");
-    expect($("[data-count='relations_removed']")!.textContent).toBe("1");
-    expect($("[data-count='releases']")!.textContent).toBe("2");
-    expect($("[data-releases]")!.textContent).toContain("PLAT-1, billing/a2");
-    expect(document.body.textContent).toContain("billing");
-    expect(sync.applied).toEqual([]);
+describe("sync status", () => {
+  function show(st: SyncStatusT | null, sync = new FakeSync()) {
+    app = mount(SyncHarness, { target: document.body, props: { status: st, onretry: () => sync.retry() } });
+    return sync;
+  }
 
-    $<HTMLButtonElement>("[data-confirm]")!.click();
+  it("says when the plan is syncing", async () => {
+    show(status({ state: "syncing" }));
     await settle();
-    expect(sync.applied).toEqual(["p1"]);
-    expect(document.body.textContent).toContain("7 created");
+    expect($("[data-sync]")!.dataset.sync).toBe("syncing");
+    expect($("[data-sync]")!.textContent).toContain("Syncing");
   });
 
-  it("names a missing capability and offers no apply", async () => {
-    const sync = new FakeSync(["link_dependency"]);
-    app = mount(SyncHarness, { target: document.body, props: { sync } });
+  it("says when the plan last synced, and opens the last result", async () => {
+    show(status({ result: { created: [{ plan_key: "billing/b1", identifier: "T-1" }], updated: [],
+      released: [{ plan_key: "billing/b1", identifier: "T-1" }], orphans: [{ plan_key: "billing/old" }] } }));
+    await settle();
+    expect($("[data-sync]")!.dataset.sync).toBe("synced");
+    expect($("[data-sync]")!.textContent).toContain("Synced");
+    expect($("[data-sync-result]")).toBeNull();
+    $<HTMLButtonElement>("[data-sync]")!.click();
+    await settle();
+    expect($("[data-sync-list='released']")!.textContent).toContain("T-1");
+    expect($("[data-sync-list='orphans']")!.textContent).toContain("billing/old");
+    expect($("[data-sync-list='created']")!.textContent).toContain("T-1");
+  });
+
+  it("shows a failure with its reason and retries it", async () => {
+    const sync = show(status({ state: "failed", failed_at: 1_800_000_100, retry_at: 1_800_000_160,
+      reason: { code: "sortie_unreachable", message: "cannot reach Sortie: connection refused" } }));
+    await settle();
+    expect($("[data-sync]")!.dataset.sync).toBe("failed");
+    expect($("[data-sync]")!.textContent).toContain("Sync failed");
+    $<HTMLButtonElement>("[data-sync]")!.click();
+    await settle();
+    expect($("[role='alert']")!.textContent).toContain("Sortie is unreachable");
+    $<HTMLButtonElement>("[data-act='retry-sync']")!.click();
+    await settle();
+    expect(sync.calls).toEqual(["retry"]);
+  });
+
+  it("names a failed write and a missing capability", async () => {
+    show(status({ state: "failed", reason: { code: "tracker_unsupported_operation", message: "the tracker lacks link_dependency" },
+      result: { created: [], failed: { op: "create", plan_key: "billing/b2", error: "boom" } } }));
+    await settle();
+    $<HTMLButtonElement>("[data-sync]")!.click();
     await settle();
     expect($("[role='alert']")!.textContent).toContain("link_dependency");
-    expect($("[data-confirm]")).toBeNull();
-    expect(sync.applied).toEqual([]);
+    expect($("[data-sync-failed]")!.textContent).toContain("billing/b2");
+  });
+
+  it("shows nothing synced yet before the first sync", async () => {
+    show(status({ state: "idle", synced_at: null, runs: 0 }));
+    await settle();
+    expect($("[data-sync]")!.textContent).toContain("Not synced yet");
   });
 });
 

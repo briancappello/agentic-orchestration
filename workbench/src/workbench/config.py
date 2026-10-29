@@ -51,6 +51,9 @@ class Config:
     session_max_age: int = 12 * 3600
     debounce_ms: int = 300
     poll_seconds: float = 5.0
+    # A failed sync is retried after this many seconds, doubling up to the ceiling.
+    sync_backoff_first: float = 1.0
+    sync_backoff_max: float = 60.0
     cookie_secure: bool = False
     # OpenID Connect. With no issuer, the workbench runs in local mode.
     oidc_issuer: str = ""

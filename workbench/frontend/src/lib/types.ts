@@ -79,11 +79,33 @@ export interface MergedGraph {
   unplanned_changes: string[];
   plan_states?: PlanStates | null;
   validation: { valid: boolean; errors: PlanError[]; version: number };
+  /** The project's automatic sync to the tracker. Absent from an older backend. */
+  sync?: SyncStatus | null;
   sortie: {
     reachable: boolean; error: string | null; capabilities: string[]; generated_at: string | null;
     /** The tracker project, and whether Sortie runs agents for it (it does for its configured project only). */
     project?: string; dispatched?: boolean;
   };
+}
+
+/** An issue a sync wrote, as Sortie reports it. */
+export interface SyncIssueRef { plan_key: string; issue_id?: string; identifier?: string }
+
+/** What the last sync wrote, and where it stopped. */
+export interface SyncResult {
+  created?: SyncIssueRef[]; updated?: SyncIssueRef[]; released?: SyncIssueRef[]; orphans?: SyncIssueRef[];
+  failed?: { op: string; plan_key: string; error: string } | null;
+}
+
+/** The state of a project's automatic sync. Times are Unix seconds. */
+export interface SyncStatus {
+  state: "idle" | "syncing" | "synced" | "failed";
+  synced_at: number | null;
+  failed_at: number | null;
+  reason: { code: string; message: string } | null;
+  result: SyncResult | null;
+  retry_at: number | null;
+  runs: number;
 }
 
 /** A project as the projects list shows it. */

@@ -23,8 +23,10 @@ dev/stage0/stage0.sh --update-sortie  # also move the Sortie checkout to origin/
 
 ## How a story runs
 
-The workbench registers the spec store (`STAGE0_STORE`). An approved,
-synced story is released to `Todo`. Sortie creates a VM from the pack and
+The workbench registers the spec store (`STAGE0_STORE`). About a second
+after an approval it syncs the plan on its own, and an approved story whose
+blockers are approved is released to `Todo`; the workbench then asks Sortie
+to poll at once. Sortie creates a VM from the pack and
 seeds it with the repository (`STAGE0_REPO_*`). It runs the agent behind
 acp-broker, then pushes the issue branch and opens the pull request. When
 the pull request merges, Sortie moves the story to `Done`.

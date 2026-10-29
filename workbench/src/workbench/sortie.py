@@ -76,6 +76,10 @@ class SortieClient:
     async def cancel(self, plan_key: str) -> dict[str, Any]:
         return await self._request("POST", "/api/v1/plan/cancel", json={"plan_key": plan_key})
 
+    async def refresh(self) -> dict[str, Any]:
+        """Ask Sortie to poll its tracker now, rather than at its next interval."""
+        return await self._request("POST", "/api/v1/refresh")
+
     # Workers. Sortie runs agents for its configured project only.
 
     async def state(self) -> dict[str, Any]:
@@ -119,6 +123,9 @@ class ProjectSortie:
 
     async def cancel(self, plan_key: str) -> dict[str, Any]:
         return await self.client.cancel(plan_key)
+
+    async def refresh(self) -> dict[str, Any]:
+        return await self.client.refresh()
 
     async def state(self) -> dict[str, Any]:
         return await self.client.state()

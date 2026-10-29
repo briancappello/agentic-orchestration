@@ -1,6 +1,6 @@
 /** The workbench backend: the browser's only server. */
 import type { About, Identity } from "./identity.svelte";
-import type { MergedGraph, ProjectSummary, TrackerProject } from "./types";
+import type { MergedGraph, ProjectSummary, SyncStatus, TrackerProject } from "./types";
 
 export class ApiError extends Error {
   constructor(readonly status: number, readonly code: string, message: string, readonly body: unknown = null) {
@@ -45,8 +45,8 @@ export function projectApi(slug: string) {
   const p = projectPath(slug);
   return {
     graph: () => request<MergedGraph>("GET", `${p}/graph`),
-    preview: () => request<SyncPreviewResponse>("POST", `${p}/sync/preview`),
-    apply: (previewId: string) => request<{ result: unknown }>("POST", `${p}/sync/apply`, { preview_id: previewId, confirm: true }),
+    syncStatus: () => request<SyncStatus>("GET", `${p}/sync`),
+    retrySync: () => request<SyncStatus>("POST", `${p}/sync/retry`),
     approve: (target: { keys?: string[]; epic?: string }) => request<{ approved: string[] }>("POST", `${p}/approve`, target),
     pullBack: (key: string) => request<unknown>("POST", `${p}/stories/pull-back`, { key }),
     cancel: (key: string) => request<{ cancelled: string; rereview: string[] }>("POST", `${p}/stories/cancel`, { key }),
@@ -103,20 +103,6 @@ export interface SessionConfig {
   options: ConfigOption[];
   /** False while the session starts and its model is still being selected. */
   ready: boolean;
-}
-
-export interface SyncPreviewResponse {
-  preview_id: string;
-  can_apply: boolean;
-  capabilities: string[];
-  preview: {
-    counts: { creates: number; updates: number; parents: number; relations_added: number; relations_removed: number; orphans: number;
-      releases?: number; labels?: number; approvals?: number };
-    missing_capabilities: string[];
-    skipped_drafts: string[];
-    releases?: { plan_key: string; identifier?: string; to: string }[];
-    unplanned_changes?: string[];
-  };
 }
 
 /** Subscribe to graph updates; the browser's EventSource reconnects by itself. */

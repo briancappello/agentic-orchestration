@@ -8,6 +8,7 @@ import logging
 import time
 from typing import Any
 
+from .autosync import approved_digest
 from .merge import merge
 from .plan_overlay import frozen_set, overlay
 from .plan_state import PlanState
@@ -16,10 +17,17 @@ from .workers import worker_fields
 
 log = logging.getLogger(__name__)
 
+_UNSET = object()
+
 
 class Hub:
     def __init__(self, plan: PlanState, sortie: ProjectSortie, records=None):
         self.plan = plan
+        # Called, from any thread, when the approved part of the graph changes.
+        self.on_approved_change = lambda: None
+        # Unset until the first build, so that build triggers the startup sync.
+        self._approved: str | None | object = _UNSET
+        self.sync_status: dict[str, Any] | None = None
         self.sortie = sortie
         # (approvals, rereviews) of the project, by plan key.
         self.records = records or (lambda: ({}, {}))
@@ -122,8 +130,22 @@ class Hub:
             },
         )
         doc["plan_states"] = (self.tracker or {}).get("plan_states")
+        doc["sync"] = self.sync_status
         self.doc = doc
         self._publish(doc)
+        approved = approved_digest(snap["graph"], self.fields) if snap["valid"] else None
+        if approved != self._approved:
+            self._approved = approved
+            self.on_approved_change()
+
+    def publish_sync(self, status: dict[str, Any]) -> None:
+        """Show a new sync status, without rebuilding the graph."""
+        self.sync_status = status
+        if not self.doc:
+            return
+        self.version += 1
+        self.doc = {**self.doc, "sync": status, "version": self.version}
+        self._publish(self.doc)
 
     def _publish(self, doc: dict[str, Any]) -> None:
         if self._loop is None:

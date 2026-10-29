@@ -9,14 +9,13 @@
   import ChatPane from "./ChatPane.svelte";
   import GraphPane from "./GraphPane.svelte";
   import Shell from "./Shell.svelte";
-  import SyncDialog from "./SyncDialog.svelte";
+  import SyncStatus from "./SyncStatus.svelte";
 
   let { slug, view = $bindable(), onmissing }: { slug: string; view: ViewState; onmissing: () => void } = $props();
 
   let doc: MergedGraph = $state(emptyGraph());
   let name = $state("");
   let tracker: TrackerProject | null = $state(null);
-  let syncing = $state(false);
   // The tracker identifier of the worker shown in the chat pane, if any.
   let watching: string | null = $state(null);
   const workerClient = $derived(watching ? httpWorker(slug, watching) : null);
@@ -68,16 +67,13 @@
       {#snippet notice()}
         {#if tracker && tracker.exists && !tracker.ready}
           <div class="tracker-warn" role="status">
-            <p><b>Huly project {tracker.key} cannot take plan writes yet.</b> Fix this in Huly, then sync:</p>
+            <p><b>Huly project {tracker.key} cannot take plan writes yet.</b> Fix this in Huly; the plan syncs at the next change, or retry it from the sync status:</p>
             <ul>{#each tracker.problems as p (p)}<li>{p}</li>{/each}</ul>
           </div>
         {/if}
       {/snippet}
       {#snippet actions()}
-        <button type="button" class="sync" onclick={() => (syncing = true)} disabled={!doc.validation.valid || !doc.sortie.reachable}
-          title={!doc.validation.valid ? "Fix the plan's problems first" : !doc.sortie.reachable ? "Sortie is unreachable" : "Preview a sync to the tracker"}>
-          Sync…
-        </button>
+        <SyncStatus status={doc.sync} onretry={() => sync.retry()} />
       {/snippet}
     </GraphPane>
   {/snippet}
@@ -86,12 +82,8 @@
       onwatch={(n) => { watching = n.tracker?.identifier ?? null; selectAnywhere(n.plan_key); }} onunwatch={() => (watching = null)} />
   {/snippet}
 </Shell>
-{#if syncing}<SyncDialog {sync} onclose={() => (syncing = false)} />{/if}
 
 <style>
-  .sync { height: 32px; padding: 0 14px; border-radius: var(--r-button); background: #fff; color: var(--ink); font-weight: 700; }
-  .sync:hover:not(:disabled) { background: var(--strip); }
-  .sync:disabled { opacity: 0.4; cursor: default; }
   .tracker-warn { flex: none; padding: 10px var(--s-gutter); border-bottom: 1px solid #ecd9a8; background: var(--amber-tint); color: var(--amber-ink); font-size: 12.5px; }
   .tracker-warn b { color: var(--ink); font-weight: 600; }
   .tracker-warn ul { margin: 4px 0 0 18px; }
