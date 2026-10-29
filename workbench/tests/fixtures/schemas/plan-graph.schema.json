@@ -108,11 +108,6 @@
           "description": "Version 2, stories only. When the story was approved, in RFC 3339.",
           "type": "string",
           "format": "date-time"
-        },
-        "repository": {
-          "description": "Stories only, and only when the breakdown names one: the repository the story lands in, by the name Sortie's workflow lists it under. A Sortie that does not read it refuses a graph that carries it.",
-          "type": "string",
-          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
         }
       }
     },
