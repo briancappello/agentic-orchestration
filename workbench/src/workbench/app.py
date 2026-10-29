@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from planlib.requirements import requirement_details
 
 from .auth import PLANNER, Sessions
 from .auth_routes import auth_router, make_checks
@@ -23,6 +25,9 @@ from .session_routes import session_router
 from .story_routes import story_router
 from .sync import sync_router
 from .worker_routes import worker_router
+
+# A change name, as the planning schemas define it; it also keeps the path inside the store.
+CHANGE_NAME = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
 
 
 _CODES = {401: "unauthorized", 403: "forbidden", 404: "not_found"}
@@ -83,6 +88,13 @@ def create_app(config: Config, **services) -> FastAPI:
     @app.get("/api/projects/{slug}/graph", dependencies=[Depends(require_operator)])
     def graph(slug: str) -> dict:
         return projects.get(slug).hub.doc
+
+    @app.get("/api/projects/{slug}/changes/{change}/requirements", dependencies=[Depends(require_operator)])
+    def requirements(slug: str, change: str) -> dict:
+        rt = projects.get(slug)
+        if not CHANGE_NAME.fullmatch(change) or change == "archive" or not (rt.store / "openspec" / "changes" / change).is_dir():
+            raise HTTPException(status_code=404, detail={"code": "unknown_change", "message": f"no change {change!r} in the store"})
+        return {"change": change, "capabilities": requirement_details(rt.store, change)}
 
     @app.get("/api/projects/{slug}/events", dependencies=[Depends(require_operator)])
     async def events(slug: str, request: Request) -> StreamingResponse:

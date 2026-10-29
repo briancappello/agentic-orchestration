@@ -24,3 +24,10 @@ export function renderMarkdown(text: string): string {
     .replaceAll("<table>", '<div class="table-scroll"><table>').replaceAll("</table>", "</table></div>");
   return DOMPurify.sanitize(html, { FORBID_TAGS: ["style", "form", "input", "img"], FORBID_ATTR: ["style"] });
 }
+
+/** One line of Markdown (code spans, emphasis, links) as safe inline HTML, with no paragraph around it. */
+export function renderInline(text: string): string {
+  hookLinks();
+  const html = marked.parseInline(text) as string;
+  return DOMPurify.sanitize(html, { ALLOWED_TAGS: ["code", "em", "strong", "a", "del"], ALLOWED_ATTR: ["href", "target", "rel"] });
+}

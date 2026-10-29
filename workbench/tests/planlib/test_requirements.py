@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from planlib.requirements import RequirementsError, openspec_show, requirement_names
+from planlib.requirements import RequirementsError, openspec_show, requirement_details, requirement_names
 from tests.conftest import FIXTURES
 
 CAPTURED = FIXTURES / "openspec-1.13"
@@ -101,3 +101,33 @@ def test_real_change_in_store(store):
 def test_openspec_failure_is_reported(store):
     with pytest.raises(RequirementsError, match="failed|not installed"):
         openspec_show(store.root, "no-such-change")
+
+
+def test_details_read_as_people_read_them(billing_store):
+    details = requirement_details(billing_store.root, "billing")
+    assert sorted(details) == ["accounts", "billing/invoicing"]
+    monthly, tax = details["billing/invoicing"]
+    assert monthly["name"] == "Monthly invoice" and monthly["operation"] == "ADDED"
+    assert monthly["text"].startswith("The system SHALL generate an invoice") and "immutable once sent" in monthly["text"]
+    assert monthly["scenarios"] == [{"name": "First of the month", "steps": [
+        {"keyword": "WHEN", "text": "the clock reaches the first day of a month"},
+        {"keyword": "THEN", "text": "an invoice exists for every active account"},
+    ]}]
+    # A header inside a code fence is text, not a requirement; the fence stays in the text.
+    assert tax["name"] == "Tax lines" and "### Requirement: not a header" in tax["text"]
+    assert [s["name"] for s in tax["scenarios"]] == ["Tax applied"]
+
+
+def test_details_leave_out_removed_requirements(store):
+    spec = store.change("billing") / "specs" / "billing"
+    spec.mkdir(parents=True)
+    (spec / "spec.md").write_text(
+        "## ADDED Requirements\n\n### Requirement: Kept\nIt SHALL stay.\n\n"
+        "#### Scenario: s\n- **WHEN** x\n  and more of x\n- **THEN** y\n\n"
+        "## REMOVED Requirements\n\n### Requirement: Gone\n**Reason**: r\n**Migration**: m\n"
+    )
+    assert requirement_details(store.root, "billing") == {"billing": [{
+        "name": "Kept", "operation": "ADDED", "text": "It SHALL stay.",
+        "scenarios": [{"name": "s", "steps": [{"keyword": "WHEN", "text": "x and more of x"}, {"keyword": "THEN", "text": "y"}]}],
+    }]}
+    assert requirement_details(store.root, "no-such-change") == {}

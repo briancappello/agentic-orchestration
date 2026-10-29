@@ -5,9 +5,11 @@
   import type { GraphNode, ViewState } from "../lib/types";
   import Icon from "./Icon.svelte";
   import { workersOf, workerStatus } from "../lib/worker";
+  import { renderInline, renderMarkdown } from "../lib/markdown";
+  import { groupCovers, type ChangeRequirements, type CoveredRequirement, type SpecReader } from "../lib/spec";
 
   let {
-    model, view, attached, onattach, onselect, actions, onwatch, watching = null,
+    model, view, attached, onattach, onselect, actions, onwatch, watching = null, specs,
   }: {
     model: GraphModel;
     view: ViewState;
@@ -18,6 +20,8 @@
     onwatch?: (node: GraphNode) => void;
     /** The identifier of the worker the chat pane shows, if any. */
     watching?: string | null;
+    /** Reads the requirements a selected story covers. */
+    specs?: SpecReader;
   } = $props();
 
   let busy = $state("");
@@ -58,6 +62,39 @@
   const unplanned = $derived(scope.filter((n) => n.has_spec === false));
   const noun = $derived(view.epic ? "stories" : "epics");
   const workers = $derived(workersOf(view.epic ? model.storiesOf(view.epic) : model.doc.nodes));
+
+  // The selected story's requirements, read once per change and plan version.
+  let reqs: ChangeRequirements | null = $state(null);
+  let reqError = $state("");
+  let expanded: Record<string, boolean> = $state({});
+  let reqKey = "";
+  $effect(() => {
+    const n = node;
+    const version = model.doc.version;
+    if (!n || !n.covers.length || !specs) {
+      reqKey = "";
+      reqs = null;
+      return;
+    }
+    const key = `${n.change}@${version}`;
+    if (key === reqKey) return;
+    if (!reqKey.startsWith(`${n.change}@`)) {
+      reqs = null;
+      expanded = {};
+    }
+    reqKey = key;
+    reqError = "";
+    specs.requirements(n.change).then(
+      (r) => { if (reqKey === key) reqs = r; },
+      (e) => { if (reqKey === key) { reqs = {}; reqError = e instanceof Error ? e.message : "The specs could not be read."; } },
+    );
+  });
+  const covered = $derived(node ? groupCovers(node.covers, reqs) : []);
+  const allOpen = (items: CoveredRequirement[]) => items.every((it) => expanded[it.ref]);
+  function toggleAll(items: CoveredRequirement[]) {
+    const to = !allOpen(items);
+    for (const it of items) expanded[it.ref] = to;
+  }
 
   function why(n: GraphNode): string {
     return model.badge(n)?.label ?? model.statusLabel(n);
@@ -118,9 +155,47 @@
             <dd>{#if node.tracker.url}<a class="ext-link" href={node.tracker.url} target="_blank" rel="noopener">{node.tracker.identifier} <Icon name="external" size={13} /></a>{:else}{node.tracker.identifier}{/if}</dd>
           {/if}
           <dt>Spec</dt>
-          <dd>
+          <dd class:spec={node.covers.length > 0}>
             {#if node.covers.length}
-              <ul class="refs">{#each node.covers as c (c)}<li>{c}</li>{/each}</ul>
+              {#each covered as g (g.capability)}
+                <div class="cap" data-capability={g.capability}>
+                  <div class="cap-head">
+                    <span class="cap-name">{g.capability}</span>
+                    {#if reqs && g.items.some((it) => it.requirement)}
+                      <button type="button" class="cap-toggle" onclick={() => toggleAll(g.items)}>{allOpen(g.items) ? "Collapse all" : "Expand all"}</button>
+                    {/if}
+                  </div>
+                  <ul class="reqs">
+                    {#each g.items as it (it.ref)}
+                      <li>
+                        <details bind:open={expanded[it.ref]} data-requirement={it.name}>
+                          <summary><span class="chev"><Icon name="chevron" size={12} /></span><span>{it.name}</span></summary>
+                          <div class="req-body">
+                            {#if it.requirement}
+                              <div class="req-text">{@html renderMarkdown(it.requirement.text)}</div>
+                              {#each it.requirement.scenarios as s (s.name)}
+                                <div class="scn">
+                                  <p class="scn-name">{s.name}</p>
+                                  <ol class="steps">
+                                    {#each s.steps as step, i (i)}
+                                      <li class:cont={step.keyword === "AND" || step.keyword === "BUT"}><b>{step.keyword.toLowerCase()}</b><span>{@html renderInline(step.text)}</span></li>
+                                    {/each}
+                                  </ol>
+                                </div>
+                              {/each}
+                            {:else if reqs === null}
+                              <p class="none">Loading…</p>
+                            {:else}
+                              <p class="none">Not found in {node.change}'s specs.</p>
+                            {/if}
+                          </div>
+                        </details>
+                      </li>
+                    {/each}
+                  </ul>
+                </div>
+              {/each}
+              {#if reqError}<p class="err">{reqError}</p>{/if}
             {:else if node.kind === "story"}<span class="none">No spec yet</span>
             {:else}<span class="mono">openspec/changes/{node.change}</span>{/if}
           </dd>
@@ -275,8 +350,30 @@
   dl { display: grid; grid-template-columns: 92px 1fr; gap: 8px 12px; margin-top: var(--s-md); font-size: 13px; }
   dt { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); padding-top: 2px; }
   dd { display: flex; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
-  .refs, .ac { list-style: none; display: flex; flex-direction: column; gap: 3px; }
-  .refs li, .mono { font: 500 11.5px var(--font-mono); word-break: break-word; }
+  .ac { list-style: none; display: flex; flex-direction: column; gap: 3px; }
+  .mono { font: 500 11.5px var(--font-mono); word-break: break-word; }
+  dd.spec { display: flex; flex-direction: column; gap: var(--s-md); }
+  .cap-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-sm); }
+  .cap-name { font: 500 11.5px var(--font-mono); color: var(--mute); word-break: break-word; }
+  .cap-toggle { flex: none; font-size: 12px; font-weight: 600; color: var(--mute); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line); }
+  .cap-toggle:hover { color: var(--ink); text-decoration-color: var(--ink); }
+  .reqs { list-style: none; margin-top: 4px; }
+  .reqs > li + li { border-top: 1px solid var(--hair); }
+  summary { display: flex; align-items: flex-start; gap: 6px; padding: 6px 0; cursor: pointer; list-style: none; font-size: 13px; font-weight: 600; line-height: 1.4; color: var(--ink); }
+  summary::-webkit-details-marker { display: none; }
+  summary:hover { color: #000; }
+  summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: var(--r-tag); }
+  .chev { display: inline-flex; padding-top: 3px; color: var(--mute); transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1); }
+  details[open] .chev { transform: rotate(90deg); color: var(--ink); }
+  .req-body { padding: 0 0 12px 18px; max-width: 68ch; font-size: 12.5px; line-height: 1.55; color: var(--ink); }
+  .req-text :global(p + p) { margin-top: 6px; }
+  .req-body :global(code) { font: 500 11.5px var(--font-mono); padding: 1px 4px; border-radius: var(--r-tag); background: var(--strip); }
+  .scn { margin-top: 10px; }
+  .scn-name { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+  .steps { list-style: none; display: grid; grid-template-columns: max-content 1fr; gap: 3px 10px; margin-top: 4px; }
+  .steps li { display: contents; }
+  .steps b { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); padding-top: 2px; text-align: right; }
+  .steps li.cont b { font-weight: 600; color: var(--slate-ink); }
   .ac li { padding-left: 12px; position: relative; }
   .ac li::before { content: "–"; position: absolute; left: 0; color: var(--mute); }
   .link { font: 500 11.5px var(--font-mono); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line); }

@@ -245,5 +245,78 @@ def _parse_delta(text: str):
     yield from flush()
 
 
+_SCENARIO = re.compile(r"^####\s+Scenario:\s*(.+?)\s*$")
+_STEP = re.compile(r"^\s*[-*]\s+\*\*([A-Z]+)\*\*\s*(.*?)\s*$")
+
+
+def requirement_details(store: Path, change: str) -> dict[str, list[dict[str, Any]]]:
+    """Each capability of the change, with its added and modified requirements
+    as people read them: name, operation, text, and scenarios with their
+    WHEN/THEN steps, in file order. Read from the delta specs, which the
+    validator has already checked against OpenSpec; a missing change has none.
+    """
+    specs_dir = Path(store) / CHANGES_DIR / change / "specs"
+    out: dict[str, list[dict[str, Any]]] = {}
+    if not specs_dir.is_dir():
+        return out
+    for spec in sorted(specs_dir.rglob("spec.md")):
+        capability = spec.parent.relative_to(specs_dir).as_posix()
+        out[capability] = list(_parse_details(spec.read_text()))
+    return out
+
+
+def _parse_details(text: str):
+    section: str | None = None
+    req: dict[str, Any] | None = None
+    scenario: dict[str, Any] | None = None
+    body: list[str] = []
+    in_fence = False
+
+    def flush():
+        if req is not None:
+            req["text"] = "\n".join(body).strip()
+            yield req
+
+    for line in text.splitlines():
+        if _FENCE.match(line):
+            in_fence = not in_fence
+            if req is not None and scenario is None:
+                body.append(line)
+            continue
+        if in_fence:
+            if req is not None and scenario is None:
+                body.append(line)
+            continue
+        m = _SECTION.match(line)
+        if m or (line.startswith("## ") and not line.startswith("### ")):
+            yield from flush()
+            req, scenario, body = None, None, []
+            section = m.group(1) if m else None
+            continue
+        if section not in _LIVE_OPERATIONS:
+            continue
+        m = _REQUIREMENT.match(line)
+        if m:
+            yield from flush()
+            req, scenario, body = {"name": m.group(1), "operation": section, "text": "", "scenarios": []}, None, []
+            continue
+        if req is None:
+            continue
+        m = _SCENARIO.match(line)
+        if m:
+            scenario = {"name": m.group(1), "steps": []}
+            req["scenarios"].append(scenario)
+            continue
+        if scenario is None:
+            body.append(line)
+            continue
+        m = _STEP.match(line)
+        if m:
+            scenario["steps"].append({"keyword": m.group(1), "text": m.group(2)})
+        elif line.strip() and scenario["steps"]:
+            scenario["steps"][-1]["text"] += " " + line.strip()
+    yield from flush()
+
+
 def _norm(text: str) -> str:
     return " ".join(text.split())

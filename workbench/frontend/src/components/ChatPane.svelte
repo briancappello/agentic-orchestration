@@ -8,13 +8,14 @@
   import type { WorkerClient } from "../lib/worker";
   import type { ConfigCategory, ConfigOption } from "../lib/api";
   import ContextCard from "./ContextCard.svelte";
+  import type { SpecReader } from "../lib/spec";
   import Icon from "./Icon.svelte";
   import ModelPicker from "./ModelPicker.svelte";
   import Transcript from "./Transcript.svelte";
   import WorkerPane from "./WorkerPane.svelte";
 
   let {
-    doc, view, session, onselect, actions, worker = null, onwatch, onunwatch,
+    doc, view, session, onselect, actions, worker = null, onwatch, onunwatch, specs,
   }: {
     doc: MergedGraph;
     view: ViewState;
@@ -25,6 +26,8 @@
     worker?: { node: GraphNode; client: WorkerClient } | null;
     onwatch?: (node: GraphNode) => void;
     onunwatch?: () => void;
+    /** Reads the requirements a selected story covers. */
+    specs?: SpecReader;
   } = $props();
 
   const model = $derived(new GraphModel(doc));
@@ -185,7 +188,7 @@
   });
 </script>
 
-<ContextCard {model} {view} {attached} {actions} {onwatch} watching={worker?.node.tracker?.identifier ?? null} onattach={(k) => (attached = [...attached, k])} onselect={(k) => onselect(k)} />
+<ContextCard {model} {view} {attached} {actions} {onwatch} {specs} watching={worker?.node.tracker?.identifier ?? null} onattach={(k) => (attached = [...attached, k])} onselect={(k) => onselect(k)} />
 
 {#if worker}
   {#key worker.node.tracker?.identifier}
