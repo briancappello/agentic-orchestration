@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import { api, projectApi, subscribeGraph } from "../lib/api";
+  import { httpSpecs } from "../lib/spec";
   import { httpSession } from "../lib/session";
   import { httpSync } from "../lib/sync";
   import { httpWorker } from "../lib/worker";
@@ -25,6 +26,8 @@
   const session = httpSession(slug);
   // svelte-ignore state_referenced_locally
   const sync = httpSync(slug);
+  // svelte-ignore state_referenced_locally
+  const specs = httpSpecs(slug);
   let unsubscribe: (() => void) | null = null;
 
   /** Select a node from outside the graph, moving to the level that shows it. */
@@ -79,7 +82,7 @@
     </GraphPane>
   {/snippet}
   {#snippet chat()}
-    <ChatPane {doc} {view} {session} onselect={(k) => selectAnywhere(k)} actions={sync} {worker}
+    <ChatPane {doc} {view} {session} onselect={(k) => selectAnywhere(k)} actions={sync} {worker} {specs}
       onwatch={(n) => { watching = n.tracker?.identifier ?? null; selectAnywhere(n.plan_key); }} onunwatch={() => (watching = null)} />
   {/snippet}
 </Shell>

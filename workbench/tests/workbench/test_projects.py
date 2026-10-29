@@ -206,3 +206,22 @@ def test_config_from_env(tmp_path):
         Config.from_env({**base, "WORKBENCH_STORE": str(tmp_path / "s")})
     cfg = Config.from_env({**base, "WORKBENCH_STORE": str(tmp_path / "s"), "WORKBENCH_HULY_PROJECT": "DEV"})
     assert (cfg.store, cfg.huly_project) == ((tmp_path / "s").resolve(), "DEV")
+
+
+def test_a_changes_requirements_for_the_story_card(store):
+    spec = store.change("billing") / "specs" / "billing"
+    spec.mkdir(parents=True)
+    (spec / "spec.md").write_text("## ADDED Requirements\n\n### Requirement: Kept\nIt SHALL stay.\n\n#### Scenario: s\n- **WHEN** x\n- **THEN** y\n")
+    app, _, _ = make(store)
+    with TestClient(app) as client:
+        assert client.get(f"{P}/changes/billing/requirements").status_code == 401
+        sign_in(client)
+        r = client.get(f"{P}/changes/billing/requirements")
+        assert r.status_code == 200, r.text
+        assert r.json() == {"change": "billing", "capabilities": {"billing": [{
+            "name": "Kept", "operation": "ADDED", "text": "It SHALL stay.",
+            "scenarios": [{"name": "s", "steps": [{"keyword": "WHEN", "text": "x"}, {"keyword": "THEN", "text": "y"}]}]}]}}
+        (store.root / "openspec" / "changes" / "archive").mkdir(exist_ok=True)
+        for bad in ("nope", "..", "Billing", "billing%2F..%2F..", "archive"):
+            r = client.get(f"{P}/changes/{bad}/requirements")
+            assert r.status_code == 404, (bad, r.text)

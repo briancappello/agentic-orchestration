@@ -6,6 +6,7 @@ import type { BrokerEvent, ChatBlock, ChatItem } from "../src/lib/chat";
 import { applyEvent, displayText, emptyTranscript, groupTurns, workSummary } from "../src/lib/chat";
 import type { SessionClient } from "../src/lib/session";
 import type { ConfigCategory, ConfigOption } from "../src/lib/api";
+import type { ChangeRequirements, SpecReader } from "../src/lib/spec";
 
 class FakeSession implements SessionClient {
   commands: Record<string, unknown>[] = [];
@@ -54,8 +55,8 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-async function render(session = new FakeSession()) {
-  app = mount(Harness, { target: document.body, props: { initial: planDoc(), session } }) as typeof app;
+async function render(session = new FakeSession(), specs?: SpecReader) {
+  app = mount(Harness, { target: document.body, props: { initial: planDoc(), session, specs } }) as typeof app;
   await settle();
   return { h: app!, session };
 }
@@ -90,10 +91,73 @@ describe("chat pane: context card", () => {
     await settle();
     const card = $(".context")!;
     expect(card.textContent).toContain("Title billing/invoice");
-    expect(card.textContent).toContain("cap#Req billing/invoice");
+    expect(card.querySelector("[data-capability='cap']")!.textContent).toContain("Req billing/invoice");
     expect(card.textContent).toContain("billing/invoice works");
     expect(card.textContent).toContain("accounts-api/close");
     expect(card.querySelector("a")!.getAttribute("href")).toBe("https://huly/billing/invoice");
+  });
+});
+
+describe("chat pane: a story's spec", () => {
+  const billing: ChangeRequirements = {
+    cap: [{
+      name: "Req billing/invoice", operation: "ADDED", text: "An invoice SHALL carry the `customer_id`.",
+      scenarios: [{ name: "A new invoice", steps: [
+        { keyword: "WHEN", text: "an invoice is created" },
+        { keyword: "THEN", text: "it names `customer_id`" },
+        { keyword: "AND", text: "<img src=x onerror=alert(1)>it is saved" },
+      ] }],
+    }],
+  };
+  class FakeSpecs implements SpecReader {
+    reads: string[] = [];
+    constructor(private result: ChangeRequirements | Error) {}
+    async requirements(change: string) {
+      this.reads.push(change);
+      if (this.result instanceof Error) throw this.result;
+      return this.result;
+    }
+  }
+  async function selectInvoice(specs: SpecReader) {
+    const { h } = await render(new FakeSession(), specs);
+    h.setEpic("billing");
+    h.select("billing/invoice");
+    await settle();
+    return $(".context")!;
+  }
+
+  it("names each covered requirement in words under its capability, folded", async () => {
+    const specs = new FakeSpecs(billing);
+    const card = await selectInvoice(specs);
+    expect(specs.reads).toEqual(["billing"]);
+    expect(card.querySelector(".cap-name")!.textContent).toBe("cap");
+    const req = card.querySelector<HTMLDetailsElement>("details[data-requirement='Req billing/invoice']")!;
+    expect(req.querySelector("summary")!.textContent).toBe("Req billing/invoice");
+    expect(req.open).toBe(false);
+  });
+
+  it("shows the requirement's text and scenarios when expanded, with code but nothing that runs", async () => {
+    const card = await selectInvoice(new FakeSpecs(billing));
+    (card.querySelector(".cap-toggle") as HTMLButtonElement).click();
+    await settle();
+    const req = card.querySelector<HTMLDetailsElement>("details[data-requirement='Req billing/invoice']")!;
+    expect(req.open).toBe(true);
+    expect(req.querySelector(".req-text code")!.textContent).toBe("customer_id");
+    expect(req.querySelector(".scn-name")!.textContent).toBe("A new invoice");
+    const steps = [...req.querySelectorAll(".steps li")].map((li) => li.textContent);
+    expect(steps).toEqual(["whenan invoice is created", "thenit names customer_id", "andit is saved"]);
+    expect(req.querySelector("img")).toBeNull();
+    expect(card.querySelector(".cap-toggle")!.textContent).toBe("Collapse all");
+  });
+
+  it("says so when the change has no such requirement, or its specs cannot be read", async () => {
+    let card = await selectInvoice(new FakeSpecs({ cap: [] }));
+    expect(card.querySelector(".req-body")!.textContent).toContain("Not found in billing's specs.");
+    unmount(app!);
+    app = undefined;
+    card = await selectInvoice(new FakeSpecs(new Error("The specs of billing could not be read (500).")));
+    expect(card.querySelector("details[data-requirement='Req billing/invoice'] summary")!.textContent).toBe("Req billing/invoice");
+    expect(card.querySelector(".err")!.textContent).toContain("could not be read (500)");
   });
 });
 
