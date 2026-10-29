@@ -12,7 +12,7 @@ from tests.workbench.conftest import P, make_config, project, settle, sign_in
 from tests.workbench.fake_oidc import CLIENT_ID, CLIENT_SECRET, ISSUER, REDIRECT, FakeProvider
 from tests.workbench.fake_sortie import FakeSortie
 from tests.workbench.test_identity import sign_in_oidc
-from tests.workbench.test_watch import validate_offline
+from tests.workbench.test_watch import validate_offline, wait_for
 from workbench.app import create_app
 from workbench.oidc import OIDCClient
 
@@ -49,8 +49,13 @@ def test_held_ready_and_the_sync_graph(store):
         assert client.post(f"{P}/approve", json={"keys": ["accounts/a3"]}).status_code == 200
         assert status(app, "billing/b1")["plan_status"] == "ready"
 
-        client.post(f"{P}/sync/preview")
-        graph = next(r[2]["graph"] for r in fake.requests if r[1] == "/api/v1/plan/sync")
+        # The approval syncs on its own.
+        def last_graph():
+            graphs = [r[2]["graph"] for r in fake.requests if r[1] == "/api/v1/plan/sync"]
+            return graphs[-1] if graphs else None
+        assert wait_for(lambda: (g := last_graph()) is not None
+                        and any(n["plan_key"] == "billing/b1" and n.get("release") for n in g["nodes"]), timeout=3)
+        graph = last_graph()
         schema = json.loads((store.root / "openspec/schemas/planning/plan-graph.schema.json").read_text())
         jsonschema.validate(graph, schema)
         nodes = {n["plan_key"]: n for n in graph["nodes"]}

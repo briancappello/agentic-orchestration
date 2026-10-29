@@ -8,7 +8,7 @@ from workbench.app import create_app
 from tests.conftest import breakdown, deliverable
 from tests.workbench.conftest import P, make_config, project, settle, sign_in
 from tests.workbench.fake_sortie import FakeSortie
-from tests.workbench.test_watch import validate_offline
+from tests.workbench.test_watch import validate_offline, wait_for
 
 
 def make(store, fake=None, **config):
@@ -129,16 +129,11 @@ def test_two_projects_plan_and_sync_apart(store):
         assert keys("store") == {"billing", "billing/invoice"}
 
         assert client.post("/api/projects/onboarding/approve", json={"epic": "welcome"}).status_code == 200
-        preview = client.post("/api/projects/onboarding/sync/preview").json()
-        r = client.post("/api/projects/onboarding/sync/apply", json={"preview_id": preview["preview_id"], "confirm": True})
-        assert r.status_code == 200, r.text
-        assert [a["project"] for a in fake.applied] == ["ONB"]
-        assert {n["plan_key"] for n in fake.applied[0]["graph"]["nodes"]} == {"welcome", "welcome/greet"}
-
-        # A preview belongs to the project that made it.
-        preview = client.post("/api/projects/onboarding/sync/preview").json()
-        r = client.post(f"{P}/sync/apply", json={"preview_id": preview["preview_id"], "confirm": True})
-        assert r.status_code == 409
+        # Each project syncs into its own tracker project, on its own.
+        onb = lambda: [a for a in fake.applied if a["project"] == "ONB"]  # noqa: E731
+        assert wait_for(lambda: any(n.get("approval") == "approved" for a in onb() for n in a["graph"]["nodes"]), timeout=3)
+        assert {n["plan_key"] for n in onb()[-1]["graph"]["nodes"]} == {"welcome", "welcome/greet"}
+        assert all(a["project"] in ("ONB", "T") for a in fake.applied)
 
         settle(client, "onboarding")
         settle(client)
@@ -176,7 +171,7 @@ def test_an_unknown_project_is_404_everywhere(store):
     with TestClient(app) as client:
         sign_in(client)
         for method, path in [("get", ""), ("get", "/graph"), ("get", "/validation"), ("get", "/events"),
-                             ("post", "/sync/preview"), ("get", "/session"), ("delete", "")]:
+                             ("get", "/sync"), ("post", "/sync/retry"), ("get", "/session"), ("delete", "")]:
             r = getattr(client, method)(f"/api/projects/nope{path}")
             assert r.status_code == 404 and r.json()["error"]["code"] == "project_not_found", (method, path, r.text)
         assert client.patch("/api/projects/nope", json={"name": "x"}).status_code == 404

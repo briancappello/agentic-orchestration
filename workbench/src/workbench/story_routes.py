@@ -63,6 +63,7 @@ def story_router(projects: ProjectManager, require_role) -> APIRouter:
         await asyncio.to_thread(rt.registry.approve, rt.project.id, {k: stories[k]["digest"] for k in keys}, who.key, who.name)
         log.info("project %s: %s approved %s", slug, who.key, ", ".join(keys))
         await refreshed(rt)
+        rt.sync.trigger("approve")
         return {"approved": keys, "by": who.public()}
 
     @router.post("/stories/pull-back")
@@ -74,6 +75,7 @@ def story_router(projects: ProjectManager, require_role) -> APIRouter:
             raise sortie_failure(exc) from exc
         log.info("project %s: %s pulled back %s", slug, who.key, body.key)
         await rt.hub.poll_once()
+        rt.sync.trigger("pull-back")
         return {"pulled_back": body.key, "node": node(rt, body.key)}
 
     def dependents(rt: ProjectRuntime, key: str) -> list[str]:
@@ -95,6 +97,7 @@ def story_router(projects: ProjectManager, require_role) -> APIRouter:
         log.info("project %s: %s cancelled %s; re-review %s", slug, who.key, body.key, deps)
         await refreshed(rt)  # the withdrawn approvals change the graph
         await rt.hub.poll_once()
+        rt.sync.trigger("cancel")
         return {"cancelled": body.key, "rereview": deps}
 
     @router.post("/stories/supersede")
@@ -115,6 +118,7 @@ def story_router(projects: ProjectManager, require_role) -> APIRouter:
             raise sortie_failure(exc) from exc
         log.info("project %s: %s confirmed %s superseding %s", slug, who.key, body.key, replaced)
         await rt.hub.poll_once()
+        rt.sync.trigger("supersede")
         return {"superseded": replaced, "by": body.key}
 
     return router

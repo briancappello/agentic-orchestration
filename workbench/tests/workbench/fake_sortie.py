@@ -39,6 +39,13 @@ class FakeSortie:
         self.retrying: dict[str, dict[str, Any]] = {}
         self.brokers: dict[str, dict[str, str]] = {}
         self.state_down = False
+        # Sync: no connection at all; the next apply is refused as stale;
+        # refresh fails; the refreshes Sortie was asked for.
+        self.unreachable = False
+        self.stale_once = False
+        self.refresh_down = False
+        self.refreshes = 0
+        self.released: set[str] = set()
 
     def run(self, identifier: str, session_id: str, stage: str = "implement", broker: str | None = None, token: str = "viewer-secret", **extra):
         """Start a run of the issue; with ``broker``, its broker has reported."""
@@ -71,6 +78,8 @@ class FakeSortie:
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content) if request.content else None
+        if self.unreachable:
+            raise httpx.ConnectError("connection refused", request=request)
         self.requests.append((request.method, request.url.path, body))
         if request.headers.get("authorization") != f"Bearer {SORTIE_TOKEN}":
             return httpx.Response(401, json={"error": {"code": "unauthorized", "message": "token"}})
@@ -116,10 +125,19 @@ class FakeSortie:
                            "missing_capabilities": missing, "skipped_drafts": [], "source_digest": graph["source_digest"]}
                 self.previews[pid] = preview
                 return httpx.Response(200, json={"preview_id": pid, "preview": preview, "capabilities": self.capabilities})
-            if body["preview_id"] not in self.previews:
+            if body["preview_id"] not in self.previews or self.stale_once:
+                self.stale_once = False
                 return httpx.Response(409, json={"error": {"code": "stale_preview", "message": "unknown preview"}})
             self.applied.append({**body, "project": project})
-            return httpx.Response(200, json={"result": {"created": [], "failed": None}})
+            released = [{"plan_key": n["plan_key"], "issue_id": "", "identifier": ""} for n in graph["nodes"]
+                        if n.get("release") and n["approval"] == "approved" and n["plan_key"] not in self.released]
+            self.released.update(r["plan_key"] for r in released)
+            return httpx.Response(200, json={"result": {"created": [], "released": released, "orphans": [], "failed": None}})
+        if path == "/api/v1/refresh":
+            self.refreshes += 1
+            if self.refresh_down:
+                return httpx.Response(503, json={"error": {"code": "unavailable", "message": "refresh"}})
+            return httpx.Response(202, json={"queued": True})
         if path == "/api/v1/state":
             if self.state_down:
                 return httpx.Response(503, json={"error": {"code": "unavailable", "message": "state"}})

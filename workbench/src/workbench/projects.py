@@ -10,6 +10,7 @@ from typing import Any, Callable
 
 from fastapi import HTTPException
 
+from .autosync import SyncLoop, sync_project
 from .config import Config
 from .hub import Hub
 from .plan_state import PlanState, watch
@@ -40,8 +41,12 @@ class ProjectRuntime:
         self.sessions = sessions
         # The brokers of the workers Sortie runs for this project's stories.
         self.workers = WorkerRelay(sortie.bind(project.huly_project), transport=broker_transport)
-        # Sync previews waiting for confirmation, by preview id.
-        self.pending: dict[str, dict[str, Any]] = {}
+        # The approved plan syncs to the tracker on its own.
+        self.sync = SyncLoop(lambda: sync_project(self.hub), debounce=config.debounce_ms / 1000,
+                             first_backoff=config.sync_backoff_first, max_backoff=config.sync_backoff_max)
+        self.sync.on_status(self.hub.publish_sync)
+        self.hub.sync_status = self.sync.status()
+        self.hub.on_approved_change = lambda: self.sync.trigger("graph")
         self._stop = asyncio.Event()
         self._tasks: list[asyncio.Task] = []
 
@@ -91,6 +96,7 @@ class ProjectRuntime:
 
     async def start(self) -> None:
         self.hub.bind(asyncio.get_running_loop())
+        self.sync.bind(asyncio.get_running_loop())
         await asyncio.to_thread(self.upgrade_schemas)
         await asyncio.to_thread(self.import_legacy_approvals)
         await asyncio.to_thread(self.plan.refresh)
@@ -99,6 +105,7 @@ class ProjectRuntime:
         else:
             log.warning("project %s: store %s has no openspec/ directory; not watching it", self.slug, self.store)
         self._tasks.append(asyncio.create_task(self.hub.poll_loop(self.config.poll_seconds, self._stop)))
+        self._tasks.append(asyncio.create_task(self.sync.run(self._stop)))
 
     async def stop(self) -> None:
         self._stop.set()
