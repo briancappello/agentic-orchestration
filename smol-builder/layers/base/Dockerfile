@@ -8,8 +8,8 @@ RUN apt-get update \
       ca-certificates curl git xz-utils procps jq ripgrep make build-essential pkg-config socat \
  && rm -rf /var/lib/apt/lists/*
 
-ARG OPENCODE_VERSION=1.18.29
-ARG OPENCODE_SHA256=ea800b7ff56226b70952126c9fc1e2517ca4c4b5682fd9d3f9e87449697a1194
+ARG OPENCODE_VERSION=2.2.1
+ARG OPENCODE_SHA256=3179551ddf69877ca24a960b0175e94405cf3f52147f1eec705094374bef49f2
 RUN curl -fsSLo /tmp/oc.tgz "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-x64.tar.gz" \
  && echo "${OPENCODE_SHA256}  /tmp/oc.tgz" | sha256sum -c - \
  && tar -xzf /tmp/oc.tgz -C /usr/local/bin opencode \
