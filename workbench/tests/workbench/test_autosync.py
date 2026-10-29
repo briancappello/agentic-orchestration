@@ -174,3 +174,21 @@ def test_status_changes_are_reported():
         assert loop.status()["result"] == {"released": [{"plan_key": "b/b1"}]}
 
     run(scenario)
+
+
+def test_a_story_that_starts_does_not_cause_another_sync():
+    from workbench.autosync import approved_digest
+
+    graph = {"nodes": [{"plan_key": "b", "kind": "epic", "approval": "approved"},
+                       {"plan_key": "b/b1", "kind": "story", "approval": "approved"},
+                       {"plan_key": "b/b2", "kind": "story", "approval": "draft"}],
+             "blocks": [], "parents": [{"child": "b/b1", "parent": "b"}, {"child": "b/b2", "parent": "b"}]}
+
+    def fields(status, frozen=False):
+        return {"b/b1": {"plan_status": status, "frozen": frozen, "review": "human", "approved_by": None, "approved_at": None},
+                "b/b2": {"plan_status": "draft", "frozen": False, "review": "human", "approved_by": None, "approved_at": None}}
+
+    ready = approved_digest(graph, fields("ready"))
+    assert approved_digest(graph, fields("released")) == ready
+    assert approved_digest(graph, fields("frozen", frozen=True)) == ready
+    assert approved_digest(graph, fields("held")) != ready
