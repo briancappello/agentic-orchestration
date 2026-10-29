@@ -29,9 +29,10 @@ seeds it with the repository (`STAGE0_REPO_*`). It runs the agent behind
 acp-broker, then pushes the issue branch and opens the pull request. When
 the pull request merges, Sortie moves the story to `Done`.
 
-- **Harness.** A story whose title holds `[claude]`, or that has the Huly
-  label `claude-code`, runs Claude Code. Every other story runs opencode.
-  `pack/agent-acp` picks one of them from `SORTIE_RULE`.
+- **Harness.** Every story runs Claude Code, unless its title holds
+  `[opencode]` or it has the Huly label `opencode`; then it runs opencode.
+  `pack/agent-acp` picks one from `SORTIE_RULE`. Both use the operator's
+  Claude subscription. No other model provider is configured.
 - **One repository.** One Sortie serves one repository. To serve another
   one, change `STAGE0_REPO_*` and run `stage0.sh` again.
 
@@ -43,8 +44,7 @@ VMs see only smolvm placeholders.
 | Credential | Source |
 | --- | --- |
 | GitHub | `github-token` in the stage-0 home, else `gh auth token` |
-| Claude Code | `claude-oauth-token` (from `claude setup-token`), else the short-lived access token in `~/.claude/.credentials.json` |
-| OpenRouter, for opencode | `OPENROUTER_API_KEY` in the systemd user environment |
+| Claude subscription, for both harnesses | `claude-oauth-token` (from `claude setup-token`); else the freshest live OAuth login: opencode's (`~/.local/share/opencode/opencode.db`) or Claude Code's (`~/.claude/.credentials.json`). `anthropic-token.py` picks it. A login token lasts hours, so `ortus-stage0-token.timer` restarts Sortie onto a fresher one while no agent runs |
 | Huly | a login with the dev account in `stage0.env` |
 
 Git reaches GitHub over HTTPS through a credential helper in the kit's own

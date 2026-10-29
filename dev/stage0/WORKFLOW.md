@@ -52,10 +52,11 @@ hooks:
     if [ -f go.mod ]; then GOTOOLCHAIN=local go mod download; fi
   timeout_ms: 600000
 
-# One ACP launch for both harnesses: the pack's agent-acp picks Claude Code
-# (claude-agent-acp) for a rule whose name starts with "claude", and opencode
-# otherwise, from SORTIE_RULE. Both run behind acp-broker on the host, so the
-# workbench can watch and steer either.
+# One ACP launch for both harnesses, both on the operator's Claude
+# subscription: the pack's agent-acp runs Claude Code (claude-agent-acp) by
+# default, and opencode for a rule whose name starts with "opencode", from
+# SORTIE_RULE. Both run behind acp-broker on the host, so the workbench can
+# watch and steer either.
 agent:
   kind: agent-client-protocol
   command: agent-acp
@@ -67,12 +68,12 @@ agent:
 
 dispatch:
   rules:
-    - name: claude-label
+    - name: opencode-label
       match:
-        labels: [claude-code]
-    - name: claude-title
+        labels: [opencode]
+    - name: opencode-title
       match:
-        title: ["[claude]"]
+        title: ["[opencode]"]
 
 environment:
   kind: smolvm
@@ -90,7 +91,6 @@ environment:
       # proxy.golang.org serves module zips by redirect to Google Cloud Storage.
       - storage.googleapis.com
     credentials:
-      - {name: openrouter, env: OPENROUTER_API_KEY, hosts: [openrouter.ai]}
       - {name: anthropic, env: CLAUDE_CODE_OAUTH_TOKEN, hosts: [api.anthropic.com]}
     pass_env: [IS_SANDBOX]
     repository:
