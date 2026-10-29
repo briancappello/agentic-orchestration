@@ -115,7 +115,6 @@ def build_graph(store: LoadedStore, names_for: NamesFor, schemas: Schemas,
         story_depth = _depths(story_graph)
         for d in bd.doc["deliverables"]:
             key = f"{change}/{d['id']}"
-            repository = resolved(bd.doc, d).get("repository")
             nodes.append(
                 {
                     "plan_key": key,
@@ -130,7 +129,6 @@ def build_graph(store: LoadedStore, names_for: NamesFor, schemas: Schemas,
                     "covers": list(d["covers"]),
                     "acceptance_criteria": list(d["acceptance_criteria"]),
                     **({"review": d.get("review", "human")} if graph_v2 else {}),
-                    **({"repository": repository} if repository else {}),
                 }
             )
             stories[key] = {
