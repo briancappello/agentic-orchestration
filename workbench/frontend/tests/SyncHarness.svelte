@@ -1,9 +1,7 @@
 <script lang="ts">
-  import SyncDialog from "../src/components/SyncDialog.svelte";
-  import type { SyncClient } from "../src/lib/sync";
-  let { sync }: { sync: SyncClient } = $props();
-  let open = $state(true);
-  export function isOpen() { return open; }
+  import SyncStatus from "../src/components/SyncStatus.svelte";
+  import type { SyncStatus as Status } from "../src/lib/types";
+  let { status, onretry }: { status: Status | null; onretry: () => Promise<unknown> } = $props();
 </script>
 
-{#if open}<SyncDialog {sync} onclose={() => (open = false)} />{/if}
+<SyncStatus {status} {onretry} />

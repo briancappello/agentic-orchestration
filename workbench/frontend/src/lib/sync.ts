@@ -1,9 +1,10 @@
 /** Sync and approval as the UI uses them; tests substitute a fake. */
-import { projectApi, type SyncPreviewResponse } from "./api";
+import { projectApi } from "./api";
+import type { SyncStatus } from "./types";
 
+/** The plan syncs on its own; a planner can only retry a failed sync. */
 export interface SyncClient extends StoryActions {
-  preview(): Promise<SyncPreviewResponse>;
-  apply(previewId: string): Promise<{ result: unknown }>;
+  retry(): Promise<SyncStatus>;
 }
 
 /** What an approver does to stories. The backend checks the role. */
@@ -18,7 +19,7 @@ export interface StoryActions {
 export function httpSync(slug: string): SyncClient {
   const api = projectApi(slug);
   return {
-    preview: () => api.preview(), apply: (id) => api.apply(id), approve: (t) => api.approve(t),
+    retry: () => api.retrySync(), approve: (t) => api.approve(t),
     pullBack: (k) => api.pullBack(k), cancel: (k) => api.cancel(k), supersede: (k) => api.supersede(k),
   };
 }
