@@ -13,11 +13,18 @@ if [ "${1:-}" = --which ]; then echo "$agent"; exit 0; fi
 case "$agent" in
   claude) exec claude-agent-acp "$@" ;;
   *)
-    # opencode's Anthropic sign-in plugin reads its OAuth login from auth.json;
-    # give it the placeholder, with an expiry it never tries to refresh.
-    mkdir -p "$HOME/.local/share/opencode"
+    # opencode 2 keeps credentials in its own store. Import the Claude
+    # subscription login the sign-in plugin reads (method claude-max), with
+    # the placeholder as its access token and an expiry it never refreshes.
+    # A second import of the same ID is skipped, so drop the old one first:
+    # the placeholder may change between runs in one machine.
     umask 077
-    printf '{"anthropic":{"type":"oauth","refresh":"","access":"%s","expires":4102444800000}}\n' \
-      "${CLAUDE_CODE_OAUTH_TOKEN:?}" > "$HOME/.local/share/opencode/auth.json"
+    id=cred_000000000000stage0anthropic
+    opencode auth logout --standalone anthropic "$id" </dev/null >&2 || true
+    cred=$(mktemp)
+    printf '[{"id":"%s","integrationID":"anthropic","label":"Claude subscription","active":true,"value":{"type":"oauth","methodID":"claude-max","refresh":"","access":"%s","expires":4102444800000}}]\n' \
+      "$id" "${CLAUDE_CODE_OAUTH_TOKEN:?}" > "$cred"
+    opencode auth import --standalone "$cred" >&2 || { rm -f "$cred"; exit 1; }
+    rm -f "$cred"
     exec opencode acp "$@" ;;
 esac
