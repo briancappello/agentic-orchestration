@@ -8,10 +8,13 @@
 #   STAGE0_GITHUB_TOKEN      $STAGE0_HOME/github-token when present (a token
 #                            scoped to the repositories Sortie pushes to), else
 #                            the operator's gh token (`gh auth token`)
-#   CLAUDE_CODE_OAUTH_TOKEN  $STAGE0_HOME/claude-oauth-token when present (a
-#                            `claude setup-token` token), else the access
-#                            token of ~/.claude/.credentials.json (short-lived)
-#   OPENROUTER_API_KEY       from the environment (the systemd user manager's)
+#   CLAUDE_CODE_OAUTH_TOKEN  the operator's Claude subscription, for both
+#                            harnesses: the freshest live token that
+#                            anthropic-token.py finds (a `claude setup-token`
+#                            token, else opencode's or Claude Code's OAuth
+#                            login). Its expiry goes to $STAGE0_HOME/token-expiry,
+#                            which ortus-stage0-token.timer watches.
+# No other model provider is used: nothing here reads an OpenRouter or API key.
 #   STAGE0_SORTIE_TOKEN      $STAGE0_HOME/sortie-token
 # Git reaches GitHub over HTTPS with that same token, through a credential
 # helper in a kit-owned global config (GIT_CONFIG_GLOBAL): no SSH agent and
@@ -37,17 +40,11 @@ export STAGE0_SORTIE_TOKEN
 STAGE0_SORTIE_TOKEN=$(cat "$STAGE0_HOME/sortie-token")
 
 export CLAUDE_CODE_OAUTH_TOKEN
-if [[ -s $STAGE0_HOME/claude-oauth-token ]]; then
-  CLAUDE_CODE_OAUTH_TOKEN=$(cat "$STAGE0_HOME/claude-oauth-token")
-else
-  CLAUDE_CODE_OAUTH_TOKEN=$(python3 -c 'import json,os,sys
-d=json.load(open(os.path.expanduser("~/.claude/.credentials.json")))["claudeAiOauth"]
-print(d["accessToken"])') || die "no Claude token: run claude setup-token into $STAGE0_HOME/claude-oauth-token"
-  echo "run-sortie.sh: using the short-lived Claude access token; restart after it expires" >&2
-fi
-[[ -n ${OPENROUTER_API_KEY:-} ]] || die "OPENROUTER_API_KEY is not set"
+CLAUDE_CODE_OAUTH_TOKEN=$("$(dirname "$0")/anthropic-token.py") \
+  || die "no live Claude subscription token: run claude setup-token into $STAGE0_HOME/claude-oauth-token"
+"$(dirname "$0")/anthropic-token.py" --expiry > "$STAGE0_HOME/token-expiry"
 export IS_SANDBOX=1
-unset ANTHROPIC_API_KEY
+unset ANTHROPIC_API_KEY OPENROUTER_API_KEY
 
 # Sortie's mirror git drops GIT_CONFIG_* but reads the global config file,
 # so the helper lives in a config file of this kit's own (GIT_CONFIG_GLOBAL),

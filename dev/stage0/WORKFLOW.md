@@ -52,16 +52,17 @@ hooks:
     if [ -f go.mod ]; then GOTOOLCHAIN=local go mod download; fi
   timeout_ms: 600000
 
-# One ACP launch for both harnesses: the pack's agent-acp picks Claude Code
-# (claude-agent-acp) for a rule whose name starts with "claude", and opencode
-# otherwise, from SORTIE_RULE. Both run behind acp-broker on the host, so the
-# workbench can watch and steer either.
+# One ACP launch for both harnesses, both on the operator's Claude
+# subscription: the pack's agent-acp runs opencode by default, and Claude
+# Code (claude-agent-acp) for a rule whose name starts with "claude", from
+# SORTIE_RULE. Both run behind acp-broker on the host, so the workbench can
+# watch and steer either.
 agent:
   kind: agent-client-protocol
   command: agent-acp
   max_turns: 20
   max_sessions: 16
-  max_concurrent_agents: 2
+  max_concurrent_agents: ${STAGE0_MAX_AGENTS}
   turn_timeout_ms: 3600000
   stall_timeout_ms: 900000
 
@@ -90,7 +91,6 @@ environment:
       # proxy.golang.org serves module zips by redirect to Google Cloud Storage.
       - storage.googleapis.com
     credentials:
-      - {name: openrouter, env: OPENROUTER_API_KEY, hosts: [openrouter.ai]}
       - {name: anthropic, env: CLAUDE_CODE_OAUTH_TOKEN, hosts: [api.anthropic.com]}
     pass_env: [IS_SANDBOX]
     repository:
@@ -108,6 +108,12 @@ branch. Read its `AGENTS.md` first and follow it. Change the code to meet the
 story's acceptance criteria, add or update tests, and run the repository's
 checks for what you changed until they pass. Keep the change focused on this
 story.
+
+The story's spec, if it has one, is in the description above: implement every
+requirement it covers and give each scenario a test. Finish the whole story
+across as many turns as it takes. Stop early, with `needs-human-review` and
+the reason, only when you are blocked on something only a person can decide
+or provide; work that is merely large or still missing is not a reason.
 
 Commit your work with git, in conventional commits, with no AI attribution.
 Do not push and do not open a pull request: Sortie does both after the run.
