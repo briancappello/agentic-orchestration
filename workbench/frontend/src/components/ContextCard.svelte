@@ -120,6 +120,16 @@
           {#if node.status === "orphaned"}<span class="chip">orphaned: no longer in the plan</span>{/if}
           {#if node.plan_status}<span class="chip plan {node.plan_status}" data-plan-status={node.plan_status}>{planStatusLabel(node.plan_status)}</span>{/if}
           {#if node.kind === "story" && node.review}<span class="chip">review: {node.review === "criteria" ? "acceptance criteria" : "a person"}</span>{/if}
+          {#if approver && actions}
+            {#if node.kind === "epic" && node.approval === "draft" && epicNeverApproved(node)}
+              <button type="button" class="chip go" data-act="approve-epic" disabled={!!busy}
+                onclick={() => act("approve", () => actions.approve({ epic: node.change }))}>{busy === "approve" ? "Approving…" : "Approve the epic"}</button>
+            {/if}
+            {#if node.kind === "story" && (node.plan_status === "draft" || node.plan_status === "needs_rereview") && !node.frozen}
+              <button type="button" class="chip go" data-act="approve" disabled={!!busy}
+                onclick={() => act("approve", () => actions.approve({ keys: [node.plan_key] }))}>{busy === "approve" ? "Approving…" : "Approve"}</button>
+            {/if}
+          {/if}
         </div>
         {#if node.plan_status === "held" && node.held_by?.length}
           <p class="why" data-why="held">Waits for the approval of {#each node.held_by as k, i (k)}{i ? ", " : ""}<button type="button" class="link" onclick={() => onselect(k)}>{k}</button>{/each}.</p>
@@ -212,14 +222,6 @@
             <button type="button" class="attach" onclick={() => onattach(node.plan_key)}>Attach to message</button>
           {/if}
           {#if approver && actions}
-            {#if node.kind === "epic" && node.approval === "draft" && epicNeverApproved(node)}
-              <button type="button" class="attach approve" data-act="approve-epic" disabled={!!busy}
-                onclick={() => act("approve", () => actions.approve({ epic: node.change }))}>{busy === "approve" ? "Approving…" : "Approve the epic"}</button>
-            {/if}
-            {#if node.kind === "story" && (node.plan_status === "draft" || node.plan_status === "needs_rereview") && !node.frozen}
-              <button type="button" class="attach approve" data-act="approve" disabled={!!busy}
-                onclick={() => act("approve", () => actions.approve({ keys: [node.plan_key] }))}>{busy === "approve" ? "Approving…" : "Approve"}</button>
-            {/if}
             {#if node.kind === "story" && node.plan_status === "released"}
               <button type="button" class="attach" data-act="pull-back" disabled={!!busy}
                 onclick={() => act("pull-back", () => actions.pullBack(node.plan_key))}>{busy === "pull-back" ? "Pulling back…" : "Pull back"}</button>
@@ -380,6 +382,9 @@
   .link:hover { text-decoration-color: var(--ink); }
   .none { color: var(--mute); font-size: 12px; }
   .acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: var(--s-md); }
+  .chip.go { background: var(--done); border-color: var(--done); color: #fff; cursor: pointer; }
+  .chip.go:hover:not(:disabled) { background: #245a3f; border-color: #245a3f; }
+  .chip.go:disabled { opacity: 0.6; cursor: default; }
   .attach.approve { background: var(--ink); color: #fff; border-color: var(--ink); }
   .attach.approve:hover:not(:disabled) { background: #000; }
   .err { color: var(--alert); font-size: 12px; margin-top: 6px; }
