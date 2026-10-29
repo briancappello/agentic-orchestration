@@ -78,7 +78,7 @@ class ProjectRuntime:
         approvals = self.registry.approvals(self.project.id)
         imported = []
         for change, bd in sorted(store.breakdowns.items()):
-            keys = {f"{change}/{d['id']}": planlib.story_digest(d) for d in bd.doc["deliverables"]}
+            keys = {f"{change}/{d['id']}": planlib.story_digest(planlib.resolved(bd.doc, d)) for d in bd.doc["deliverables"]}
             if planlib.legacy_approved(bd.doc) and not any(k in approvals for k in keys):
                 self.registry.approve(self.project.id, keys, f"migration|{change}", "Imported approval")
                 imported.append(change)
