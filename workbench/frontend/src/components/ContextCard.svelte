@@ -130,7 +130,37 @@
                 onclick={() => act("approve", () => actions.approve({ keys: [node.plan_key] }))}>{busy === "approve" ? "Approving…" : "Approve"}</button>
             {/if}
           {/if}
+          {#if node.kind === "story" && node.runtime?.watchable && onwatch && node.tracker?.identifier !== watching}
+            <button type="button" class="chip act" data-act="watch" onclick={() => onwatch(node)}>Watch the worker</button>
+          {/if}
+          {#if !attached.includes(node.plan_key)}
+            <button type="button" class="chip act" onclick={() => onattach(node.plan_key)}>Attach to message</button>
+          {/if}
+          {#if approver && actions}
+            {#if node.kind === "story" && node.plan_status === "released"}
+              <button type="button" class="chip act" data-act="pull-back" disabled={!!busy}
+                onclick={() => act("pull-back", () => actions.pullBack(node.plan_key))}>{busy === "pull-back" ? "Pulling back…" : "Pull back"}</button>
+            {/if}
+            {#if node.kind === "story" && node.supersedes && node.plan_status !== "draft"}
+              <button type="button" class="chip act" data-act="supersede" disabled={!!busy}
+                onclick={() => act("supersede", () => actions.supersede(node.plan_key), { text: `Cancel ${node.supersedes} and move the stories that depend on it to ${node.plan_key}?`, label: `Replace ${node.supersedes}` })}>Confirm: replaces {node.supersedes}</button>
+            {/if}
+            {#if node.kind === "story" && node.tracker && !node.tracker.terminal}
+              <button type="button" class="chip act danger" data-act="cancel" disabled={!!busy}
+                onclick={() => act("cancel", () => actions.cancel(node.plan_key), { text: `Cancel ${node.plan_key}? Its worker stops, its issue is cancelled, and the stories that depend on it need re-review.`, label: "Cancel story" })}>Cancel story</button>
+            {/if}
+          {/if}
         </div>
+        {#if pending}
+          <div class="confirm" role="group" aria-label={pending.label} data-confirm={pending.name}>
+            <p>{pending.text}</p>
+            <div>
+              <button type="button" class="small danger" data-act="confirm" onclick={() => pending && act(pending.name, pending.run)}>{pending.label}</button>
+              <button type="button" class="small" data-act="keep" onclick={() => (pending = null)}>Keep it</button>
+            </div>
+          </div>
+        {/if}
+        {#if actError}<p class="err" role="alert">{actError}</p>{/if}
         {#if node.plan_status === "held" && node.held_by?.length}
           <p class="why" data-why="held">Waits for the approval of {#each node.held_by as k, i (k)}{i ? ", " : ""}<button type="button" class="link" onclick={() => onselect(k)}>{k}</button>{/each}.</p>
         {:else if node.plan_status === "needs_rereview"}
@@ -214,38 +244,6 @@
             <dd><ul class="ac">{#each node.acceptance_criteria as a, i (i)}<li>{a}</li>{/each}</ul></dd>
           {/if}
         </dl>
-        <div class="acts">
-          {#if node.kind === "story" && node.runtime?.watchable && onwatch && node.tracker?.identifier !== watching}
-            <button type="button" class="attach" data-act="watch" onclick={() => onwatch(node)}>Watch the worker</button>
-          {/if}
-          {#if !attached.includes(node.plan_key)}
-            <button type="button" class="attach" onclick={() => onattach(node.plan_key)}>Attach to message</button>
-          {/if}
-          {#if approver && actions}
-            {#if node.kind === "story" && node.plan_status === "released"}
-              <button type="button" class="attach" data-act="pull-back" disabled={!!busy}
-                onclick={() => act("pull-back", () => actions.pullBack(node.plan_key))}>{busy === "pull-back" ? "Pulling back…" : "Pull back"}</button>
-            {/if}
-            {#if node.kind === "story" && node.supersedes && node.plan_status !== "draft"}
-              <button type="button" class="attach" data-act="supersede" disabled={!!busy}
-                onclick={() => act("supersede", () => actions.supersede(node.plan_key), { text: `Cancel ${node.supersedes} and move the stories that depend on it to ${node.plan_key}?`, label: `Replace ${node.supersedes}` })}>Confirm: replaces {node.supersedes}</button>
-            {/if}
-            {#if node.kind === "story" && node.tracker && !node.tracker.terminal}
-              <button type="button" class="attach danger" data-act="cancel" disabled={!!busy}
-                onclick={() => act("cancel", () => actions.cancel(node.plan_key), { text: `Cancel ${node.plan_key}? Its worker stops, its issue is cancelled, and the stories that depend on it need re-review.`, label: "Cancel story" })}>Cancel story</button>
-            {/if}
-          {/if}
-        </div>
-        {#if pending}
-          <div class="confirm" role="group" aria-label={pending.label} data-confirm={pending.name}>
-            <p>{pending.text}</p>
-            <div>
-              <button type="button" class="small danger" data-act="confirm" onclick={() => pending && act(pending.name, pending.run)}>{pending.label}</button>
-              <button type="button" class="small" data-act="keep" onclick={() => (pending = null)}>Keep it</button>
-            </div>
-          </div>
-        {/if}
-        {#if actError}<p class="err" role="alert">{actError}</p>{/if}
       </div>
     {:else}
       {#if approver && actions && view.epic && drafts.length}
@@ -382,6 +380,10 @@
   .link:hover { text-decoration-color: var(--ink); }
   .none { color: var(--mute); font-size: 12px; }
   .acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: var(--s-md); }
+  .chip.act { background: #fff; cursor: pointer; }
+  .chip.act:hover:not(:disabled) { border-color: var(--ink); }
+  .chip.act.danger { border-color: var(--alert); }
+  .chip.act:disabled { opacity: 0.6; cursor: default; }
   .chip.go { background: var(--done); border-color: var(--done); color: #fff; cursor: pointer; }
   .chip.go:hover:not(:disabled) { background: #245a3f; border-color: #245a3f; }
   .chip.go:disabled { opacity: 0.6; cursor: default; }

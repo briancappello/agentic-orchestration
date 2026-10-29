@@ -171,7 +171,7 @@ describe("approver actions", () => {
     await settle();
     // Approve sits beside the status chips, above the spec, so it is seen without scrolling.
     expect($(".chips [data-act='approve']")).not.toBeNull();
-    expect($(".acts [data-act='approve']")).toBeNull();
+    expect($("section.context .sel .acts")).toBeNull();
     $<HTMLButtonElement>("[data-act='approve']")!.click();
     await settle();
     expect(sync.approved).toEqual([{ keys: [s.plan_key] }]);
@@ -195,6 +195,7 @@ describe("approver actions", () => {
     await settle();
     h.select(s.plan_key);
     await settle();
+    expect($(".chips [data-act='pull-back']")).not.toBeNull();
     $<HTMLButtonElement>("[data-act='pull-back']")!.click();
     await settle();
     expect(sync.calls).toEqual([`pull-back ${s.plan_key}`]);
@@ -210,6 +211,7 @@ describe("approver actions", () => {
     await settle();
     h.select(s.plan_key);
     await settle();
+    expect($(".chips [data-act='cancel']")).not.toBeNull();
     $<HTMLButtonElement>("[data-act='cancel']")!.click();
     await settle();
     expect(sync.calls).toEqual([]);
