@@ -90,11 +90,11 @@ describe("worker list", () => {
     await settle();
     h.select(open.plan_key);
     await settle();
-    $<HTMLButtonElement>("section.context .acts [data-act='watch']")!.click();
+    $<HTMLButtonElement>("section.context .chips [data-act='watch']")!.click();
     expect(watched).toEqual([open.plan_key]);
     h.select(other.plan_key);
     await settle();
-    expect($("section.context .acts [data-act='watch']")).toBeNull();
+    expect($("section.context .chips [data-act='watch']")).toBeNull();
   });
 });
 
@@ -110,7 +110,7 @@ describe("watching a worker", () => {
     expect($(".session-bar .sub")!.textContent).toContain("accounts-api/open · implement");
     h.select(open.plan_key);
     await settle();
-    expect($("section.context .acts [data-act='watch']")).toBeNull();
+    expect($("section.context .chips [data-act='watch']")).toBeNull();
     w.h!.onRun({ identifier: open.tracker!.identifier, session_id: "s1", stage: "implement", follow: false });
     w.h!.onEvent(ev(1, "reading the code"));
     w.h!.onEvent({ seq: 2, time: "2026-10-17T00:00:01Z", type: "state", floor: "human" });
