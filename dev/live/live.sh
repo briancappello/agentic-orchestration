@@ -14,7 +14,7 @@
 #   - Sortie on 127.0.0.1:7679, from WORKFLOW.md, running `opencode acp`
 #     behind acp-broker, with the agent configuration in agent-config/;
 #   - the workbench on http://127.0.0.1:8791, local mode, password "live".
-# Then: plan, approve, and sync in the workbench; watch and steer the workers;
+# Then: plan and approve in the workbench (approved stories sync on their own); watch and steer the workers;
 # review and merge their pull requests in Gitea; Sortie moves merged stories
 # to Done and releases what they unblock. Ctrl-C stops Sortie and the
 # workbench; Gitea keeps running (dev/forge/gitea.sh down removes it).
