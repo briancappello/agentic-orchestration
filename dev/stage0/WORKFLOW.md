@@ -109,6 +109,12 @@ story's acceptance criteria, add or update tests, and run the repository's
 checks for what you changed until they pass. Keep the change focused on this
 story.
 
+The story's spec, if it has one, is in the description above: implement every
+requirement it covers and give each scenario a test. Finish the whole story
+across as many turns as it takes. Stop early, with `needs-human-review` and
+the reason, only when you are blocked on something only a person can decide
+or provide; work that is merely large or still missing is not a reason.
+
 Commit your work with git, in conventional commits, with no AI attribution.
 Do not push and do not open a pull request: Sortie does both after the run.
 Only committed work leaves this machine. Before you finish, write
