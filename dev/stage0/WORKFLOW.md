@@ -53,8 +53,8 @@ hooks:
   timeout_ms: 600000
 
 # One ACP launch for both harnesses, both on the operator's Claude
-# subscription: the pack's agent-acp runs Claude Code (claude-agent-acp) by
-# default, and opencode for a rule whose name starts with "opencode", from
+# subscription: the pack's agent-acp runs opencode by default, and Claude
+# Code (claude-agent-acp) for a rule whose name starts with "claude", from
 # SORTIE_RULE. Both run behind acp-broker on the host, so the workbench can
 # watch and steer either.
 agent:
@@ -62,18 +62,18 @@ agent:
   command: agent-acp
   max_turns: 20
   max_sessions: 16
-  max_concurrent_agents: 2
+  max_concurrent_agents: ${STAGE0_MAX_AGENTS}
   turn_timeout_ms: 3600000
   stall_timeout_ms: 900000
 
 dispatch:
   rules:
-    - name: opencode-label
+    - name: claude-label
       match:
-        labels: [opencode]
-    - name: opencode-title
+        labels: [claude-code]
+    - name: claude-title
       match:
-        title: ["[opencode]"]
+        title: ["[claude]"]
 
 environment:
   kind: smolvm

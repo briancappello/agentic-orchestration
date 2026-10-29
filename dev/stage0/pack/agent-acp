@@ -1,17 +1,18 @@
 #!/bin/sh
 # The one ACP agent command of the stage-0 workflow. Sortie sets SORTIE_RULE
 # to the dispatch rule a run was dispatched under: a rule whose name starts
-# with "opencode" runs opencode, anything else Claude Code (claude-agent-acp).
+# with "claude" runs Claude Code (claude-agent-acp), anything else opencode.
 # Both use the operator's Claude subscription through CLAUDE_CODE_OAUTH_TOKEN,
 # which in the VM holds only smolvm's placeholder; smolvm swaps in the real
 # token on requests to api.anthropic.com.
 case "${SORTIE_RULE:-}" in
-  opencode*) agent=opencode ;;
-  *) agent=claude ;;
+  claude*) agent=claude ;;
+  *) agent=opencode ;;
 esac
 if [ "${1:-}" = --which ]; then echo "$agent"; exit 0; fi
 case "$agent" in
-  opencode)
+  claude) exec claude-agent-acp "$@" ;;
+  *)
     # opencode's Anthropic sign-in plugin reads its OAuth login from auth.json;
     # give it the placeholder, with an expiry it never tries to refresh.
     mkdir -p "$HOME/.local/share/opencode"
@@ -19,5 +20,4 @@ case "$agent" in
     printf '{"anthropic":{"type":"oauth","refresh":"","access":"%s","expires":4102444800000}}\n' \
       "${CLAUDE_CODE_OAUTH_TOKEN:?}" > "$HOME/.local/share/opencode/auth.json"
     exec opencode acp "$@" ;;
-  *) exec claude-agent-acp "$@" ;;
 esac

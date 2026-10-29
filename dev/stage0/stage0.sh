@@ -54,13 +54,16 @@ STAGE0_REPO_URL=https://github.com/ortusnova/sortie.git
 STAGE0_REPO_BASE=plan-bench
 STAGE0_REPO_PROJECT=ortusnova/sortie
 STAGE0_PACK=$STAGE0_HOME/stage0.smolmachine
+# Agents at once; each VM takes 4 vCPU and 8 GiB (WORKFLOW.md).
+STAGE0_MAX_AGENTS=3
 EOF
   )
 fi
 # shellcheck source=/dev/null
 . "$ENV_FILE"
+STAGE0_MAX_AGENTS=${STAGE0_MAX_AGENTS:-3}
 [[ $STAGE0_KIT_ROOT == "$ROOT" ]] || say "Note: $ENV_FILE runs the kit from $STAGE0_KIT_ROOT, not $ROOT"
-export STAGE0_HOME STAGE0_HULY_URL STAGE0_HULY_WORKSPACE STAGE0_HULY_PROJECT STAGE0_SORTIE_PORT \
+export STAGE0_HOME STAGE0_HULY_URL STAGE0_HULY_WORKSPACE STAGE0_HULY_PROJECT STAGE0_SORTIE_PORT STAGE0_MAX_AGENTS \
   STAGE0_PACK STAGE0_REPO_URL STAGE0_REPO_BASE STAGE0_REPO_PROJECT
 
 for cmd in smolvm podman go uv npm openspec gh git openssl python3; do
