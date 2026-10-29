@@ -3,6 +3,13 @@
   "autoupdate": false,
   "share": "disabled",
   "model": "anthropic/claude-opus-5-5",
-  "plugin": ["@ex-machina/opencode-anthropic-auth@1.8.5"],
-  "permission": { "edit": "allow", "bash": "allow", "webfetch": "deny" }
+  "plugin": [
+    "@ex-machina/opencode-anthropic-auth@1.8.5"
+  ],
+  "permission": {
+    "*": "allow",
+    "external_directory": "allow",
+    "doom_loop": "allow",
+    "webfetch": "deny"
+  }
 }
