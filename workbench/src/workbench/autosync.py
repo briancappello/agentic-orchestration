@@ -121,8 +121,16 @@ def approved_digest(graph: dict[str, Any] | None, fields: dict[str, dict[str, An
         return None
     g = sync_graph(graph, fields)
     keep = {n["plan_key"] for n in g["nodes"] if n.get("approval") == "approved"}
+    nodes = []
+    for n in g["nodes"]:
+        if n["plan_key"] not in keep:
+            continue
+        # Release is one way: a story that started stays released, and needs no sync.
+        if fields.get(n["plan_key"], {}).get("frozen"):
+            n = {**n, "release": True}
+        nodes.append(n)
     doc = {
-        "nodes": sorted((n for n in g["nodes"] if n["plan_key"] in keep), key=lambda n: n["plan_key"]),
+        "nodes": sorted(nodes, key=lambda n: n["plan_key"]),
         "blocks": sorted((b["blocker"], b["blocked"]) for b in g.get("blocks") or []
                          if b["blocker"] in keep and b["blocked"] in keep),
         "parents": sorted((p["child"], p["parent"]) for p in g.get("parents") or []
