@@ -13,7 +13,7 @@
 # then run this again). State, tokens and workspaces live in $STAGE0_HOME.
 #
 # Needs: smolvm 1.26.x, podman, Go, uv, npm, the openspec CLI, gh signed in,
-# OPENROUTER_API_KEY in the systemd user manager's environment, Huly running
+# a live Claude subscription login (claude setup-token, opencode or Claude Code), Huly running
 # (HULY_COMPOSE_DIR) and the host's opencode signed in to Anthropic for
 # planning sessions.
 set -euo pipefail
@@ -54,13 +54,16 @@ STAGE0_REPO_URL=https://github.com/ortusnova/sortie.git
 STAGE0_REPO_BASE=plan-bench
 STAGE0_REPO_PROJECT=ortusnova/sortie
 STAGE0_PACK=$STAGE0_HOME/stage0.smolmachine
+# Agents at once; each VM takes 4 vCPU and 8 GiB (WORKFLOW.md).
+STAGE0_MAX_AGENTS=3
 EOF
   )
 fi
 # shellcheck source=/dev/null
 . "$ENV_FILE"
+STAGE0_MAX_AGENTS=${STAGE0_MAX_AGENTS:-3}
 [[ $STAGE0_KIT_ROOT == "$ROOT" ]] || say "Note: $ENV_FILE runs the kit from $STAGE0_KIT_ROOT, not $ROOT"
-export STAGE0_HOME STAGE0_HULY_URL STAGE0_HULY_WORKSPACE STAGE0_HULY_PROJECT STAGE0_SORTIE_PORT \
+export STAGE0_HOME STAGE0_HULY_URL STAGE0_HULY_WORKSPACE STAGE0_HULY_PROJECT STAGE0_SORTIE_PORT STAGE0_MAX_AGENTS \
   STAGE0_PACK STAGE0_REPO_URL STAGE0_REPO_BASE STAGE0_REPO_PROJECT
 
 for cmd in smolvm podman go uv npm openspec gh git openssl python3; do
@@ -68,8 +71,8 @@ for cmd in smolvm podman go uv npm openspec gh git openssl python3; do
 done
 smolvm --version | grep -q '^smolvm 1\.26\.' || die "Sortie needs smolvm 1.26.x"
 gh auth token >/dev/null || die "gh has no token: run gh auth login"
-[[ -n $(systemctl --user show-environment | sed -n 's/^OPENROUTER_API_KEY=//p') ]] \
-  || die "OPENROUTER_API_KEY is not in the systemd user environment (systemctl --user set-environment)"
+STAGE0_HOME=$STAGE0_HOME "$KIT/anthropic-token.py" >/dev/null \
+  || die "no live Claude subscription token: run claude setup-token into $STAGE0_HOME/claude-oauth-token"
 
 if [[ ! -d $STAGE0_SORTIE_SRC ]]; then
   say "Creating the Sortie checkout $STAGE0_SORTIE_SRC (ortusnova/sortie plan-bench)"
@@ -125,11 +128,12 @@ python3 "$ROOT/dev/forge/render.py" "$KIT/WORKFLOW.md" "$STAGE0_HOME/sortie/WORK
 say "Installing the user units"
 UNITS=$HOME/.config/systemd/user
 mkdir -p "$UNITS"
-for unit in ortus-stage0-sortie ortus-stage0-workbench; do
-  sed -e "s|@KIT@|$KIT|g" -e "s|@STAGE0_HOME@|$STAGE0_HOME|g" "$KIT/units/$unit.service" > "$UNITS/$unit.service"
+for unit in ortus-stage0-sortie.service ortus-stage0-workbench.service ortus-stage0-token.service ortus-stage0-token.timer; do
+  sed -e "s|@KIT@|$KIT|g" -e "s|@STAGE0_HOME@|$STAGE0_HOME|g" "$KIT/units/$unit" > "$UNITS/$unit"
 done
 systemctl --user daemon-reload
 systemctl --user enable -q ortus-stage0-sortie.service ortus-stage0-workbench.service
+systemctl --user enable -q --now ortus-stage0-token.timer
 systemctl --user restart ortus-stage0-sortie.service
 for _ in $(seq 60); do curl -sf -o /dev/null "http://127.0.0.1:$STAGE0_SORTIE_PORT/readyz" && break; sleep 1; done
 systemctl --user restart ortus-stage0-workbench.service
