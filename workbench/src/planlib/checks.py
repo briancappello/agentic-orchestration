@@ -59,7 +59,7 @@ def check_graph(store: LoadedStore, names_for: NamesFor) -> list[PlanError]:
 
 def check_frozen(store: LoadedStore, frozen: dict[str, str]) -> list[PlanError]:
     """A story agents have started may not change or disappear."""
-    from .approval import story_digest
+    from .approval import resolved, story_digest
 
     current = {f"{c}/{d['id']}": (bd, d) for c, bd in store.breakdowns.items() for d in bd.doc["deliverables"]}
     errors = []
@@ -68,7 +68,7 @@ def check_frozen(store: LoadedStore, frozen: dict[str, str]) -> list[PlanError]:
         if key not in current:
             errors.append(PlanError("frozen", f"'{key}' has started and cannot be removed; add a story that supersedes it instead",
                                     file=str(CHANGES_DIR / change / "breakdown.yaml"), change=change, deliverable=did, members=(key,)))
-        elif story_digest(current[key][1]) != digest:
+        elif story_digest(resolved(current[key][0].doc, current[key][1])) != digest:
             errors.append(PlanError("frozen", f"'{key}' has started and cannot change; add an amending story that depends on it, "
                                     "or a replacement that supersedes it", file=current[key][0].file, change=change, deliverable=did, members=(key,)))
     return errors

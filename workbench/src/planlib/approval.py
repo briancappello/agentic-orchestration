@@ -22,6 +22,15 @@ def story_digest(deliverable: dict) -> str:
     return "sha256:" + hashlib.sha256(canonical_json(deliverable)).hexdigest()
 
 
+def resolved(doc: dict, deliverable: dict) -> dict:
+    """The deliverable as an approval covers it: with the breakdown's default
+    repository filled in when it names none, so changing that default
+    returns the story to draft."""
+    if doc.get("repository") and not deliverable.get("repository"):
+        return {**deliverable, "repository": doc["repository"]}
+    return deliverable
+
+
 def deliverables_digest(doc: dict) -> str:
     """The old format's digest over all of a breakdown's deliverables."""
     return "sha256:" + hashlib.sha256(canonical_json(doc.get("deliverables", []))).hexdigest()

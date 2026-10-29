@@ -14,6 +14,10 @@
       "description": "Deprecated. Approval is recorded per story by the plan workbench, never in this file. Read only to import approvals made before that.",
       "enum": ["draft", "approved"]
     },
+    "repository": {
+      "description": "The repository every deliverable of this change lands in, by the name Sortie's workflow lists it under. A deliverable's own repository overrides it. Absent: the workflow's default repository.",
+      "$ref": "#/$defs/kebab"
+    },
     "approved_digest": {
       "description": "Deprecated, with status: the digest of an approval made under the old format.",
       "type": "string",
@@ -71,6 +75,10 @@
         "supersedes": {
           "description": "The deliverable this one replaces, once that one has started. Its dependents move to this one.",
           "$ref": "#/$defs/deliverable_ref"
+        },
+        "repository": {
+          "description": "The repository this deliverable lands in, by the name Sortie's workflow lists it under; overrides the breakdown's repository.",
+          "$ref": "#/$defs/kebab"
         }
       }
     }

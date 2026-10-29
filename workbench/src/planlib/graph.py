@@ -8,7 +8,7 @@ from typing import Any
 
 import networkx as nx
 
-from .approval import story_digest
+from .approval import resolved, story_digest
 from .checks import NamesFor, resolve_ref
 from .errors import PlanError
 from .requirements import RequirementsError
@@ -78,7 +78,7 @@ def build_graph(store: LoadedStore, names_for: NamesFor, schemas: Schemas,
         if bd:
             for d in bd.doc["deliverables"]:
                 key = f"{change}/{d['id']}"
-                story_approval[key] = "approved" if approvals.get(key) == story_digest(d) else "draft"
+                story_approval[key] = "approved" if approvals.get(key) == story_digest(resolved(bd.doc, d)) else "draft"
         if bd is None:
             approval = "unplanned"
         else:
@@ -115,6 +115,7 @@ def build_graph(store: LoadedStore, names_for: NamesFor, schemas: Schemas,
         story_depth = _depths(story_graph)
         for d in bd.doc["deliverables"]:
             key = f"{change}/{d['id']}"
+            repository = resolved(bd.doc, d).get("repository")
             nodes.append(
                 {
                     "plan_key": key,
@@ -129,10 +130,11 @@ def build_graph(store: LoadedStore, names_for: NamesFor, schemas: Schemas,
                     "covers": list(d["covers"]),
                     "acceptance_criteria": list(d["acceptance_criteria"]),
                     **({"review": d.get("review", "human")} if graph_v2 else {}),
+                    **({"repository": repository} if repository else {}),
                 }
             )
             stories[key] = {
-                "digest": story_digest(d),
+                "digest": story_digest(resolved(bd.doc, d)),
                 "review": d.get("review", "human"),
                 "supersedes": resolve_ref(change, d["supersedes"]) if d.get("supersedes") else None,
             }

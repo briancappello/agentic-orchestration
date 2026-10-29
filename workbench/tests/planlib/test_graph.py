@@ -152,3 +152,38 @@ def test_graph_version_follows_the_store_schema(store):
     schema.write_text(json.dumps(doc))
     r = validate(store.root, show=no_openspec)
     assert r.errors == [] and r.graph["schema_version"] == 1
+
+
+def test_change_default_and_an_override_name_each_story_repository(store):
+    store.plan([("workers", []), ("other", [])])
+    store.change("workers", breakdown(deliverable("wiring"), deliverable("daemon", repository="agentic-orchestration"),
+                                      repository="sortie"))
+    store.change("other", breakdown(deliverable("plain")))
+    r = validate(store.root, show=no_openspec)
+    assert r.errors == []
+    nodes = by_key(r.graph)
+    assert nodes["workers/daemon"]["repository"] == "agentic-orchestration"
+    assert nodes["workers/wiring"]["repository"] == "sortie"
+    assert "repository" not in nodes["other/plain"]
+    assert "repository" not in nodes["workers"]
+    assert Schemas.load(store.root).check("plan-graph", r.graph, file="g") == []
+
+
+def test_a_story_approval_covers_its_resolved_repository(store):
+    store.plan([("workers", [])])
+    store.change("workers", breakdown(deliverable("wiring"), repository="sortie"))
+    before = validate(store.root, show=no_openspec).stories["workers/wiring"]["digest"]
+    store.change("workers", breakdown(deliverable("wiring"), repository="homelab"))
+    after = validate(store.root, show=no_openspec).stories["workers/wiring"]["digest"]
+    assert before != after
+    store.change("workers", breakdown(deliverable("wiring")))
+    plain = validate(store.root, show=no_openspec).stories["workers/wiring"]["digest"]
+    from planlib import story_digest
+    assert plain == story_digest(deliverable("wiring"))
+
+
+def test_a_repository_name_must_be_kebab_case(store):
+    store.plan([("workers", [])])
+    store.change("workers", breakdown(deliverable("wiring", repository="Not OK")))
+    r = validate(store.root, show=no_openspec)
+    assert r.graph is None and any("repository" in str(e) for e in r.errors)
