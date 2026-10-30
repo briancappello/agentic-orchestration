@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Home · ortus-nova-specs (Kind columns slack)</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;600;700&family=Bodoni+Moda:ital,wght@1,400;1,700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#1d1d1f;--ink2:#2a2a2d;--edge:#3a3a3d;--paper:#fbfbf8;--strip:#f4f4f2;--line:#dcdcd7;--hair:#e6e6e0;--mute:#5d626b;--done:#2f6f4e;--donet:#eef4f0;--amber:#c98a1a;--amberi:#8a5a06;--ambert:#fbf4e5;--slate:#8a8f98;--alert:#c4382f;--alertt:#fbeceb}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1440px;height:900px;overflow:hidden;background:var(--paper);color:var(--ink);font:13px/1.45 "Instrument Sans",sans-serif}
+.mono{font:500 10.5px "JetBrains Mono",monospace;color:var(--mute)}
+.bod{font-family:"Bodoni Moda",serif;font-style:italic}
+.top{height:56px;background:var(--ink);color:#fff;display:flex;align-items:center;gap:18px;padding:0 20px}
+.top b{font-size:16px}.crumb{color:#b8b8bd;font-weight:600}.crumb i{color:#fff;font-style:normal}
+.tabs{display:flex;gap:2px;margin-left:16px}.tabs span{padding:6px 12px;border-radius:5px;color:#b8b8bd;font-weight:600}.tabs .on{background:var(--ink2);color:#fff}
+.sp{flex:1}.pill{height:30px;padding:0 12px;border-radius:99px;border:1px solid var(--edge);background:var(--ink2);display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600}
+.dot{width:8px;height:8px;border-radius:50%;background:#5fb48a}
+.score{height:300px;background:var(--strip);border-bottom:1px solid var(--line);padding:22px 40px 0;position:relative}
+.score h1{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.score h1 span{font-weight:400;color:var(--mute);font-size:15px;letter-spacing:0;margin-left:10px}
+.staff{position:absolute;left:40px;right:40px;top:110px;height:166px}
+.lane{position:absolute;left:0;right:0;height:1px;background:var(--hair)}
+.bar{position:absolute;top:58px;height:10px;border-radius:2px}
+.m{position:absolute;top:0;bottom:0;border-left:1px solid var(--ink)}
+.m.goal{border-left:5px double var(--ink)}
+.m .lab{position:absolute;top:-4px;left:10px;white-space:nowrap}
+.m .lab b{font-family:"Bodoni Moda";font-style:italic;font-size:22px;display:block;line-height:1}
+.m .lab span{font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--mute)}
+.m .cnt{position:absolute;top:96px;left:10px;font-size:11.5px;color:var(--mute);white-space:nowrap;line-height:1.5}
+.here{position:absolute;top:40px;transform:translateX(-50%);text-align:center}
+.here .flag{background:var(--ink);color:#fff;font-size:11px;font-weight:700;padding:3px 8px;border-radius:3px;white-space:nowrap}
+.here .stem{width:2px;height:22px;background:var(--ink);margin:0 auto}
+.x{position:absolute;top:78px;width:14px;height:14px}
+.x:before,.x:after{content:"";position:absolute;left:6px;top:0;width:2.5px;height:14px;background:var(--alert);transform:rotate(45deg)}.x:after{transform:rotate(-45deg)}
+.path{display:flex;align-items:center;gap:0;padding:12px 40px 0;height:72px}
+.path .t{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--mute);width:120px;line-height:1.3}
+.node{border:1.5px solid var(--line);border-radius:6px;background:#fff;padding:6px 10px;min-width:118px}
+.node b{font-size:12.5px;display:block}.node.need{border-style:dashed;border-color:var(--alert)}.node.gate{border:2px solid var(--ink)}
+.arr{width:18px;height:1.5px;background:var(--slate);position:relative}.arr:after{content:"";position:absolute;right:-1px;top:-3px;border:4px solid transparent;border-left-color:var(--slate)}
+.cols{display:grid;grid-template-columns:420px 1fr;gap:28px;padding:18px 40px}
+h2{font-size:15px;font-weight:700;margin-bottom:8px}h2 span{font-size:12px;color:var(--mute);font-weight:600;margin-left:6px}
+.verdict{border:1px solid #e9b8b3;background:var(--alertt);border-radius:10px;padding:14px 16px}
+.verdict b{font-size:24px;color:#8f241d;letter-spacing:-.01em}
+.slots{display:flex;gap:6px;margin:10px 0 6px}.slots i{flex:1;height:22px;border:1.5px dashed var(--slate);border-radius:4px}
+.kv{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--hair)}
+.kv b{font-feature-settings:"tnum"}
+table{width:100%;border-collapse:collapse}td{padding:7px 8px;border-bottom:1px solid var(--hair);vertical-align:middle}
+th{font-size:11px;letter-spacing:.05em;color:var(--mute);text-align:left;padding:4px 8px;border-bottom:1px solid var(--line)}
+.chip{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;border:1px solid var(--line);white-space:nowrap}
+.c-spec{background:var(--alertt);border-color:#e9b8b3;color:#8f241d}.c-appr{background:var(--ambert);border-color:#ecd9a8;color:var(--amberi)}.c-op{background:#ecebf6;border-color:#cfcde6;color:#3c3a6b}
+.num{text-align:right;font-feature-settings:"tnum"}
+.strip{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:12px}
+.tile{border:1px solid var(--line);border-radius:10px;background:#fff;padding:16px 18px;height:166px;display:flex;flex-direction:column}
+.tile h3{font-size:11px;letter-spacing:.06em;font-weight:700;color:var(--mute)}
+.verdict{background:var(--alertt);border-color:#e9b8b3}
+.verdict .big{font-size:40px;font-weight:700;letter-spacing:-.02em;line-height:1.05;margin-top:6px;color:#8f241d}
+.verdict p{margin-top:8px;font-size:14px;max-width:46ch}
+
+.tnum small{font-size:14px;color:var(--mute);font-weight:600}
+.slots{display:flex;gap:6px;margin-top:8px}.slots i{flex:1;height:26px;border:1.5px dashed var(--slate);border-radius:5px}
+.hist{margin-top:auto;display:flex;align-items:flex-end;gap:2px;height:34px}.hist i{flex:1;background:var(--slate);border-radius:1px}
+.hist.g i{background:var(--done)}.cap{font-size:11px;color:var(--mute);margin-top:4px}
+.verdict{background:var(--alertt);border-color:#e9b8b3}.verdict .big{font-size:36px;font-weight:700;letter-spacing:-.02em;line-height:1.05;margin-top:4px;color:#8f241d}.verdict p{margin-top:6px;font-size:13.5px;max-width:48ch}
+.tnum{font-size:32px;font-weight:700;letter-spacing:-.02em;font-feature-settings:"tnum";margin-top:2px}.tnum small{font-size:14px;color:var(--mute);font-weight:600}
+.stripwrap{padding:14px 40px 0}
+.score{height:258px}.staff{top:96px}
+.cols2{display:grid;grid-template-columns:1fr 380px;gap:28px;padding:14px 40px}
+.ev{display:grid;grid-template-columns:44px 1fr;gap:8px;padding:6px 0;border-bottom:1px solid var(--hair);font-size:12px}
+
+.hb{padding:12px 40px 0}
+.hb h2{font-size:15px;font-weight:700;margin-bottom:10px}.hb h2 span{font-size:12px;color:var(--mute);font-weight:600;margin-left:8px}
+.btn{height:28px;padding:0 12px;border-radius:7px;font-weight:700;font-size:12px;display:inline-flex;align-items:center;border:1px solid var(--line);background:#fff;white-space:nowrap}
+.btn.go{background:var(--done);border-color:var(--done);color:#fff}.btn.ink{background:var(--ink);border-color:var(--ink);color:#fff}
+.crit{font-size:10.5px;font-weight:700;color:#8f241d;border:1px solid #e9b8b3;background:var(--alertt);border-radius:3px;padding:0 5px}
+.k{font-size:11.5px;color:var(--mute)}
+
+.tabs2{display:flex;gap:6px;margin-bottom:6px}
+.tb{height:28px;padding:0 12px;border:1px solid var(--line);border-radius:99px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:6px;background:#fff}
+.tb.on{background:var(--ink);color:#fff;border-color:var(--ink)}.tb i{font-style:normal;font-weight:600;opacity:.7}
+.kd{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;text-align:center;white-space:nowrap}
+.kd-approve{background:var(--ambert);color:var(--amberi)}.kd-spec{background:var(--alertt);color:#8f241d}.kd-op{background:#ecebf6;color:#3c3a6b}
+.ibar{position:relative;height:16px;background:var(--strip);border-radius:3px}.ibar i{position:absolute;left:0;top:0;bottom:0;background:var(--ink);border-radius:3px;opacity:.85}
+.n{font-family:"Bodoni Moda",serif;font-style:italic;font-weight:700;font-size:16px;color:var(--mute)}
+.btn{justify-content:center}
+
+.kind{display:grid;grid-template-columns:1.1fr 1fr .9fr;gap:14px}
+.kc{border:1px solid var(--line);border-radius:10px;background:#fff;padding:10px 14px;height:372px;overflow:hidden}
+.kh{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:8px;border-bottom:1px solid var(--line)}.kh b{font-size:14px}.kh span{font-size:11.5px;color:var(--mute);font-weight:600}
+.ki{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--hair)}
+.rk{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:var(--mute);font-feature-settings:"tnum"}
+.ki.hot .rk{background:var(--ink);border-color:var(--ink);color:#fff}
+.kb b{font-size:12.5px}.kr{display:grid;grid-template-columns:96px auto auto;gap:8px;align-items:center;justify-content:start;margin-top:4px}.kr .crit{justify-self:start}
+.sbar{position:relative;height:8px;background:var(--strip);border-radius:4px;overflow:hidden}.sbar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px}
+.t-red{background:var(--alert)}.t-amber{background:var(--amber)}.t-green{background:var(--done)}
+.sl{font-size:11px;font-weight:700;white-space:nowrap}.t-red-text{color:#8f241d}.t-amber-text{color:var(--amberi)}.t-green-text{color:var(--done)}
+.legend2{display:flex;gap:16px;align-items:center;font-size:11.5px;color:var(--mute);margin:-4px 0 10px}
+.legend2 i{display:inline-block;width:18px;height:6px;border-radius:3px;margin-right:6px;vertical-align:1px}
+</style></head><body>
+<div class="top"><b>Plan workbench</b><span class="crumb">Projects &rsaquo; <i>ortus-nova-specs</i></span>
+<div class="tabs"><span class="on">Home</span><span>Graph</span></div><span class="sp"></span>
+<span class="pill"><span class="dot" style="background:var(--slate)"></span>Sortie · 0 running</span><span class="pill"><span class="dot"></span>Synced 11:03</span><span style="font-weight:600">Brian</span></div>
+<div class="score"><h1>The homelab, live on metal<span>M2 is the goal · 31% of the work to it is done</span></h1>
+<div class="staff">
+<div class="lane" style="top:63px"></div>
+<div class="bar" style="left:0;width:30%;background:var(--ink)"></div>
+<div class="bar" style="left:30%;width:70%;background:repeating-linear-gradient(90deg,var(--line) 0 10px,transparent 10px 16px)"></div>
+<div class="m" style="left:0"><div class="lab"><b>M0</b><span>FOUNDATIONS</span></div><div class="cnt">done</div></div>
+<div class="m" style="left:11%"><div class="lab"><b>M1</b><span>VM-COMPLETE</span></div><div class="cnt">7 / 46 stories<br>101 / 151 agent tasks<br>0 / 3 person tasks</div></div>
+<div class="m goal" style="left:60%"><div class="lab"><b>M2</b><span>METAL ON THE LAN · GOAL</span></div><div class="cnt">0 / 47 person tasks<br>hardware and operator work</div></div>
+<div class="m" style="left:82%"><div class="lab"><b>M3</b><span>REMOTE ACCESS</span></div><div class="cnt">0 / 11 tasks</div></div>
+<div class="m" style="left:96%"><div class="lab"><b>M4</b></div></div>
+<div class="here" style="left:30%"><div class="flag">we are here</div><div class="stem"></div></div>
+<span class="x" style="left:33%"></span><span class="x" style="left:36%"></span><span class="x" style="left:39%"></span><span class="x" style="left:44%"></span><span class="x" style="left:52%"></span><span class="x" style="left:62%"></span><span class="x" style="left:65%"></span>
+</div></div>
+
+<div class="stripwrap"><div class="strip">
+<div class="tile verdict"><h3>EXECUTION</h3><div class="big">Idle now</div><p>3 agent slots are free and no approved story is ready to run. The last run finished at 07:12; agents have been idle 4 h.</p></div>
+<div class="tile"><h3>AGENT SLOTS</h3><div class="tnum">0<small> / 3 busy</small></div><div class="slots"><i></i><i></i><i></i></div><div class="hist"><i style="height:90%"></i><i style="height:100%"></i><i style="height:100%"></i><i style="height:66%"></i><i style="height:33%"></i><i style="height:4%"></i><i style="height:4%"></i><i style="height:4%"></i><i style="height:4%"></i><i style="height:4%"></i></div><div class="cap">busy slots, last 10 h</div></div>
+<div class="tile"><h3>RUNWAY</h3><div class="tnum">0<small> stories ready</small></div><div class="cap" style="margin-top:6px">needs 3 to fill the slots</div><div class="hist g"><i style="height:40%"></i><i style="height:60%"></i><i style="height:30%"></i><i style="height:10%"></i><i style="height:4%"></i><i style="height:4%"></i><i style="height:4%"></i><i style="height:4%"></i><i style="height:4%"></i><i style="height:4%"></i></div><div class="cap">ready stories, last 10 h</div></div>
+<div class="tile"><h3>NEEDS A PERSON</h3><div class="tnum">17</div><div class="cap" style="font-size:12.5px;color:var(--ink);margin-top:4px">9 specs to write · 3 approvals<br>3 operator tasks</div><div class="cap" style="margin-top:auto">nearest: worker-daemon, on the critical path</div></div>
+</div>
+</div>
+<div class="path"><div class="t">CRITICAL PATH<br><span style="font-weight:600;letter-spacing:0">to the M1 gate</span></div>
+<div class="node need"><span class="mono">not approved</span><b>worker-daemon</b></div><div class="arr"></div>
+<div class="node need"><span class="mono">no spec</span><b>stage-1-on-p1</b></div><div class="arr"></div>
+<div class="node need"><span class="mono">no spec</span><b>taichi-worker</b></div><div class="arr"></div>
+<div class="node need"><span class="mono">no spec</span><b>nested-opt-in</b></div><div class="arr"></div>
+<div class="node need"><span class="mono">no spec</span><b>homelab-image</b></div><div class="arr"></div>
+<div class="node need"><span class="mono">no spec</span><b>homelab-pilot</b></div><div class="arr"></div>
+<div class="node"><span class="mono">+3 stories</span><b>M1-A / C / E</b></div><div class="arr"></div>
+<div class="node gate"><span class="mono">gate</span><b>m1-gate</b></div></div>
+<div class="hb"><h2>Needs a person<span>by what you do · numbers rank all 17 by urgency</span></h2><div class="legend2"><span>Bar = time before it blocks agents, counted in stories until estimates exist. Shorter is more urgent.</span><span><i class="t-red"></i>blocking now</span><span><i class="t-amber"></i>within 4 stories</span><span><i class="t-green"></i>room to spare</span></div><div class="kind"><div class="kc"><div class="kh"><b>Approve</b><span>3 · 26 stories</span></div><div class="ki hot"><span class="rk">1</span><div class="kb"><b>worker-daemon</b><div class="k">agent-platform-workers · spec reviewed</div><div class="kr"><div class="sbar"><i class="t-red" style="width:4%"></i></div><span class="sl t-red-text">blocking now</span><span class=crit>critical</span></div></div><span class="btn go">Approve</span></div><div class="ki hot"><span class="rk">2</span><div class="kb"><b>control-plane-images</b><div class="k">agent-platform-workers · spec reviewed</div><div class="kr"><div class="sbar"><i class="t-red" style="width:4%"></i></div><span class="sl t-red-text">blocking now</span><span class=crit>critical</span></div></div><span class="btn go">Approve</span></div><div class="ki hot"><span class="rk">3</span><div class="kb"><b>add-artifact-trust · unify-seed-bringup · declare-fleet-source</b><div class="k">24 stories with specs · would fill the 3 idle slots</div><div class="kr"><div class="sbar"><i class="t-red" style="width:4%"></i></div><span class="sl t-red-text">blocking now</span></div></div><span class="btn go">Review 24</span></div></div><div class="kc"><div class="kh"><b>Write a spec</b><span>9 · plan in the graph</span></div><div class="ki"><span class="rk">4</span><div class="kb"><b>homelab-instance</b><div class="k">agent-platform-workers · after control-plane-images</div><div class="kr"><div class="sbar"><i class="t-amber" style="width:12%"></i></div><span class="sl t-amber-text">blocks in 1 story</span><span class=crit>critical</span></div></div><span class="btn ">Plan in graph</span></div><div class="ki"><span class="rk">5</span><div class="kb"><b>stage-1-on-p1</b><div class="k">agent-platform-workers · after worker-daemon and homelab-instance</div><div class="kr"><div class="sbar"><i class="t-amber" style="width:25%"></i></div><span class="sl t-amber-text">blocks in 2 stories</span><span class=crit>critical</span></div></div><span class="btn ">Plan in graph</span></div><div class="ki"><span class="rk">6</span><div class="kb"><b>taichi-worker</b><div class="k">agent-platform-workers</div><div class="kr"><div class="sbar"><i class="t-amber" style="width:38%"></i></div><span class="sl t-amber-text">blocks in 3 stories</span><span class=crit>critical</span></div></div><span class="btn ">Plan in graph</span></div><div class="ki"><span class="rk">7</span><div class="kb"><b>nested-opt-in</b><div class="k">run-homelab-through-sortie</div><div class="kr"><div class="sbar"><i class="t-amber" style="width:50%"></i></div><span class="sl t-amber-text">blocks in 4 stories</span><span class=crit>critical</span></div></div><span class="btn ">Plan in graph</span></div></div><div class="kc"><div class="kh"><b>Operator tasks</b><span>3 · gate M2</span></div><div class="ki"><span class="rk">8</span><div class="kb"><b>Enroll the YubiKey, declare p1 a mgmt peer</b><div class="k">p3 3.7 · needs a p1 reboot · first step of M2</div><div class="kr"><div class="sbar"><i class="t-green" style="width:100%"></i></div><span class="sl t-green-text">blocks after M1, ~39 stories</span></div></div><span class="btn ink">Open task</span></div><div class="ki"><span class="rk">9</span><div class="kb"><b>Order node3's hardware</b><div class="k">harden-talos-nodes · needed for M2's rebuild</div><div class="kr"><div class="sbar"><i class="t-green" style="width:100%"></i></div><span class="sl t-green-text">blocks after M1, ~39 stories</span></div></div><span class="btn ink">Open task</span></div></div></div></div></body></html>

@@ -175,11 +175,21 @@ breakdown. Each item has one reason, the first that applies:
 
 Reasons 1 to 6 need a person. Reason 7 is listed but shown quieter.
 
-**Urgency** orders the list: earlier milestones first, then items on the
+**Slack** is how much work can still run before an item starts holding
+agents up: zero when an agent slot is free now and the item is what stands
+between it and work, otherwise the number of stories that will run first on
+the item's path. It is counted in stories until estimates exist (D8), then
+in hours. **Urgency** orders the items: least slack first, then items on the
 critical path, then items that more unfinished stories transitively depend
-on, then plan order. The home shows the urgency, not just the order: each
-item says whether it is on the critical path, and how many stories wait
-behind it.
+on, then plan order.
+
+On the home, the items that need a person sit in three columns by what a
+person does: **Approve** (a story, or a change whose drafts are reviewed
+together), **Write a spec** (no breakdown or no spec), and **Operator tasks**.
+Each item carries its rank across all three columns, the top three marked,
+and a slack bar: shorter is more urgent, red when blocking now, amber within
+four stories, green with room to spare, with the slack also in words. Each
+has its action: Approve, Review, Plan in graph, or Open task.
 
 ### D7. A timeline across the page
 
@@ -201,10 +211,19 @@ the last:
 - When estimates exist (D8), the axis can become wall-clock time without
   changing the marks.
 
-The timeline is the at-a-glance view. Under it sit the two focal points side
-by side, execution health first, and under them each milestone's progress
-(D3). Charts that answer "how healthy?" or "how far?" belong here; a chart
-that answers neither does not.
+The timeline is the at-a-glance view. Under it, in order (`prototype.html`
+in this change is the locked composition, with real data from the
+`ortus-nova-specs` plan):
+
+1. **Health strip:** the execution verdict with its reasons (D5), agent slots
+   in use and free, the runway, and "needs a person" with its count by kind.
+   Slots and runway show their recent history.
+2. **Critical path:** the chain of stories to the next milestone's gate, each
+   marked with what it needs.
+3. **Needs a person:** the three ranked columns (D6).
+
+Charts that answer "how healthy?" or "how far?" belong here; a chart that
+answers neither does not.
 
 ### D8. Room for estimates
 

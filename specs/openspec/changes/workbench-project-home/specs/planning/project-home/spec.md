@@ -49,16 +49,24 @@ With the verdict it SHALL show its reasons (each held run and why, the failed sy
 - **THEN** the verdict is "healthy", with a runway of 4 stories against 3 slots
 
 ### Requirement: Not ready to execute
-The home SHALL list every story in an unfinished milestone that cannot run yet, and every included change with no breakdown, each with the first reason that applies: no breakdown; no spec (a `story`, not an enabler, that covers no requirement); needs re-review; not approved; held for approval (approved, but a blocker is not); waits on a person (an open person task in its milestone, named); waits on work (an unfinished blocker that is planned and approved). Reasons other than "waits on work" SHALL be marked as needing a person; "waits on work" items SHALL be shown less prominently. The list SHALL be ordered by urgency: earlier milestones first, then stories on the next milestone's critical path, then by how many unfinished stories transitively depend on the item, then plan order. Each item SHALL show whether it is on the critical path and how many stories wait behind it.
+The home SHALL find every story in an unfinished milestone that cannot run yet, and every included change with no breakdown, each with the first reason that applies: no breakdown; no spec (a `story`, not an enabler, that covers no requirement); needs re-review; not approved; held for approval (approved, but a blocker is not); waits on a person (an open person task in its milestone, named); waits on work (an unfinished blocker that is planned and approved).
 
-#### Scenario: Ordered by urgency
-- **WHEN** M1 holds `nested-opt-in` (no spec, on the critical path, 4 stories behind it) and `vm-mirrors` (not approved, off the path, none behind it), and M2 holds `metal-apply` (waits on a person)
-- **THEN** the list shows `nested-opt-in`, then `vm-mirrors`, then `metal-apply`
-- **AND** `nested-opt-in` is marked on the critical path with 4 stories behind it
+For each item it SHALL compute its slack: zero when an agent slot is free and the item stands between that slot and work, otherwise the number of stories that will run before the item is needed on its path (their estimates, when every one has one). Items SHALL be ranked by least slack, then by being on the next milestone's critical path, then by how many unfinished stories transitively depend on them, then by plan order.
 
-#### Scenario: Waiting only on time
-- **WHEN** `homelab-image` is approved and waits only on approved stories that are running
-- **THEN** it is listed as "waits on work", shown less prominently, and not marked as needing a person
+The items that need a person (every reason but "waits on work") SHALL show in three columns: Approve (a story, or a change whose draft stories are reviewed together), Write a spec, and Operator tasks. Each item SHALL show its rank across all three columns, with the top three marked; its slack as a bar that is shorter the less slack it has, colored as blocking now, within four stories, or with room to spare, and in words; whether it is on the critical path; and its action (approve, review, open in the graph to plan, or open the task).
+
+#### Scenario: Ranked by slack
+- **WHEN** a slot is free and `worker-daemon` is not approved and nothing is ahead of it, and `homelab-instance` has no spec and is needed after one more story
+- **THEN** `worker-daemon` ranks above `homelab-instance`
+- **AND** `worker-daemon` shows "blocking now" in the most urgent color, and `homelab-instance` "blocks in 1 story" in the middle color
+
+#### Scenario: Grouped by what a person does
+- **WHEN** the home shows `worker-daemon` (not approved), `homelab-instance` (no spec) and "Enroll the YubiKey" (operator task)
+- **THEN** they appear in the Approve, Write a spec and Operator tasks columns, each with its rank across all three
+
+#### Scenario: A change reviewed as one
+- **WHEN** change `add-artifact-trust-and-updates` has 8 draft stories that all have specs
+- **THEN** the Approve column shows it as one item that reviews its 8 stories
 
 ### Requirement: Milestone progress on the home
 Below the focal points, the home SHALL show each milestone with its stories, agent tasks and person tasks done against total (`planning/milestones`), as separate measures, and SHALL mark the next milestone and the goal. A milestone with no stories SHALL show its tasks, not "no stories".
