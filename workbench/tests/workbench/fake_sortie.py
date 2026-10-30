@@ -39,6 +39,11 @@ class FakeSortie:
         self.retrying: dict[str, dict[str, Any]] = {}
         self.brokers: dict[str, dict[str, str]] = {}
         self.state_down = False
+        # Sortie's agent concurrency cap, and the runs that wait on a budget
+        # or a person, as /api/v1/state reports them.
+        self.max_agents: int | None = 3
+        self.budget_exhausted: list[dict[str, Any]] = []
+        self.parked: list[dict[str, Any]] = []
         # Sync: no connection at all; the next apply is refused as stale;
         # refresh fails; the refreshes Sortie was asked for.
         self.unreachable = False
@@ -141,8 +146,10 @@ class FakeSortie:
         if path == "/api/v1/state":
             if self.state_down:
                 return httpx.Response(503, json={"error": {"code": "unavailable", "message": "state"}})
+            agent = {"max_concurrent_agents": self.max_agents} if self.max_agents is not None else {}
             return httpx.Response(200, json={"running": list(self.running.values()), "retrying": list(self.retrying.values()),
-                                             "budget_exhausted": []})
+                                             "budget_exhausted": self.budget_exhausted, "parked": self.parked,
+                                             "config": {"agent": agent}})
         if path.startswith("/api/v1/") and path.endswith("/broker"):
             ident = path.removeprefix("/api/v1/").removesuffix("/broker")
             if ident not in self.brokers:

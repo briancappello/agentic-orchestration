@@ -35,6 +35,8 @@ class PlanState:
         self._inputs = inputs or (lambda: ({}, {}))
         self.graph: dict[str, Any] | None = None
         self.stories: dict[str, dict[str, Any]] = {}
+        # The milestones and each change's tasks.md items, from the last valid read.
+        self.planning: dict[str, Any] = {"milestones": [], "declared": False, "tasks": {}}
         self.errors: list[dict[str, Any]] = []
         self.version = 0
         self.validated_at = 0.0
@@ -86,6 +88,9 @@ class PlanState:
             graph = result.graph
             if graph is not None:
                 self.stories = result.stories
+                self.planning = {"milestones": getattr(result, "milestones", []),
+                                 "declared": getattr(result, "milestones_declared", False),
+                                 "tasks": getattr(result, "tasks", {})}
         except PlanLoadError as exc:
             errors = [{"code": "store", "message": str(exc), "file": None, "change": None, "deliverable": None, "members": []}]
             graph = None

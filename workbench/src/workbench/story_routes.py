@@ -35,6 +35,11 @@ def story_router(projects: ProjectManager, require_role) -> APIRouter:
     async def refreshed(rt: ProjectRuntime) -> None:
         await asyncio.to_thread(rt.plan.refresh)
 
+    def writable(rt: ProjectRuntime) -> None:
+        if not rt.config.sync_enabled:
+            raise HTTPException(status_code=409, detail={"code": "sync_disabled",
+                                                         "message": "this workbench does not write to the tracker (WORKBENCH_SYNC=0)"})
+
     def sortie_failure(exc: SortieError) -> HTTPException:
         return HTTPException(status_code=exc.status if exc.status >= 400 else 502, detail={"code": exc.code, "message": exc.message})
 
@@ -69,6 +74,7 @@ def story_router(projects: ProjectManager, require_role) -> APIRouter:
     @router.post("/stories/pull-back")
     async def pull_back(slug: str, body: StoryBody, who: Identity = Depends(approver)) -> dict:
         rt = projects.get(slug)
+        writable(rt)
         try:
             await rt.hub.sortie.pull_back(body.key)
         except SortieError as exc:
@@ -85,6 +91,7 @@ def story_router(projects: ProjectManager, require_role) -> APIRouter:
     @router.post("/stories/cancel")
     async def cancel(slug: str, body: StoryBody, who: Identity = Depends(approver)) -> dict:
         rt = projects.get(slug)
+        writable(rt)
         try:
             await rt.hub.sortie.cancel(body.key)
         except SortieError as exc:
@@ -112,6 +119,7 @@ def story_router(projects: ProjectManager, require_role) -> APIRouter:
         if rt.hub.fields.get(body.key, {}).get("plan_status") == "draft":
             raise HTTPException(status_code=409, detail={"code": "replacement_draft", "message": "approve the replacement first"})
         replaced = meta["supersedes"]
+        writable(rt)
         try:
             await rt.hub.sortie.cancel(replaced)
         except SortieError as exc:

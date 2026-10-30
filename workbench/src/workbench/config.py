@@ -55,6 +55,10 @@ class Config:
     sync_backoff_first: float = 1.0
     sync_backoff_max: float = 60.0
     cookie_secure: bool = False
+    # Off, the workbench never writes to the tracker on its own: no automatic
+    # sync, no pull-back of edited stories, no story action that calls Sortie.
+    # For a second, read-only workbench beside the one that owns the project.
+    sync_enabled: bool = True
     # OpenID Connect. With no issuer, the workbench runs in local mode.
     oidc_issuer: str = ""
     oidc_client_id: str = ""
@@ -127,6 +131,7 @@ class Config:
             frontend_dir=Path(frontend),
             runtime_dir=Path(env["WORKBENCH_RUNTIME_DIR"]).expanduser() if env.get("WORKBENCH_RUNTIME_DIR") else None,
             cookie_secure=env.get("WORKBENCH_COOKIE_SECURE", "") == "1",
+            sync_enabled=env.get("WORKBENCH_SYNC", "1").strip() != "0",
             oidc_issuer=issuer,
             oidc_client_id=env.get("WORKBENCH_OIDC_CLIENT_ID", "").strip(),
             oidc_client_secret=secret,

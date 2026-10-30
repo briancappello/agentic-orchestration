@@ -9,6 +9,7 @@ import time
 from typing import Any
 
 from .autosync import approved_digest
+from .home import History, build_home
 from .merge import merge
 from .plan_overlay import frozen_set, overlay
 from .plan_state import PlanState
@@ -38,6 +39,14 @@ class Hub:
         # Worker fields by tracker identifier, from Sortie's state.
         self.workers: dict[str, dict[str, Any]] = {}
         self.sortie_error: str | None = None
+        # Sortie's state (runs, holds, the agent concurrency cap) for a
+        # project it dispatches, and why the last read failed.
+        self.agent_state: dict[str, Any] | None = None
+        self.state_error: str | None = None
+        self.history = History()
+        # Read-only: never pull back an edited story on its own.
+        self.read_only = False
+        self.home: dict[str, Any] = {}
         self.capabilities: list[str] = []
         self.version = 0
         self.doc: dict[str, Any] = {}
@@ -73,17 +82,27 @@ class Hub:
         await self.pull_back_stale()
 
     async def _workers(self, graph: dict[str, Any]) -> dict[str, dict[str, Any]]:
-        if not graph.get("dispatched") or not any(n.get("runtime") for n in graph.get("nodes") or []):
+        # The home reads the agent slots and held runs from Sortie's state,
+        # which Sortie keeps for the project it dispatches only.
+        if not graph.get("dispatched"):
+            self.agent_state, self.state_error = None, None
             return {}
         try:
-            return worker_fields(await self.sortie.state())
+            state = await self.sortie.state()
         except SortieError as exc:
             log.warning("sortie state unavailable: %s", exc)
+            self.agent_state, self.state_error = None, exc.message
             return {}
+        self.agent_state, self.state_error = state, None
+        if not any(n.get("runtime") for n in graph.get("nodes") or []):
+            return {}
+        return worker_fields(state)
 
     async def pull_back_stale(self) -> None:
         """Pull back each released story whose content changed since its
         approval, before an agent takes the old content."""
+        if self.read_only:
+            return
         # A story pulled back and released again may need pulling back again.
         self._pulled_back = {k for k in self._pulled_back if self.fields.get(k, {}).get("stale_release")}
         for key, f in list(self.fields.items()):
@@ -131,6 +150,7 @@ class Hub:
         )
         doc["plan_states"] = (self.tracker or {}).get("plan_states")
         doc["sync"] = self.sync_status
+        doc["home"] = self.home = self._home(doc, snap)
         self.doc = doc
         self._publish(doc)
         approved = approved_digest(snap["graph"], self.fields) if snap["valid"] else None
@@ -145,7 +165,28 @@ class Hub:
             return
         self.version += 1
         self.doc = {**self.doc, "sync": status, "version": self.version}
+        # A failed sync makes the agents stuck.
+        self.doc["home"] = self.home = self._home(self.doc, self.plan.snapshot())
         self._publish(self.doc)
+
+    def _home(self, doc: dict[str, Any], snap: dict[str, Any]) -> dict[str, Any]:
+        sortie = doc.get("sortie") or {}
+        try:
+            home = build_home(
+                graph=snap["graph"], nodes=doc.get("nodes") or [], fields=self.fields, planning=self.plan.planning,
+                plan_states=doc.get("plan_states"), tracker_known=self.tracker is not None, valid=snap["valid"],
+                errors=len(snap["errors"]), history=self.history,
+                health_inputs={
+                    "reachable": bool(sortie.get("reachable")), "sortie_error": sortie.get("error"),
+                    "dispatched": bool(sortie.get("dispatched")), "project": self.sortie.project,
+                    "state": self.agent_state, "state_error": self.state_error, "sync": doc.get("sync"),
+                },
+            )
+        except Exception:  # the home must never take the graph down with it
+            log.exception("could not build the project home")
+            return {"error": "the home could not be computed; see the workbench log"}
+        home["version"] = doc.get("version")
+        return home
 
     def _publish(self, doc: dict[str, Any]) -> None:
         if self._loop is None:
