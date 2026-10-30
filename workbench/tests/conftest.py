@@ -40,6 +40,18 @@ class StoreBuilder:
             self._write(d / "breakdown.yaml", breakdown)
         return d
 
+    def milestones(self, milestones: list[dict] | dict | str) -> Path:
+        if isinstance(milestones, list):
+            milestones = {"schema_version": 1, "milestones": milestones}
+        return self._write(self.root / "openspec" / "milestones.yaml", milestones)
+
+    def tasks(self, change: str, text: str) -> Path:
+        d = self.root / "openspec" / "changes" / change
+        d.mkdir(parents=True, exist_ok=True)
+        path = d / "tasks.md"
+        path.write_text(text)
+        return path
+
     @staticmethod
     def _write(path: Path, content: Any) -> Path:
         text = content if isinstance(content, str) else yaml.safe_dump(content, sort_keys=False)
@@ -58,6 +70,10 @@ def deliverable(id: str, depends_on: list[str] | None = None, covers: list[str] 
     }
     d.update(extra)
     return d
+
+
+def milestone(id: str, includes: list[dict], depends_on: list[str] | None = None, **extra) -> dict:
+    return {"id": id, "title": extra.pop("title", id.upper()), "depends_on": depends_on or [], "includes": includes, **extra}
 
 
 def breakdown(*deliverables: dict, **top) -> dict:

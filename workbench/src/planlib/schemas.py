@@ -20,7 +20,12 @@ SUPPORTED_VERSIONS: dict[str, int] = {
     "breakdown": 1,
     "plan": 1,
     "plan-graph": 2,
+    "milestones": 1,
 }
+
+# Schemas a store may lack: it then has no file of that kind. A store
+# created before milestones existed has no milestones schema.
+OPTIONAL = frozenset({"milestones"})
 
 
 @dataclass(frozen=True)
@@ -41,6 +46,8 @@ class Schemas:
             try:
                 schema = json.loads(path.read_text())
             except FileNotFoundError as exc:
+                if kind in OPTIONAL:
+                    continue
                 raise PlanLoadError(f"{path}: planning schema not found") from exc
             except json.JSONDecodeError as exc:
                 raise PlanLoadError(f"{path}: not valid JSON: {exc}") from exc
@@ -56,6 +63,9 @@ class Schemas:
             validators[kind] = Draft202012Validator(schema)
             versions[kind] = declared
         return cls(validators, versions)
+
+    def has(self, kind: str) -> bool:
+        return kind in self.validators
 
     def version(self, kind: str) -> int:
         """The version of ``kind`` the store's schema declares."""
@@ -93,7 +103,8 @@ def _to_plan_error(err: ValidationError, doc: dict, *, file: str, change: str | 
     path = list(err.absolute_path)
     deliverable = None
     rest = path
-    if len(path) >= 2 and path[0] in ("deliverables", "changes", "nodes") and isinstance(path[1], int):
+    milestone = None
+    if len(path) >= 2 and path[0] in ("deliverables", "changes", "nodes", "milestones") and isinstance(path[1], int):
         items = doc.get(path[0]) or []
         item = items[path[1]] if path[1] < len(items) else None
         key = "name" if path[0] == "changes" else ("plan_key" if path[0] == "nodes" else "id")
@@ -102,6 +113,8 @@ def _to_plan_error(err: ValidationError, doc: dict, *, file: str, change: str | 
             deliverable = label if isinstance(label, str) else f"#{path[1]}"
         elif path[0] == "changes" and isinstance(label, str) and change is None:
             change = label
+        elif path[0] == "milestones":
+            milestone = label if isinstance(label, str) else f"#{path[1]}"
         rest = path[2:]
 
     field = ".".join(str(p) for p in rest)
@@ -118,7 +131,10 @@ def _to_plan_error(err: ValidationError, doc: dict, *, file: str, change: str | 
     else:
         target = f"field {field}" if field else "document"
         message = f"{target}: {err.message}"
-    return PlanError("schema", message, file=file, change=change, deliverable=deliverable)
+    if milestone is not None:
+        message = f"milestone '{milestone}': {message}"
+    return PlanError("schema", message, file=file, change=change, deliverable=deliverable,
+                     members=(milestone,) if milestone is not None else ())
 
 
 def _join(prefix: str, name: str) -> str:

@@ -12,6 +12,7 @@ from .errors import PlanError
 from .schemas import Schemas
 
 PLAN_FILE = Path("openspec") / "plan.yaml"
+MILESTONES_FILE = Path("openspec") / "milestones.yaml"
 CHANGES_DIR = Path("openspec") / "changes"
 BREAKDOWN_FILE = "breakdown.yaml"
 
@@ -37,6 +38,9 @@ class LoadedStore:
     plan: dict[str, Any] | None = None
     plan_raw: bytes | None = None
     breakdowns: dict[str, Breakdown] = field(default_factory=dict)
+    # The milestones file, when the store has one and it matched its schema.
+    milestones: dict[str, Any] | None = None
+    milestones_raw: bytes | None = None
     errors: list[PlanError] = field(default_factory=list)
 
 
@@ -64,6 +68,20 @@ def load_store(root: Path, schemas: Schemas | None = None) -> LoadedStore:
         if doc is not None:
             store.plan = doc
             store.plan_raw = raw
+
+    milestones_path = root / MILESTONES_FILE
+    if milestones_path.is_file():
+        raw = milestones_path.read_bytes()
+        if not schemas.has("milestones"):
+            store.errors.append(PlanError(
+                "missing_schema", "the store has a milestones file but no openspec/schemas/planning/milestones.schema.json",
+                file=str(MILESTONES_FILE)))
+        else:
+            doc, errs = _parse_and_check(schemas, "milestones", raw, file=str(MILESTONES_FILE), change=None)
+            store.errors.extend(errs)
+            if doc is not None:
+                store.milestones = doc
+                store.milestones_raw = raw
 
     for change in store.changes:
         rel = CHANGES_DIR / change / BREAKDOWN_FILE

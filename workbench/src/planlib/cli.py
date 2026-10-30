@@ -47,6 +47,8 @@ def main(argv: list[str] | None = None) -> int:
         nodes = result.graph["nodes"]
         epics = sum(1 for n in nodes if n["kind"] == "epic")
         summary = f"plan is valid: {epics} epic(s), {len(nodes) - epics} story(ies)"
+        if result.milestones_declared:
+            summary += f", {len(result.milestones)} milestone(s)"
         if args.json:
             json.dump({"ok": True, "errors": [], "summary": summary}, sys.stdout)
             print()

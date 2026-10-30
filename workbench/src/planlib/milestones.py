@@ -1,0 +1,315 @@
+"""Milestones: the outcomes a plan works toward, and how far it is from each.
+
+A store may declare them in ``openspec/milestones.yaml``. Each milestone
+collects whole changes or single stories, may count a change's tasks.md
+items by kind, names an optional gate story, and depends on earlier
+milestones. Without the file the project is one implicit milestone that
+holds every planned change.
+"""
+
+from __future__ import annotations
+
+import re
+from collections import Counter
+from pathlib import Path
+from typing import Any, Iterable
+
+import networkx as nx
+
+from .errors import PlanError
+from .store import CHANGES_DIR, MILESTONES_FILE, LoadedStore
+TASKS_FILE = "tasks.md"
+
+TASK_KINDS = ("agent", "metal", "operator")
+PERSON_KINDS = ("metal", "operator")
+# Which tasks.md items a change's ``tasks`` setting counts, and whether its
+# stories, which are agent work, count with them.
+SELECTS = {"all": set(TASK_KINDS), "agent": {"agent"}, "metal": {"metal"}, "operator": {"operator"}}
+STORIES_WITH = {"all", "agent"}
+
+_ITEM = re.compile(r"^\s*[-*]\s+\[([ xX])\]\s+(.*?)\s*$")
+_NUMBER = re.compile(r"^(\d+(?:\.\d+)*)\.?\s+")
+_TAG = re.compile(r"\s*\[(metal|operator)\]\s*$")
+
+IMPLICIT_ID = "project"
+
+
+# Task kinds -----------------------------------------------------------------
+
+
+def parse_tasks(text: str, change: str = "") -> list[dict[str, Any]]:
+    """Each checklist item of a tasks.md: its number, text, kind and whether it is ticked.
+
+    An item whose line ends with ``[metal]`` is a metal task, with
+    ``[operator]`` an operator task, and any other an agent task."""
+    out = []
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        m = _ITEM.match(line)
+        if not m:
+            continue
+        body = m.group(2)
+        tag = _TAG.search(body)
+        kind = tag.group(1) if tag else "agent"
+        if tag:
+            body = body[: tag.start()]
+        num = _NUMBER.match(body)
+        number = num.group(1) if num else None
+        if num:
+            body = body[num.end():]
+        out.append({
+            "change": change,
+            "id": f"{change}#{number or f'L{lineno}'}",
+            "number": number,
+            "text": body.strip(),
+            "kind": kind,
+            "done": m.group(1) != " ",
+            "line": lineno,
+        })
+    return out
+
+
+def read_tasks(root: Path, change: str) -> list[dict[str, Any]]:
+    path = Path(root) / CHANGES_DIR / change / TASKS_FILE
+    if not path.is_file():
+        return []
+    return parse_tasks(path.read_text(errors="replace"), change)
+
+
+def task_counts(tasks: Iterable[dict[str, Any]]) -> dict[str, dict[str, int]]:
+    """Done and total of each kind."""
+    out = {k: {"done": 0, "total": 0} for k in TASK_KINDS}
+    for t in tasks:
+        out[t["kind"]]["total"] += 1
+        out[t["kind"]]["done"] += int(t["done"])
+    return out
+
+
+# The file -------------------------------------------------------------------
+
+
+def normalize(doc: dict[str, Any]) -> list[dict[str, Any]]:
+    """The milestones of a schema-valid file, with every default filled in."""
+    out = []
+    for m in doc.get("milestones") or []:
+        includes = []
+        for inc in m["includes"]:
+            if "change" in inc:
+                includes.append({"change": inc["change"], "tasks": inc.get("tasks", "all")})
+            else:
+                includes.append({"story": inc["story"]})
+        out.append({
+            "id": m["id"], "title": m["title"], "depends_on": list(m["depends_on"]), "includes": includes,
+            "gate": m.get("gate"), "goal": bool(m.get("goal", False)), "implicit": False,
+        })
+    return out
+
+
+def implicit(plan: dict[str, Any] | None, title: str = "The plan") -> list[dict[str, Any]]:
+    """The one milestone of a store without a milestones file: every planned change."""
+    changes = [e["name"] for e in (plan or {}).get("changes", [])]
+    return [{
+        "id": IMPLICIT_ID, "title": title, "depends_on": [], "gate": None, "goal": True, "implicit": True,
+        "includes": [{"change": c, "tasks": "all"} for c in changes],
+    }]
+
+
+def check_milestones(store: LoadedStore) -> list[PlanError]:
+    """References, duplicates, cycles and goals. Runs after the schema check."""
+    if store.milestones is None:
+        return []
+    file = str(MILESTONES_FILE)
+    ms = normalize(store.milestones)
+    planned = {e["name"] for e in (store.plan or {}).get("changes", [])}
+    stories = {f"{c}/{d['id']}" for c, bd in store.breakdowns.items() for d in bd.doc["deliverables"]}
+    errors: list[PlanError] = []
+
+    counts = Counter(m["id"] for m in ms)
+    for mid, n in sorted(counts.items()):
+        if n > 1:
+            errors.append(PlanError("duplicate_milestone", f"milestone '{mid}' is declared {n} times", file=file, members=(mid,)))
+    ids = set(counts)
+    for m in ms:
+        mid = m["id"]
+        for inc in m["includes"]:
+            if "change" in inc and store.plan is not None and inc["change"] not in planned:
+                errors.append(PlanError("unknown_change", f"milestone '{mid}' includes change '{inc['change']}', which plan.yaml does not list",
+                                        file=file, change=inc["change"], members=(mid,)))
+            if "story" in inc and inc["story"] not in stories:
+                errors.append(PlanError("unknown_story", f"milestone '{mid}' includes story '{inc['story']}', which no breakdown holds",
+                                        file=file, members=(mid, inc["story"])))
+        if m["gate"] and m["gate"] not in stories:
+            errors.append(PlanError("unknown_story", f"milestone '{mid}' has gate '{m['gate']}', which no breakdown holds",
+                                    file=file, members=(mid, m["gate"])))
+        for dep in m["depends_on"]:
+            if dep not in ids:
+                errors.append(PlanError("unknown_milestone", f"milestone '{mid}' depends on '{dep}', which no milestone has",
+                                        file=file, members=(mid, dep)))
+
+    g = nx.DiGraph()
+    for m in ms:
+        g.add_node(m["id"])
+        for dep in m["depends_on"]:
+            if dep in ids:
+                g.add_edge(m["id"], dep)
+    for comp in sorted((sorted(c) for c in nx.strongly_connected_components(g)), key=lambda c: c[0]):
+        if len(comp) > 1 or g.has_edge(comp[0], comp[0]):
+            errors.append(PlanError("milestone_cycle", "milestones depend on each other in a cycle: " + ", ".join(comp),
+                                    file=file, members=tuple(comp)))
+
+    goals = [m["id"] for m in ms if m["goal"]]
+    if len(goals) > 1:
+        errors.append(PlanError("several_goals", "more than one milestone is the goal: " + ", ".join(goals),
+                                file=file, members=tuple(goals)))
+    return errors
+
+
+def order(milestones: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Dependency order, ties broken by file order. Assumes no cycle."""
+    index = {m["id"]: i for i, m in enumerate(milestones)}
+    waiting = {m["id"]: {d for d in m["depends_on"] if d in index} for m in milestones}
+    out: list[dict[str, Any]] = []
+    while waiting:
+        ready = sorted((mid for mid, deps in waiting.items() if not deps), key=index.__getitem__)
+        if not ready:  # a cycle: keep file order for the rest
+            ready = sorted(waiting, key=index.__getitem__)
+        mid = ready[0]
+        out.append(milestones[index[mid]])
+        del waiting[mid]
+        for deps in waiting.values():
+            deps.discard(mid)
+    return out
+
+
+def goal(milestones: list[dict[str, Any]]) -> str | None:
+    """The milestone with ``goal: true``, or else the last in dependency order."""
+    for m in milestones:
+        if m["goal"]:
+            return m["id"]
+    ordered = order(milestones)
+    return ordered[-1]["id"] if ordered else None
+
+
+# Progress -------------------------------------------------------------------
+
+
+def stories_by_change(graph: dict[str, Any] | None) -> dict[str, list[str]]:
+    out: dict[str, list[str]] = {}
+    for n in (graph or {}).get("nodes") or []:
+        if n.get("kind") == "story":
+            out.setdefault(n["change"], []).append(n["plan_key"])
+    return out
+
+
+def story_blocks(graph: dict[str, Any] | None) -> list[tuple[str, str]]:
+    """(blocker, blocked) between stories."""
+    stories = {n["plan_key"] for n in (graph or {}).get("nodes") or [] if n.get("kind") == "story"}
+    return [(b["blocker"], b["blocked"]) for b in (graph or {}).get("blocks") or []
+            if b["blocker"] in stories and b["blocked"] in stories]
+
+
+def members(m: dict[str, Any], by_change: dict[str, list[str]], tasks: dict[str, list[dict[str, Any]]]
+            ) -> tuple[list[str], list[dict[str, Any]], list[str]]:
+    """The stories, the tasks.md items, and the changes a milestone counts."""
+    stories: list[str] = []
+    counted: list[dict[str, Any]] = []
+    changes: list[str] = []
+    seen_tasks: set[str] = set()
+    for inc in m["includes"]:
+        if "change" in inc:
+            change = inc["change"]
+            if change not in changes:
+                changes.append(change)
+            if inc["tasks"] in STORIES_WITH:
+                stories += by_change.get(change, [])
+            kinds = SELECTS[inc["tasks"]]
+            for t in tasks.get(change, []):
+                if t["kind"] in kinds and t["id"] not in seen_tasks:
+                    seen_tasks.add(t["id"])
+                    counted.append(t)
+        else:
+            stories.append(inc["story"])
+            change = inc["story"].split("/", 1)[0]
+            if change not in changes:
+                changes.append(change)
+    if m.get("gate"):
+        stories.append(m["gate"])
+    return list(dict.fromkeys(stories)), counted, changes
+
+
+def progress(milestones: list[dict[str, Any]], graph: dict[str, Any] | None, tasks: dict[str, list[dict[str, Any]]],
+             done: set[str], dropped: Iterable[str] = (), estimates: dict[str, float] | None = None) -> dict[str, Any]:
+    """Each milestone's membership and progress in dependency order, the
+    goal, the next milestone and its critical path.
+
+    ``done`` holds the plan keys whose tracker issue is in the done state;
+    ``dropped`` the cancelled ones, which count toward nothing. Stories,
+    agent tasks and person tasks are reported apart, never summed."""
+    dropped = set(dropped)
+    by_change = stories_by_change(graph)
+    out = []
+    for m in order(milestones):
+        stories, counted, changes = members(m, by_change, tasks)
+        stories = [s for s in stories if s not in dropped]
+        kinds = task_counts(counted)
+        person = {"done": sum(kinds[k]["done"] for k in PERSON_KINDS), "total": sum(kinds[k]["total"] for k in PERSON_KINDS)}
+        stories_done = sum(1 for s in stories if s in done)
+        if m.get("gate"):
+            is_done = m["gate"] in done
+        else:
+            is_done = stories_done == len(stories) and all(t["done"] for t in counted)
+        out.append({
+            **m,
+            "stories": stories,
+            "changes": changes,
+            "tasks": counted,
+            "progress": {
+                "stories": {"done": stories_done, "total": len(stories)},
+                "agent_tasks": kinds["agent"],
+                "person_tasks": person,
+                "metal_tasks": kinds["metal"],
+                "operator_tasks": kinds["operator"],
+            },
+            "done": is_done,
+        })
+    nxt = next((m for m in out if not m["done"]), None)
+    path = critical_path(nxt, graph, done, estimates) if nxt else []
+    return {"milestones": out, "goal": goal(milestones), "next": nxt["id"] if nxt else None, "critical_path": path}
+
+
+def critical_path(m: dict[str, Any], graph: dict[str, Any] | None, done: set[str],
+                  estimates: dict[str, float] | None = None) -> list[str]:
+    """The longest chain of the milestone's unfinished stories, by dependency,
+    that ends at its gate, or at any story with no unfinished dependent in
+    the milestone when it has no gate. A story counts as one unless it has
+    an estimate. Ties break by plan order."""
+    estimates = estimates or {}
+    rank = {n["plan_key"]: i for i, n in enumerate((graph or {}).get("nodes") or [])}
+    open_ = [s for s in m["stories"] if s not in done]
+    keep = set(open_)
+    g = nx.DiGraph()
+    g.add_nodes_from(open_)
+    g.add_edges_from((a, b) for a, b in story_blocks(graph) if a in keep and b in keep)
+    gate = m.get("gate")
+    if gate and gate in keep:
+        g = g.subgraph(nx.ancestors(g, gate) | {gate}).copy()
+        ends = [gate]
+    elif gate:
+        return []
+    else:
+        ends = [n for n in g if g.out_degree(n) == 0]
+    if not g:
+        return []
+
+    def key(path: list[str]) -> tuple:
+        length = sum(estimates.get(k, 1) for k in path)
+        return (length, tuple(-rank.get(k, len(rank)) for k in path))
+
+    best: dict[str, list[str]] = {}
+    try:
+        topo = list(nx.lexicographical_topological_sort(g, key=lambda k: rank.get(k, len(rank))))
+    except nx.NetworkXUnfeasible:  # a cycle fails validation first
+        return []
+    for n in topo:
+        preds = [best[p] for p in g.predecessors(n)]
+        best[n] = (max(preds, key=key) if preds else []) + [n]
+    return max((best[e] for e in ends), key=key)
