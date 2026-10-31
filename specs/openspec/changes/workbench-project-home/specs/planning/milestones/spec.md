@@ -12,13 +12,20 @@ A spec store MAY hold `openspec/milestones.yaml`, checked against a published sc
 - `depends_on`, a list of milestone ids;
 - `includes`, a list whose entries are either `{change: <change-name>}` with an optional `tasks` of `agent`, `metal`, `operator` or `all` (default `all`), or `{story: <change-name>/<id>}`;
 - `gate`, optional, a story ref;
-- `goal`, optional, a boolean.
+- `goal`, optional, a boolean;
+- `done`, optional, a boolean: the milestone was finished outside the tracker.
+
+A change entry SHALL bring the change's stories when its `tasks` is `agent` or `all`; an entry with `metal` or `operator` brings only those tasks.
 
 Unknown fields SHALL be rejected.
 
 #### Scenario: A milestone that collects a change and a story
 - **WHEN** milestone `m1` includes change `billing` and story `accounts/close`
 - **THEN** `m1` holds every story of `billing` and the story `accounts/close`
+
+#### Scenario: A change counted for its hardware tasks only
+- **WHEN** `m2` includes change `p3` with `tasks: metal`
+- **THEN** `m2` counts `p3`'s metal tasks and none of its stories
 
 #### Scenario: An unknown field
 - **WHEN** a milestone carries `owner: ann`
@@ -54,11 +61,15 @@ planlib SHALL read each change's `tasks.md` checklist items. An item whose line 
 - **THEN** planlib reports one agent task (done), one metal task and one operator task (both open)
 
 ### Requirement: Milestone progress
-For each milestone, planlib SHALL report, separately and never summed: its stories done and total, its agent tasks done and total, and its person tasks done and total. A story SHALL count as done when its tracker issue is in the tracker's done state. The tasks counted SHALL be those of each included change whose kind its `tasks` setting selects. A milestone SHALL be done when its gate story is done, or, without a gate, when every story and task it counts is done.
+For each milestone, planlib SHALL report, separately and never summed: its stories done and total, its agent tasks done and total, and its person tasks done and total. A story SHALL count as done when its tracker issue is in the tracker's done state. The tasks counted SHALL be those of each included change whose kind its `tasks` setting selects. A milestone SHALL be done when it is declared `done: true`, when its gate story is done, or, without a gate, when every story and task it counts is done. A milestone declared done SHALL still report the counts its sources record.
 
 #### Scenario: A change finished by hand
 - **WHEN** milestone `m0` includes change `move-plan`, whose five stories were never synced, and whose `tasks.md` items are all ticked
 - **THEN** `m0` reports 0 of 5 stories and 12 of 12 agent tasks done, and is not reported as having no progress
+
+#### Scenario: Declared done
+- **WHEN** `m0` sets `done: true`, and its five stories were never synced
+- **THEN** `m0` is done, still reports 0 of 5 stories, and is never the next milestone
 
 #### Scenario: One change in two milestones
 - **WHEN** `m1` includes `p3` with `tasks: agent` and `m2` includes `p3` with `tasks: metal`

@@ -264,7 +264,8 @@ def test_the_home_is_served_and_updates_when_a_story_finishes(store):
         assert home["health"]["busy"] == 1 and home["health"]["slots"] == 3
         assert home["milestones"][0]["progress"]["stories"] == {"done": 0, "total": 2}
         assert home["timeline"]["here"] == 0
-        assert client.get(f"{P}/graph").json()["home"]["version"] == home["version"]
+        graph = client.get(f"{P}/graph").json()
+        assert graph["home"]["version"] == graph["version"]
 
         a.update(state="Done", terminal=True, runtime=None)
         fake.end(a["identifier"])

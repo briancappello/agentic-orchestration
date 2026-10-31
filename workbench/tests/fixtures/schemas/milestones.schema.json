@@ -61,6 +61,10 @@
         "goal": {
           "description": "The milestone the project works toward. At most one milestone sets it.",
           "type": "boolean"
+        },
+        "done": {
+          "description": "Declared done: the milestone was finished outside the tracker, by hand. Its progress still shows what the tracker and the checklists record.",
+          "type": "boolean"
         }
       }
     },

@@ -163,6 +163,20 @@ def test_a_change_finished_by_hand(store):
     assert m0["progress"]["person_tasks"] == {"done": 0, "total": 0}
 
 
+def test_a_milestone_declared_done_keeps_its_counts(store):
+    store.plan([("move-plan", []), ("next", [])])
+    store.change("move-plan", breakdown(*(deliverable(f"s{i}") for i in range(5))))
+    store.change("next", breakdown(deliverable("n")))
+    store.tasks("move-plan", "- [x] 1.1 step\n")
+    store.milestones([milestone("m0", [{"change": "move-plan"}], done=True), milestone("m1", [{"change": "next"}], ["m0"])])
+    r = check(store)
+    assert r.errors == []
+    out = ms.progress(r.milestones, r.graph, r.tasks, done=set())
+    m0 = out["milestones"][0]
+    assert m0["done"] is True and m0["progress"]["stories"] == {"done": 0, "total": 5}
+    assert out["next"] == "m1" and out["critical_path"] == ["next/n"]
+
+
 def test_one_change_in_two_milestones(store):
     store.plan([("p3", [])])
     store.change("p3", breakdown(deliverable("vm")))

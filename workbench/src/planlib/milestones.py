@@ -99,7 +99,8 @@ def normalize(doc: dict[str, Any]) -> list[dict[str, Any]]:
                 includes.append({"story": inc["story"]})
         out.append({
             "id": m["id"], "title": m["title"], "depends_on": list(m["depends_on"]), "includes": includes,
-            "gate": m.get("gate"), "goal": bool(m.get("goal", False)), "implicit": False,
+            "gate": m.get("gate"), "goal": bool(m.get("goal", False)), "declared_done": bool(m.get("done", False)),
+            "implicit": False,
         })
     return out
 
@@ -108,7 +109,7 @@ def implicit(plan: dict[str, Any] | None, title: str = "The plan") -> list[dict[
     """The one milestone of a store without a milestones file: every planned change."""
     changes = [e["name"] for e in (plan or {}).get("changes", [])]
     return [{
-        "id": IMPLICIT_ID, "title": title, "depends_on": [], "gate": None, "goal": True, "implicit": True,
+        "id": IMPLICIT_ID, "title": title, "depends_on": [], "gate": None, "goal": True, "declared_done": False, "implicit": True,
         "includes": [{"change": c, "tasks": "all"} for c in changes],
     }]
 
@@ -241,6 +242,8 @@ def progress(milestones: list[dict[str, Any]], graph: dict[str, Any] | None, tas
     """Each milestone's membership and progress in dependency order, the
     goal, the next milestone and its critical path.
 
+    A milestone is done when it is declared done, when its gate story is
+    done, or, without a gate, when everything it counts is done.
     ``done`` holds the plan keys whose tracker issue is in the done state;
     ``dropped`` the cancelled ones, which count toward nothing. Stories,
     agent tasks and person tasks are reported apart, never summed."""
@@ -253,7 +256,9 @@ def progress(milestones: list[dict[str, Any]], graph: dict[str, Any] | None, tas
         kinds = task_counts(counted)
         person = {"done": sum(kinds[k]["done"] for k in PERSON_KINDS), "total": sum(kinds[k]["total"] for k in PERSON_KINDS)}
         stories_done = sum(1 for s in stories if s in done)
-        if m.get("gate"):
+        if m.get("declared_done"):
+            is_done = True
+        elif m.get("gate"):
             is_done = m["gate"] in done
         else:
             is_done = stories_done == len(stories) and all(t["done"] for t in counted)
