@@ -23,6 +23,7 @@ See [docs/](docs/README.md) for how the parts fit and every guide.
 git clone --recurse-submodules https://github.com/briancappello/agentic-orchestration.git
 make test        # every component's tests
 make lint        # linters, the license copies, and the specs
+make check-latest   # every Go component's dependencies against their latest stable releases
 dev/dev.sh       # the whole system locally; settings in dev/.env.example
 make dist        # release archives of the Go tools and the workbench wheel
 ```
