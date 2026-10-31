@@ -19,6 +19,7 @@ We always run the latest stable release of every third-party dependency. Today S
 - Every pin moves to the latest stable release, so the version tests pass when this change lands.
 - smol-builder deletes builder machines that an earlier, interrupted run left behind, such as after a host restart. Each builder machine is labeled with its process ID and the host's boot ID, so a build never deletes the machine of another build that is still running.
 - A credential binding's `header` is passed to smolvm, which supports it since 1.32: the header is set on every HTTPS request to the binding's hosts. Sortie used to refuse it because smolvm 1.26 had no such option.
+- Sortie recognizes smolvm's own failures, such as a missing or stopped machine, from the stable error codes smolvm prints with `--error-format json`, instead of matching its English error text, which changed between 1.26 and 1.32.
 - `dev/stage0/stage0.sh` also accepts smolvm `1.32.4` or later, instead of exactly `1.26.x`.
 
 ## Capabilities

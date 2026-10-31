@@ -5,6 +5,7 @@
 - [x] 1.3 Add the `SORTIE_LATEST_TEST=1` version tests (installed smolvm against its latest GitHub release, Go modules against `go list -m -u all`) and a `check-latest` make target; verify they skip without the variable, and fail naming the dependency when one is behind.
 - [ ] 1.4 Update every Go module to its latest release; verify `make test`, `make lint`, and `make check-latest`.
 - [x] 1.5 Update the smolvm guide, the workflow reference, and `CHANGELOG.md`; verify `make lint-docs`.
+- [ ] 1.6 Recognize smolvm's own failures from `--error-format json` error codes instead of matching its stderr text (connection failures, a missing machine); verify with fake-CLI tests for each code, and the gated `ConnectionFailed` test on 1.32.4.
 
 ## 2. smol-builder
 
