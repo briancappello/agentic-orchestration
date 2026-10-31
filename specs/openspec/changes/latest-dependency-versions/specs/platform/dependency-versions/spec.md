@@ -18,7 +18,8 @@ Each component SHALL have version tests that fetch the latest stable release of 
 
 The sources SHALL be:
 
-- GitHub releases, skipping prereleases and drafts, for smolvm, opencode, uv, and rustup;
+- GitHub releases, skipping prereleases and drafts, for smolvm, opencode, and uv;
+- rustup's stable release channel (`static.rust-lang.org/rustup/release-stable.toml`) for rustup;
 - `go.dev/dl` for Go, stable releases only;
 - `nodejs.org/dist/index.json` for Node, LTS releases only;
 - the Rust stable release channel for Rust;

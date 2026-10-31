@@ -6,7 +6,8 @@ We always run the latest stable release of every third-party dependency. Today S
 
 - **Sortie accepts any smolvm release at or above a minimum version**, instead of exactly `1.26.x`. The minimum is the release the smolvm checks were last run against, initially `1.32.4`. There is no upper bound. **BREAKING** for a host still on smolvm `1.26.x`: Sortie refuses it and names the minimum.
 - **Version tests compare each dependency with its latest stable release**, fetched from the project's own release list at test time:
-  - smolvm, opencode, uv, and rustup: GitHub releases, skipping prereleases and drafts;
+  - smolvm, opencode, and uv: GitHub releases, skipping prereleases and drafts;
+  - rustup: its stable release channel;
   - Go: `go.dev/dl`, stable releases only;
   - Node: `nodejs.org/dist/index.json`, the newest LTS release;
   - Rust: the stable release channel;
@@ -16,6 +17,8 @@ We always run the latest stable release of every third-party dependency. Today S
   A test fails, naming the dependency, our version, and the latest one, when we are behind.
 - The version tests need the network and change their verdict whenever a project ships a release, so they run only when enabled: `SORTIE_LATEST_TEST=1` in the fork and `SMOL_BUILDER_LATEST_TEST=1` and `ACP_BROKER_LATEST_TEST=1` in this repository, each with a `check-latest` make target. They use `GH_TOKEN` for GitHub when it is set.
 - Every pin moves to the latest stable release, so the version tests pass when this change lands.
+- smol-builder deletes builder machines that an earlier, interrupted run left behind, such as after a host restart. Each builder machine is labeled with its process ID and the host's boot ID, so a build never deletes the machine of another build that is still running.
+- `dev/stage0/stage0.sh` also accepts smolvm `1.32.4` or later, instead of exactly `1.26.x`.
 
 ## Capabilities
 
@@ -26,6 +29,7 @@ We always run the latest stable release of every third-party dependency. Today S
 ### Modified Capabilities
 
 - `sortie/smolvm-environment`: the supported smolvm version becomes a minimum with no upper bound.
+- `smol-builder/stack-builder`: a build also deletes builder machines that interrupted earlier runs left behind.
 
 ## Impact
 
