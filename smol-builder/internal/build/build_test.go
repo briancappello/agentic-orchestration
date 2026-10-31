@@ -9,8 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -34,12 +36,13 @@ func (c call) String() string { return strings.Join(c.argv, " ") }
 // images and machines that exist, writes the files the real programs would,
 // and fails any call that fail picks.
 type fakeTools struct {
-	t        *testing.T
-	engine   string
-	mu       sync.Mutex
-	calls    []call
-	images   map[string]bool
-	machines map[string]bool
+	t      *testing.T
+	engine string
+	mu     sync.Mutex
+	calls  []call
+	images map[string]bool
+	// machines maps each machine that exists to its labels.
+	machines map[string]map[string]string
 	packs    int
 	// fail returns the error for a call, or nil to let it succeed.
 	fail func(ctx context.Context, argv []string) error
@@ -48,7 +51,7 @@ type fakeTools struct {
 }
 
 func newFakeTools(t *testing.T, engine string) *fakeTools {
-	return &fakeTools{t: t, engine: engine, images: map[string]bool{}, machines: map[string]bool{}}
+	return &fakeTools{t: t, engine: engine, images: map[string]bool{}, machines: map[string]map[string]string{}}
 }
 
 func exitErr(argv []string, code int) error {
@@ -107,9 +110,22 @@ func (f *fakeTools) do(ctx context.Context, argv []string) ([]byte, error) {
 			return nil, err
 		}
 	case verb == "smolvm machine create":
-		f.machines[flagValue(argv, "--name")] = true
+		labels := map[string]string{}
+		for i, a := range argv {
+			if a == "--label" && i+1 < len(argv) {
+				k, v, _ := strings.Cut(argv[i+1], "=")
+				labels[k] = v
+			}
+		}
+		f.machines[flagValue(argv, "--name")] = labels
 	case verb == "smolvm machine delete":
 		delete(f.machines, flagValue(argv, "--name"))
+	case verb == "smolvm machine ls" && last == "--json":
+		ms := []listedMachine{}
+		for name, labels := range f.machines {
+			ms = append(ms, listedMachine{Name: name, Labels: labels})
+		}
+		return json.Marshal(ms)
 	case verb == "smolvm machine ls":
 		var names []string
 		for m := range f.machines {
@@ -189,8 +205,29 @@ func newFixture(t *testing.T, engine, toml string, repoFiles map[string]string) 
 		Log:      f.log,
 		TempDir:  t.TempDir(),
 		Library:  layers.FS,
+		Host:     testHost(),
 	}
 	return f
+}
+
+// fakeHost is a host where the processes in running run, each with its
+// start time.
+type fakeHost struct {
+	boot    string
+	self    Process
+	running map[int]string
+}
+
+func testHost() *fakeHost {
+	self := Process{PID: 4242, Start: "777"}
+	return &fakeHost{boot: "boot-now", self: self, running: map[int]string{self.PID: self.Start}}
+}
+
+func (h *fakeHost) BootID() string { return h.boot }
+func (h *fakeHost) Self() Process  { return h.self }
+func (h *fakeHost) Running(p Process) bool {
+	start, ok := h.running[p.PID]
+	return ok && (p.Start == "" || p.Start == start)
 }
 
 func (f *fixture) build(ctx context.Context) (*Report, error) {
@@ -277,7 +314,9 @@ func TestBuildCommandSequence(t *testing.T) {
 			filepath.Join(project.Context, "agent.Dockerfile") + " " + project.Context,
 		"podman save --format docker-archive -o " + archive + " " + project.Tag,
 		"podman image inspect " + project.Tag,
+		"smolvm machine ls --json",
 		"smolvm machine create --name " + machine + " --image " + archive + " --label smol-builder=1" +
+			" --label smol-builder.pid=4242 --label smol-builder.start=777 --label smol-builder.boot=boot-now" +
 			" -e PATH=/usr/local/go/bin:/usr/bin -e SORTIE_STACK_LAYERS=base+go -w /workspace",
 		"smolvm machine start --name " + machine,
 		"smolvm machine stop --name " + machine,
@@ -291,8 +330,8 @@ func TestBuildCommandSequence(t *testing.T) {
 	if !strings.HasPrefix(machine, BuilderPrefix) {
 		t.Errorf("machine %q lacks prefix %q", machine, BuilderPrefix)
 	}
-	if filepath.Dir(stem) != f.outDir {
-		t.Errorf("pack stem %s is not in the output directory", stem)
+	if filepath.Dir(filepath.Dir(stem)) != f.outDir {
+		t.Errorf("pack stem %s is not in a directory in the output directory", stem)
 	}
 	if len(f.tools.machines) != 0 {
 		t.Errorf("machines left: %v", f.tools.machines)
@@ -630,5 +669,149 @@ func TestBuildShippedLibrary(t *testing.T) {
 	}
 	if len(entries) != 0 {
 		t.Fatalf("temporary directory holds %d entries after the build", len(entries))
+	}
+}
+
+func TestBuildSweepsLeftBehindBuilders(t *testing.T) {
+	f := newFixture(t, "podman", `layers = []`, nil)
+	host := f.builder.Host.(*fakeHost)
+	host.running[100] = "500" // another build, still running
+	host.running[200] = "999" // a process that reused a dead build's ID
+	builder := func(pid, start, boot string) map[string]string {
+		return map[string]string{"smol-builder": "1", LabelPID: pid, LabelStart: start, LabelBoot: boot}
+	}
+	f.tools.machines = map[string]map[string]string{
+		"smol-builder-otherboot": builder("100", "500", "boot-before"),
+		"smol-builder-dead":      builder("300", "1", "boot-now"),
+		"smol-builder-reused":    builder("200", "600", "boot-now"),
+		"smol-builder-live":      builder("100", "500", "boot-now"),
+		"smol-builder-old":       {"smol-builder": "1"},
+		"smol-builder-unlabeled": {LabelPID: "300", LabelBoot: "boot-before"},
+		"user-vm":                {},
+	}
+
+	if _, err := f.build(context.Background()); err != nil {
+		t.Fatalf("Build: %v\nlog:\n%s", err, f.log)
+	}
+	var kept []string
+	for name := range f.tools.machines {
+		kept = append(kept, name)
+	}
+	slices.Sort(kept)
+	if want := []string{"smol-builder-live", "smol-builder-old", "smol-builder-unlabeled", "user-vm"}; !reflect.DeepEqual(kept, want) {
+		t.Fatalf("machines left: %v, want %v", kept, want)
+	}
+
+	// Every left-behind machine goes before the build creates its own.
+	calls := f.tools.argvs()
+	create := slices.IndexFunc(calls, func(c string) bool { return strings.HasPrefix(c, "smolvm machine create") })
+	for _, name := range []string{"smol-builder-otherboot", "smol-builder-dead", "smol-builder-reused"} {
+		i := slices.Index(calls, "smolvm machine delete --name "+name+" -f")
+		if i < 0 || i > create {
+			t.Errorf("%s deleted at call %d, the build's own machine created at %d", name, i, create)
+		}
+	}
+	if !strings.Contains(f.log.String(), "keeping builder machine smol-builder-old") {
+		t.Errorf("log does not say why smol-builder-old is kept:\n%s", f.log)
+	}
+}
+
+func TestSweepWithoutBootID(t *testing.T) {
+	f := newFixture(t, "podman", `layers = []`, nil)
+	host := f.builder.Host.(*fakeHost)
+	host.boot = ""
+	host.running[100] = ""
+	f.tools.machines = map[string]map[string]string{
+		"smol-builder-running": {"smol-builder": "1", LabelPID: "100", LabelBoot: "boot-before"},
+		"smol-builder-dead":    {"smol-builder": "1", LabelPID: "300", LabelBoot: "boot-before"},
+	}
+	if _, err := f.build(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := f.tools.machines["smol-builder-running"]; !ok {
+		t.Error("deleted a machine whose process runs, on a host with no boot ID")
+	}
+	if _, ok := f.tools.machines["smol-builder-dead"]; ok {
+		t.Error("kept a machine whose process is gone")
+	}
+}
+
+func TestSweepFailureStopsTheBuild(t *testing.T) {
+	f := newFixture(t, "podman", `layers = []`, nil)
+	f.tools.machines["smol-builder-dead"] = map[string]string{"smol-builder": "1", LabelPID: "300"}
+	f.tools.fail = func(_ context.Context, argv []string) error {
+		if strings.HasPrefix(strings.Join(argv, " "), "smolvm machine delete") {
+			return exitErr(argv, 1)
+		}
+		return nil
+	}
+	_, err := f.build(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "smol-builder-dead") {
+		t.Fatalf("err = %v, want one naming the machine it could not delete", err)
+	}
+	for _, c := range f.tools.argvs() {
+		if strings.HasPrefix(c, "smolvm machine create") {
+			t.Fatalf("created a machine after the sweep failed: %s", c)
+		}
+	}
+}
+
+func TestSystemHostKnowsItself(t *testing.T) {
+	h := systemHost{}
+	self := h.Self()
+	if self.PID != os.Getpid() || !h.Running(self) {
+		t.Fatalf("Self() = %+v, Running = false", self)
+	}
+	if self.Start != "" && h.Running(Process{PID: self.PID, Start: self.Start + "0"}) {
+		t.Error("a process with another start time counts as this one")
+	}
+	cmd := exec.Command("true")
+	if err := cmd.Run(); err != nil {
+		t.Fatal(err)
+	}
+	if h.Running(Process{PID: cmd.Process.Pid}) {
+		t.Errorf("process %d exited but counts as running", cmd.Process.Pid)
+	}
+	if runtime.GOOS == "linux" && (h.BootID() == "" || self.Start == "") {
+		t.Errorf("on Linux, BootID() = %q and Self().Start = %q; want both", h.BootID(), self.Start)
+	}
+}
+
+func TestBuildSweepsLeftBehindDirectories(t *testing.T) {
+	f := newFixture(t, "podman", `layers = []`, nil)
+	f.builder.Host.(*fakeHost).running[100] = "500"
+	dead := `{"smol-builder.pid":"300","smol-builder.boot":"boot-now"}`
+	live := `{"smol-builder.pid":"100","smol-builder.start":"500","smol-builder.boot":"boot-now"}`
+	otherBoot := `{"smol-builder.pid":"100","smol-builder.start":"500","smol-builder.boot":"boot-before"}`
+	tmp, out := f.builder.TempDir, f.outDir
+	writeFiles(t, tmp, map[string]string{
+		"smol-builder-dead/" + ownerFile:      dead,
+		"smol-builder-dead/image.tar":         "archive",
+		"smol-builder-otherboot/" + ownerFile: otherBoot,
+		"smol-builder-live/" + ownerFile:      live,
+		"smol-builder-foreign/image.tar":      "not ours",
+	})
+	writeFiles(t, out, map[string]string{
+		".app.smolmachine.dead.tmp/" + ownerFile:   dead,
+		".app.smolmachine.dead.tmp/pack":           "launcher",
+		".app.smolmachine.foreign.tmp/x":           "not ours",
+		".other.smolmachine.dead.tmp/" + ownerFile: dead,
+	})
+	if _, err := f.build(context.Background()); err != nil {
+		t.Fatalf("Build: %v\nlog:\n%s", err, f.log)
+	}
+	for dir, want := range map[string]bool{
+		filepath.Join(tmp, "smol-builder-dead"):            false,
+		filepath.Join(tmp, "smol-builder-otherboot"):       false,
+		filepath.Join(tmp, "smol-builder-live"):            true,
+		filepath.Join(tmp, "smol-builder-foreign"):         true,
+		filepath.Join(out, ".app.smolmachine.dead.tmp"):    false,
+		filepath.Join(out, ".app.smolmachine.foreign.tmp"): true,
+		filepath.Join(out, ".other.smolmachine.dead.tmp"):  true,
+	} {
+		_, err := os.Stat(dir)
+		if exists := err == nil; exists != want {
+			t.Errorf("%s exists = %v, want %v", dir, exists, want)
+		}
 	}
 }

@@ -4,16 +4,19 @@
 GO_MODULES := acp-broker smol-builder
 COMPONENTS := workbench $(GO_MODULES)
 
-.PHONY: help test lint licenses specs dist
+.PHONY: help test lint check-latest licenses specs dist
 
 help: ## Show the targets
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-13s %s\n", $$1, $$2}'
 
 test: ## Run every component's tests
 	@set -e; for c in $(COMPONENTS); do echo "== $$c: test"; $(MAKE) -s -C $$c test; done
 
 lint: licenses specs ## Lint every component, check the license copies, and validate the specs
 	@set -e; for c in $(COMPONENTS); do echo "== $$c: lint"; $(MAKE) -s -C $$c lint; done
+
+check-latest: ## Fail when a Go component's dependency is behind its latest stable release (network)
+	@set -e; for m in $(GO_MODULES); do echo "== $$m: check-latest"; $(MAKE) -s -C $$m check-latest; done
 
 licenses: ## Check that each component ships the repository's LICENSE unchanged
 	@set -e; for c in $(COMPONENTS); do cmp -s LICENSE $$c/LICENSE || { echo "$$c/LICENSE differs from LICENSE"; exit 1; }; done; echo "licenses: ok"

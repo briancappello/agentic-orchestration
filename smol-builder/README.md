@@ -9,7 +9,7 @@ It is one static Go binary (no CGo). The layer library is embedded in it.
 ## Requirements
 
 - podman or docker. podman is used when both are installed.
-- smolvm 1.26.x, on a host where it can run machines (KVM on Linux).
+- smolvm 1.32.4 or later, on a host where it can run machines (KVM on Linux).
 - Go 1.26.1 or later, to build `smol-builder` itself.
 
 `smol-builder` fails with an error naming the missing program when it cannot find a container engine or `smolvm` on `PATH`.
@@ -53,13 +53,15 @@ The library ships inside the binary (`layers/`). `--layers <dir>` selects anothe
 
 Every input is pinned. Base images are pinned by digest. Every download is pinned by version and SHA-256, and checked before use, so a tampered download fails the build of that layer.
 
+Every pin is the latest stable release of its project: for Node, the newest LTS release; for the base image, the current linux/amd64 digest of its tag. The downloads are the linux/amd64 builds. `make check-latest` fails when a pin falls behind (see [Development](#development)).
+
 | Layer | Provides | Pins |
 |---|---|---|
-| `base` | Debian trixie-slim; `git`, a C toolchain (`build-essential`, `pkg-config`, `make`), `curl`, `jq`, `ripgrep`, `xz-utils`, `procps`, `socat` (which carries Sortie's tool server into a VM); opencode with a policy-only config; `WORKDIR /workspace` | `debian:trixie-slim@sha256:918311b7b6c4c6f68b232ba516584925f6c78ad82b6fd534b98979df6438e483`; opencode 1.18.29, SHA-256 `ea800b7ff56226b70952126c9fc1e2517ca4c4b5682fd9d3f9e87449697a1194` |
-| `go` | Go in `/usr/local/go`, `GOPATH=/root/go` | Go 1.27.2, SHA-256 `ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5` |
-| `node` | Node.js LTS and npm in `/opt/node` | Node 24.21.0, SHA-256 `fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6` |
-| `python` | uv and CPython in `/opt/uv-python` | uv 0.13.0, SHA-256 `1468ebd5a5541121837c5a2817b9972ba6090fa6caa3d142620850a47fb75154`; CPython 3.14.6, checked by uv against its own pinned hashes |
-| `rust` | rustup and a minimal Rust toolchain with clippy and rustfmt in `/usr/local/cargo` | rustup 1.29.1, SHA-256 `dda7234360b7f578ca8b0ddcb80145646fa61a67c1720a5abc7051b35c9fcb71`; toolchain 1.99.0 |
+| `base` | Debian trixie-slim; `git`, a C toolchain (`build-essential`, `pkg-config`, `make`), `curl`, `jq`, `ripgrep`, `xz-utils`, `procps`, `socat` (which carries Sortie's tool server into a VM); opencode with a policy-only config; `WORKDIR /workspace` | `debian:trixie-slim@sha256:1e1a22175fbf1b32157ddaf0219e1db4e5401fab2b94ed285add64d18587cd2d`; opencode 2.2.5, SHA-256 `09f44302c10fd036912f59c81fd1aef5df45dd06f649197f9dfc9bbe2a79614e` |
+| `go` | Go in `/usr/local/go`, `GOPATH=/root/go` | Go 1.27.3, SHA-256 `65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40` |
+| `node` | Node.js LTS and npm in `/opt/node` | Node 26.13.0, SHA-256 `d28a96af6c38596f6d9d97c0ee531c13d238d757742387d1928de822d959e997` |
+| `python` | uv and CPython in `/opt/uv-python` | uv 0.13.6, SHA-256 `f29c3e94ffabd7e6f3ba521dba169a9b7ec12100bf3257087f0f24f6123f3645`; CPython 3.15.2, checked by uv against its own pinned hashes |
+| `rust` | rustup and a minimal Rust toolchain with clippy and rustfmt in `/usr/local/cargo` | rustup 1.29.2, SHA-256 `5be191e8c70a5007074254cb74d78dbfdd25cd5a61c27de7b8e5410122ec24f4`; toolchain 1.99.1 |
 
 The `base` layer's Debian packages come from the mirrors at build time. apt checks their signatures, but their versions are not pinned.
 
@@ -131,18 +133,32 @@ The exec prints the Go version, `Status: install ok installed`, `base+go`, and `
 
 ### What a build does
 
-1. Reads and validates `<repo>/smol-builder.toml`.
+1. Reads and validates `<repo>/smol-builder.toml`, and removes the temporary directories an earlier, interrupted build left (see below).
 2. Resolves the chain and tags each step `localhost/smol-builder/chain:<hash>`. The hash covers the previous step's hash, the layer's name, and every file in its build context: relative paths, contents, and the executable bit.
 3. Builds each step whose tag the engine does not have yet. A step that exists is reused, so a pack with `["go", "node"]` built after one with `["go"]` builds only `node`.
 4. Saves the last image as an archive and reads its `Env` and `WorkingDir`.
-5. Creates a builder machine from the archive, with that `Env` and `WorkingDir` passed as `-e` and `-w`, then starts and stops it.
-6. Runs `smolvm pack create --from-vm` into a temporary name in the output's directory.
+5. Deletes the builder machines earlier builds left behind (see below), then creates a builder machine from the archive, with that `Env` and `WorkingDir` passed as `-e` and `-w`, then starts and stops it.
+6. Runs `smolvm pack create --from-vm` into a temporary directory in the output's directory, `.<output name>.<random>.tmp`.
 7. Deletes the builder machine.
 8. Renames the pack onto the output path.
 
 The output is replaced atomically. When a build fails, the file at the output path is left unchanged, and the temporary files are removed.
 
 The builder machine is named `smol-builder-<hash>-<random>` and labelled `smol-builder=1`. It is deleted on every path, including a failed build and an interrupt (SIGINT or SIGTERM). If deleting it fails, the build fails and the error names the machine.
+
+### Leftovers of an interrupted build
+
+A build that is killed (SIGKILL, a crash) or that the host's restart stops cannot clean up, so the next build does it. Each builder machine also carries labels naming its build: `smol-builder.pid` (the process ID), `smol-builder.start` (the process's start time, so a reused process ID is not taken for the build), and `smol-builder.boot` (the host's boot ID from `/proc/sys/kernel/random/boot_id`). Before it creates its own machine, a build deletes every `smol-builder=1` machine whose boot ID is not the current one, or whose process no longer runs. It fails, naming the machine, when such a delete fails.
+
+It never deletes:
+
+- a machine whose build still runs, such as a second build running at the same time;
+- a machine without the `smol-builder=1` label;
+- a `smol-builder=1` machine without `smol-builder.pid`. Only a smol-builder older than this one makes those, and its build may still run. The build logs each one it keeps; delete it with `smolvm machine delete --name <name> -f` once no older build runs.
+
+The temporary directories work the same way. The work directory (`$TMPDIR/smol-builder-*`, which holds the image archive) and the pack directory beside the output each hold a `.smol-builder-owner` file with the same three values. A build removes those its predecessors left, and leaves alone a directory without that file.
+
+On Linux every check is available. On macOS smol-builder reads neither a boot ID nor a start time, so a machine or directory is left behind only when no process has its process ID; a reused ID keeps it, never the other way round. On Windows smol-builder cannot tell, and deletes none.
 
 ### The report
 
@@ -177,10 +193,12 @@ On success, `smol-builder` prints one JSON object to standard output. Diagnostic
 
 The exit status is 0 on success, 1 when the build fails, and 2 on a usage error.
 
-## Gotchas (smolvm 1.26.1)
+## Gotchas (smolvm 1.32.4)
+
+The builder machine and `--from-vm` route was designed on smolvm 1.26.1, and the first two items were measured there; they explain why `smol-builder` works the way it does. On 1.32.4 the build, the two-file output, the pack cache, and `pack prune` were checked again.
 
 - **`pack create --from-vm` drops the image's `ENV` and `WORKDIR`.** It keeps the builder machine's own `-e` and `-w`, so `smol-builder` passes the image config through as flags. Without that, `PATH` loses every toolchain and the working directory is `/`.
-- **`pack create --image` takes only registry references.** It refuses a local archive, so `smol-builder` goes through a builder machine and `--from-vm` instead.
+- **`pack create --image` took only registry references on 1.26.1.** It refused a local archive, so `smol-builder` goes through a builder machine and `--from-vm` instead. On 1.32.4 it also accepts a `docker save` archive, and a pack made that way keeps the image's `ENV` and `WORKDIR`; `smol-builder` does not use that route yet.
 - **`pack create -o STEM` writes two files:** `STEM.smolmachine`, the pack, and `STEM`, a launcher executable of about 50 MB. `smol-builder` keeps only the pack. Give the output a `.smolmachine` name.
 - **Extracted packs are cached under `~/.cache/smolvm`.** The first `machine create --from` a new pack extracts it there, and the cache grows by hundreds of MiB per pack. Clean it with `smolvm pack prune`:
 
@@ -199,7 +217,10 @@ The exit status is 0 on success, 1 when the build fails, and 2 on a usage error.
 make test    # unit tests with the race detector
 make lint    # golangci-lint
 make build   # static binary, CGO_ENABLED=0
+make check-latest   # compare every pin and Go module with its latest stable release
 SMOL_BUILDER_SMOLVM_TEST=1 go test -count=1 -run TestIntegration -v ./internal/build/
 ```
 
-The integration test needs podman and smolvm. It builds `layers = ["go"]`, creates a machine from the pack, and checks that `go` resolves through `PATH` and the working directory is `/workspace`. It then forces two failures and checks that the previous pack is unchanged and no builder machine remains. Without `SMOL_BUILDER_SMOLVM_TEST=1` it is skipped.
+The integration test needs podman and smolvm. It builds `layers = ["go"]`, creates a machine from the pack, and checks that `go` resolves through `PATH` and the working directory is `/workspace`. It then forces two failures and checks that the previous pack is unchanged and no builder machine remains. A second test kills a build with SIGKILL once its builder machine exists, and checks that the next build deletes that machine and the killed build's work and pack directories. Without `SMOL_BUILDER_SMOLVM_TEST=1` both are skipped.
+
+`make check-latest` sets `SMOL_BUILDER_LATEST_TEST=1` and runs the version tests. They read every pin from the layer Dockerfiles and fetch each dependency's latest stable release from its project: the Debian tag's current linux/amd64 digest from Docker Hub, opencode and uv from their GitHub releases (skipping prereleases and drafts), Go from `go.dev/dl`, Node's newest LTS from `nodejs.org/dist/index.json`, CPython's newest final release from python.org, rustup and Rust from their stable channels on `static.rust-lang.org`, and the Go modules from `go list -m -u all`. A test fails, naming the dependency, our version, and the latest one, when a pin is behind, and names the source when it cannot fetch or parse it. They need the network and use `GH_TOKEN` for GitHub when it is set; the target takes it from `gh auth token` otherwise. Without `SMOL_BUILDER_LATEST_TEST=1` they are skipped.

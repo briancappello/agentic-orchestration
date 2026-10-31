@@ -87,6 +87,9 @@ type Builder struct {
 	// Library is the shipped layer library, used when Options.LayersDir is
 	// empty.
 	Library fs.FS
+	// Host tells which builds still run, to find the builder machines and
+	// temporary directories that interrupted builds left behind.
+	Host Host
 }
 
 // New returns a Builder that runs host programs and logs to log.
@@ -96,6 +99,7 @@ func New(log io.Writer) *Builder {
 		LookPath: exec.LookPath,
 		Log:      log,
 		Library:  layers.FS,
+		Host:     systemHost{},
 	}
 }
 
@@ -118,7 +122,13 @@ func (b *Builder) Build(ctx context.Context, opts Options) (*Report, error) {
 		return nil, fmt.Errorf("output directory %s does not exist", outDir)
 	}
 
-	work, err := os.MkdirTemp(b.TempDir, "smol-builder-")
+	// Directories an interrupted build left: its work directory, and its
+	// pack directory beside this output.
+	packPattern := "." + filepath.Base(output) + ".*.tmp"
+	b.sweepDirs(b.TempDir, "smol-builder-*")
+	b.sweepDirs(outDir, packPattern)
+
+	work, err := b.ownedTempDir(b.TempDir, "smol-builder-")
 	if err != nil {
 		return nil, err
 	}
@@ -171,8 +181,18 @@ func (b *Builder) Build(ctx context.Context, opts Options) (*Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	stem := filepath.Join(outDir, "."+filepath.Base(output)+"."+suffix+".tmp")
-	defer removeIfExists(b, stem, stem+packSuffix)
+	// smolvm writes the pack and a launcher; both go in a directory beside
+	// the output, so the pack can be renamed onto it.
+	packDir, err := b.ownedTempDir(outDir, packPattern)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := os.RemoveAll(packDir); err != nil {
+			b.logf("removing %s: %v", packDir, err)
+		}
+	}()
+	stem := filepath.Join(packDir, "pack")
 
 	machine := BuilderPrefix + last.Hash[:12] + "-" + suffix
 	if err := b.pack(ctx, machine, archive, cfg, stem, &report.Timings); err != nil {
@@ -237,7 +257,8 @@ func (b *Builder) buildStep(ctx context.Context, eng engine, step stack.Step, ba
 // pack boots a builder machine from the archive and packs it into stem.
 // A pack made with --from-vm drops the image's ENV and WORKDIR but keeps
 // the machine's own -e and -w, so the image config is passed as flags.
-// The machine is deleted on every path.
+// The machine is deleted on every path. Before creating it, pack deletes the
+// builder machines earlier runs left behind.
 func (b *Builder) pack(ctx context.Context, machine, archive string, cfg imageConfig, stem string, timings *Timings) (err error) {
 	created := false
 	defer func() {
@@ -249,8 +270,12 @@ func (b *Builder) pack(ctx context.Context, machine, archive string, cfg imageCo
 		}
 	}()
 
+	if err := b.sweep(ctx); err != nil {
+		return err
+	}
+
 	t := time.Now()
-	args := []string{"machine", "create", "--name", machine, "--image", archive, "--label", BuilderLabel}
+	args := append([]string{"machine", "create", "--name", machine, "--image", archive}, b.builderLabels()...)
 	for _, kv := range cfg.Env {
 		args = append(args, "-e", kv)
 	}
@@ -308,14 +333,6 @@ func (b *Builder) machineExists(ctx context.Context, machine string) (bool, erro
 		}
 	}
 	return false, nil
-}
-
-func removeIfExists(b *Builder, paths ...string) {
-	for _, p := range paths {
-		if err := os.Remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			b.logf("removing %s: %v", p, err)
-		}
-	}
 }
 
 // hashFile returns the file's SHA-256 and size after flushing it to disk.

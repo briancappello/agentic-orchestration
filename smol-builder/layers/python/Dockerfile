@@ -1,9 +1,9 @@
 ARG BASE
 FROM ${BASE}
 
-ARG UV_VERSION=0.13.0
-ARG UV_SHA256=1468ebd5a5541121837c5a2817b9972ba6090fa6caa3d142620850a47fb75154
-ARG PYTHON_VERSION=3.14.6
+ARG UV_VERSION=0.13.6
+ARG UV_SHA256=f29c3e94ffabd7e6f3ba521dba169a9b7ec12100bf3257087f0f24f6123f3645
+ARG PYTHON_VERSION=3.15.2
 RUN curl -fsSLo /tmp/uv.tgz "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz" \
  && echo "${UV_SHA256}  /tmp/uv.tgz" | sha256sum -c - \
  && tar -xzf /tmp/uv.tgz -C /usr/local/bin --strip-components=1 \

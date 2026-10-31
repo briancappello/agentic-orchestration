@@ -25,7 +25,10 @@ Go only, standard library only, no CGo.
 make build   # bin/acp-broker
 make test    # the tests, with the race detector
 make lint    # golangci-lint for Linux, macOS and Windows
+make check-latest   # fail when a Go module is behind its latest release
 ```
+
+`make check-latest` sets `ACP_BROKER_LATEST_TEST=1` and compares every module in acp-broker's build list with its latest release, through `go list -m -u all` outside the workspace. It needs the network. Without the variable the test is skipped.
 
 ## License
 

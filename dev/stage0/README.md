@@ -10,7 +10,10 @@ podman containers.
 dev/stage0/stage0.sh                  # set up or update, then (re)start the units
 dev/stage0/stage0.sh --rebuild-pack   # also rebuild the smolvm pack
 dev/stage0/stage0.sh --update-sortie  # also move the Sortie checkout to origin/plan-bench
+dev/stage0/test-smolvm-version.sh     # check the smolvm version check against fake binaries
 ```
+
+The kit needs smolvm 1.32.4 or later (`SMOLVM_MIN` in `smolvm-version.sh`); `stage0.sh` refuses an older one.
 
 | Part | Where |
 | --- | --- |

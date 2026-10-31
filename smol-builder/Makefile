@@ -6,7 +6,7 @@ export CGO_ENABLED := 0
 
 .PHONY: help
 help: ## List targets
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "%-8s %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "%-13s %s\n", $$1, $$2}'
 
 .PHONY: build
 build: ## Build the static binary into bin/
@@ -15,6 +15,10 @@ build: ## Build the static binary into bin/
 .PHONY: test
 test: ## Run unit tests with the race detector (RUN=TestFoo)
 	CGO_ENABLED=1 $(GO) test -race -count=1 ./... $(if $(RUN),-run '$(RUN)',)
+
+.PHONY: check-latest
+check-latest: ## Fail when a layer pin or Go module is behind its latest stable release (network)
+	GH_TOKEN="$${GH_TOKEN:-$$(gh auth token 2>/dev/null)}" SMOL_BUILDER_LATEST_TEST=1 $(GO) test -count=1 -run '^TestLatest' -v ./...
 
 .PHONY: vet
 vet: ## Run go vet
