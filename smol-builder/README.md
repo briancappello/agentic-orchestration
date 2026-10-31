@@ -199,7 +199,10 @@ The exit status is 0 on success, 1 when the build fails, and 2 on a usage error.
 make test    # unit tests with the race detector
 make lint    # golangci-lint
 make build   # static binary, CGO_ENABLED=0
+make check-latest   # compare every pin and Go module with its latest stable release
 SMOL_BUILDER_SMOLVM_TEST=1 go test -count=1 -run TestIntegration -v ./internal/build/
 ```
 
 The integration test needs podman and smolvm. It builds `layers = ["go"]`, creates a machine from the pack, and checks that `go` resolves through `PATH` and the working directory is `/workspace`. It then forces two failures and checks that the previous pack is unchanged and no builder machine remains. Without `SMOL_BUILDER_SMOLVM_TEST=1` it is skipped.
+
+`make check-latest` sets `SMOL_BUILDER_LATEST_TEST=1` and runs the version tests. They read every pin from the layer Dockerfiles and fetch each dependency's latest stable release from its project: the Debian tag's current linux/amd64 digest from Docker Hub, opencode and uv from their GitHub releases (skipping prereleases and drafts), Go from `go.dev/dl`, Node's newest LTS from `nodejs.org/dist/index.json`, CPython's newest final release from python.org, rustup and Rust from their stable channels on `static.rust-lang.org`, and the Go modules from `go list -m -u all`. A test fails, naming the dependency, our version, and the latest one, when a pin is behind, and names the source when it cannot fetch or parse it. They need the network and use `GH_TOKEN` for GitHub when it is set; the target takes it from `gh auth token` otherwise. Without `SMOL_BUILDER_LATEST_TEST=1` they are skipped.
