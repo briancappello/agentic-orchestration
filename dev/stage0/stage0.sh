@@ -12,7 +12,7 @@
 # Settings live in $STAGE0_HOME/stage0.env, written on the first run (edit it,
 # then run this again). State, tokens and workspaces live in $STAGE0_HOME.
 #
-# Needs: smolvm 1.26.x, podman, Go, uv, npm, the openspec CLI, gh signed in,
+# Needs: smolvm 1.32.4 or later, podman, Go, uv, npm, the openspec CLI, gh signed in,
 # a live Claude subscription login (claude setup-token, opencode or Claude Code), Huly running
 # (HULY_COMPOSE_DIR) and the host's opencode signed in to Anthropic for
 # planning sessions.
@@ -69,7 +69,9 @@ export STAGE0_HOME STAGE0_HULY_URL STAGE0_HULY_WORKSPACE STAGE0_HULY_PROJECT STA
 for cmd in smolvm podman go uv npm openspec gh git openssl python3; do
   command -v "$cmd" >/dev/null || die "$cmd is not on PATH"
 done
-smolvm --version | grep -q '^smolvm 1\.26\.' || die "Sortie needs smolvm 1.26.x"
+# shellcheck source=smolvm-version.sh
+. "$KIT/smolvm-version.sh"
+smolvm_version_ok > /dev/null || die "Sortie needs smolvm $SMOLVM_MIN or later; found: $(smolvm --version 2>&1 | head -1)"
 gh auth token >/dev/null || die "gh has no token: run gh auth login"
 STAGE0_HOME=$STAGE0_HOME "$KIT/anthropic-token.py" >/dev/null \
   || die "no live Claude subscription token: run claude setup-token into $STAGE0_HOME/claude-oauth-token"
