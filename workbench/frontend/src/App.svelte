@@ -56,7 +56,7 @@
     <NewProject oncreated={(p) => (location.hash = projectHref(p.slug))} />
   {:else}
     {#key route.slug}
-      <ProjectView slug={route.slug} bind:view={route.view} onmissing={() => (location.hash = "#/")} />
+      <ProjectView slug={route.slug} page={route.page} bind:view={route.view} onmissing={() => (location.hash = "#/")} />
     {/key}
   {/if}
 {/if}

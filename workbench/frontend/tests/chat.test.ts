@@ -162,6 +162,15 @@ describe("chat pane: a story's spec", () => {
 });
 
 describe("chat pane: selection as context", () => {
+  it("attaches the story a deep link selects", async () => {
+    app = mount(Harness, { target: document.body, props: {
+      initial: planDoc(), session: new FakeSession(),
+      initialView: { epic: "billing", selected: "billing/invoice", showCross: true, mark: null },
+    } }) as typeof app;
+    await settle();
+    expect($("[data-attached='billing/invoice']")).not.toBeNull();
+  });
+
   it("attaches the selected node to the next message, and can detach it", async () => {
     const { h, session } = await render();
     h.select("billing/invoice");

@@ -1,4 +1,5 @@
 /** The merged graph the backend serves on /api/graph and /api/events. */
+import type { HomeDoc } from "./home";
 
 export type NodeStatus = "draft" | "synced" | "orphaned";
 
@@ -81,6 +82,8 @@ export interface MergedGraph {
   validation: { valid: boolean; errors: PlanError[]; version: number };
   /** The project's automatic sync to the tracker. Absent from an older backend. */
   sync?: SyncStatus | null;
+  /** The project home, computed with the graph. Absent from an older backend. */
+  home?: HomeDoc | null;
   sortie: {
     reachable: boolean; error: string | null; capabilities: string[]; generated_at: string | null;
     /** The tracker project, and whether Sortie runs agents for it (it does for its configured project only). */
@@ -99,7 +102,8 @@ export interface SyncResult {
 
 /** The state of a project's automatic sync. Times are Unix seconds. */
 export interface SyncStatus {
-  state: "idle" | "syncing" | "synced" | "failed";
+  /** "disabled": a read-only workbench (WORKBENCH_SYNC=0) never syncs. */
+  state: "idle" | "syncing" | "synced" | "failed" | "disabled";
   synced_at: number | null;
   failed_at: number | null;
   reason: { code: string; message: string } | null;
@@ -149,4 +153,6 @@ export interface ViewState {
   epic: string | null;
   selected: string | null;
   showCross: boolean;
+  /** A milestone whose changes the project level marks. */
+  mark?: string | null;
 }

@@ -4,10 +4,12 @@
   import type { GraphNode } from "../lib/types";
 
   let {
-    node, model, x, y, selected = false, near = false, onselect, onopen,
+    node, model, x, y, selected = false, near = false, marked, onselect, onopen,
   }: {
     node: GraphNode; model: GraphModel; x: number; y: number;
     selected?: boolean; near?: boolean;
+    /** The short name of the milestone the home marked this change for. */
+    marked?: string;
     onselect: (key: string) => void; onopen: (key: string) => void;
   } = $props();
 
@@ -32,7 +34,8 @@
     `${model.identifier(node)} ${node.title}, ${model.statusLabel(node)}` +
       (unplanned ? ", no spec" : "") +
       (node.plan_status && node.plan_status !== "draft" ? `, ${planStatusLabel(node.plan_status).toLowerCase()}` : "") +
-      (node.status === "draft" ? ", draft" : node.status === "orphaned" ? ", orphaned" : ""),
+      (node.status === "draft" ? ", draft" : node.status === "orphaned" ? ", orphaned" : "") +
+      (marked ? `, in ${marked}` : ""),
   );
 </script>
 
@@ -42,6 +45,7 @@
   class:unplanned
   class:sel={selected}
   class:near
+  class:marked={!!marked}
   class:draft={node.status === "draft"}
   class:orphaned={node.status === "orphaned"}
   data-key={node.plan_key}
@@ -62,6 +66,7 @@
   <span class="r3">
     <span class="meta" class:warn={node.plan_status === "needs_rereview"} data-plan-status={node.plan_status ?? null}>{meta}</span>
     <span class="tags">
+      {#if marked}<span class="tag in-ms">{marked}</span>{/if}
       {#if node.status === "draft"}<span class="tag marker draft-tag">Draft</span>{/if}
       {#if node.status === "orphaned"}<span class="tag marker orphan-tag">Orphaned</span>{/if}
       {#if unplanned}<span class="tag nospec">No spec</span>{:else if node.has_spec}<span class="tag">OpenSpec</span>{/if}
@@ -85,6 +90,8 @@
   .card.draft { border-style: dashed; }
   .card.orphaned { opacity: 0.8; }
   .meta.warn { color: var(--amber-ink); font-weight: 700; }
+  .card.marked { outline: 2px solid var(--ink-rule); outline-offset: 3px; }
+  .tag.in-ms { background: var(--ink); border-color: var(--ink); color: #fff; font-weight: 600; }
   .card:hover { box-shadow: var(--shadow-lift); }
   .card.sel { box-shadow: var(--shadow-halo); }
   :global(.score.focused) .card:not(.sel):not(.near) { opacity: 0.45; }
@@ -103,7 +110,7 @@
   .pg { flex: none; height: 3px; margin: 6px 0 5px; border-radius: 2px; background: rgba(20, 22, 26, 0.08); }
   .pg i { display: block; height: 100%; border-radius: 2px; background: var(--c); }
   .r3 { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 11.5px; color: var(--mute); }
-  .tags { display: flex; gap: 4px; }
+  .tags { display: flex; gap: 4px; white-space: nowrap; }
   .tag { padding: 1px 6px; border: 1px solid rgba(20, 22, 26, 0.18); border-radius: var(--r-tag); background: #fff; color: var(--ink); font-size: 10.5px; }
   .tag.nospec, .tag.marker { border-style: dashed; color: var(--mute); }
   .badge {
