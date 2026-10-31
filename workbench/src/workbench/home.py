@@ -247,7 +247,7 @@ def not_ready(milestones: list[dict[str, Any]], graph: dict[str, Any], fields: d
         if m["done"]:
             continue
         before = _milestones_before(m, by_id)
-        stories_before = [s for b in before for s in by_id[b]["stories"] if p.open(s)]
+        stories_before = [s for b in before if not by_id[b]["done"] for s in by_id[b]["stories"] if p.open(s)]
         open_person = [t for t in m["tasks"] if not t["done"] and t["kind"] in ms.PERSON_KINDS]
 
         for inc in m["includes"]:
@@ -460,7 +460,10 @@ def build_home(*, graph: dict[str, Any] | None, nodes: list[dict[str, Any]], fie
                 "needs_person": _needs([]), "timeline": None}
 
     out = ms.progress(planning.get("milestones") or [], graph, planning.get("tasks") or {}, done, dropped, estimates)
-    items = not_ready(out["milestones"], graph, fields, done, dropped, out["critical_path"],
+    # A milestone declared done was finished by hand: its stories are not
+    # work still ahead of anything, whatever the tracker says.
+    settled = done | {s for m in out["milestones"] if m.get("declared_done") for s in m["stories"]}
+    items = not_ready(out["milestones"], graph, fields, settled, dropped, out["critical_path"],
                       free=health["free"] or 0, runway=runway, estimates=estimates)
     line = timeline(out["milestones"], out["goal"], items, estimates, done)
     by_key = {n["plan_key"]: n for n in nodes}

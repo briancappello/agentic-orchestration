@@ -213,6 +213,19 @@ def test_an_operator_task_waits_for_the_milestones_before_it(store):
     assert task["slack"] == 5 and task["urgency"] == "later"
 
 
+def test_a_milestone_declared_done_is_not_work_ahead(store):
+    store.plan([("m0", []), ("ops", [])])
+    store.change("m0", breakdown(deliverable("old", kind="enabler")))
+    store.change("ops")
+    store.tasks("ops", "- [ ] 1.1 Rack it. [operator]\n")
+    store.milestones([milestone("zero", [{"change": "m0"}], done=True),
+                      milestone("one", [{"change": "ops", "tasks": "operator"}], ["zero"])])
+    home = home_of(store)
+    items = items_by_key(home)
+    assert "m0/old" not in items
+    assert items["ops#1.1"]["slack"] == 0 and items["ops#1.1"]["after_milestones"] == []
+
+
 def test_milestones_timeline_and_critical_path(store):
     platform(store)
     home = home_of(store, {"apw/control-plane-images": "ready"}, done={"apw/control-plane-images"})
