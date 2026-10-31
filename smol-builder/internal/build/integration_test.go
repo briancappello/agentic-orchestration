@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/briancappello/agentic-orchestration/smol-builder/internal/runner"
 	"github.com/briancappello/agentic-orchestration/smol-builder/internal/stack"
+	"github.com/briancappello/agentic-orchestration/smol-builder/layers"
 )
 
 // testMachineLabel marks the machine the integration test creates from the
@@ -90,6 +92,22 @@ func fileSHA256(t *testing.T, path string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// pinnedArg returns the default of ARG name in the shipped layer's Dockerfile.
+func pinnedArg(t *testing.T, layer, name string) string {
+	t.Helper()
+	data, err := fs.ReadFile(layers.FS, layer+"/Dockerfile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for line := range strings.Lines(string(data)) {
+		if v, ok := strings.CutPrefix(strings.TrimSpace(line), "ARG "+name+"="); ok {
+			return v
+		}
+	}
+	t.Fatalf("layer %s has no ARG %s", layer, name)
+	return ""
+}
+
 func smolvm(t *testing.T, args ...string) string {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -159,7 +177,7 @@ func TestIntegrationBuildGoPack(t *testing.T) {
 		if lines[0] != "/usr/local/go/bin/go" {
 			t.Errorf("command -v go = %q", lines[0])
 		}
-		if !strings.HasPrefix(lines[1], "go version go1.27.2 ") {
+		if want := "go version go" + pinnedArg(t, "go", "GO_VERSION") + " "; !strings.HasPrefix(lines[1], want) {
 			t.Errorf("go version = %q", lines[1])
 		}
 		if lines[2] != "layers=base+go" {
