@@ -18,6 +18,7 @@ We always run the latest stable release of every third-party dependency. Today S
 - The version tests need the network and change their verdict whenever a project ships a release, so they run only when enabled: `SORTIE_LATEST_TEST=1` in the fork and `SMOL_BUILDER_LATEST_TEST=1` and `ACP_BROKER_LATEST_TEST=1` in this repository, each with a `check-latest` make target. They use `GH_TOKEN` for GitHub when it is set.
 - Every pin moves to the latest stable release, so the version tests pass when this change lands.
 - smol-builder deletes builder machines that an earlier, interrupted run left behind, such as after a host restart. Each builder machine is labeled with its process ID and the host's boot ID, so a build never deletes the machine of another build that is still running.
+- A credential binding's `header` is passed to smolvm, which supports it since 1.32: the header is set on every HTTPS request to the binding's hosts. Sortie used to refuse it because smolvm 1.26 had no such option.
 - `dev/stage0/stage0.sh` also accepts smolvm `1.32.4` or later, instead of exactly `1.26.x`.
 
 ## Capabilities
@@ -28,7 +29,7 @@ We always run the latest stable release of every third-party dependency. Today S
 
 ### Modified Capabilities
 
-- `sortie/smolvm-environment`: the supported smolvm version becomes a minimum with no upper bound.
+- `sortie/smolvm-environment`: the supported smolvm version becomes a minimum with no upper bound, and a credential's header is defined precisely.
 - `smol-builder/stack-builder`: a build also deletes builder machines that interrupted earlier runs left behind.
 
 ## Impact
