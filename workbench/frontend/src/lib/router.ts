@@ -1,23 +1,26 @@
 /** The app's places, kept in the URL hash so links and reloads land where they were. */
 import type { ViewState } from "./types";
 
+export type ProjectPage = "home" | "graph";
+
 export type Route =
   | { name: "projects" }
   | { name: "new" }
-  | { name: "project"; slug: string; view: ViewState };
+  | { name: "project"; slug: string; page: ProjectPage; view: ViewState };
+
+export const emptyView = (): ViewState => ({ epic: null, selected: null, showCross: true, mark: null });
 
 export function parseRoute(hash: string): Route {
   const raw = hash.replace(/^#/, "");
   const [path, query = ""] = raw.split("?");
   const parts = path.split("/").filter(Boolean);
   if (parts[0] === "new" && parts.length === 1) return { name: "new" };
-  if (parts[0] === "p" && parts[1] && parts.length === 2) {
+  if (parts[0] === "p" && parts[1] && (parts.length === 2 || (parts.length === 3 && parts[2] === "graph"))) {
     const q = new URLSearchParams(query);
-    return {
-      name: "project",
-      slug: decodeURIComponent(parts[1]),
-      view: { epic: q.get("epic"), selected: q.get("sel"), showCross: q.get("cross") !== "0" },
-    };
+    const view: ViewState = { epic: q.get("epic"), selected: q.get("sel"), showCross: q.get("cross") !== "0", mark: q.get("mark") };
+    // A link from before the home existed carries the graph's place without "/graph".
+    const page: ProjectPage = parts[2] === "graph" || view.epic || view.selected || view.mark || !view.showCross ? "graph" : "home";
+    return { name: "project", slug: decodeURIComponent(parts[1]), page, view };
   }
   return { name: "projects" };
 }
@@ -29,17 +32,27 @@ export function formatRoute(route: Route): string {
     case "new":
       return "#/new";
     case "project": {
+      const base = `#/p/${encodeURIComponent(route.slug)}`;
+      if (route.page === "home") return base;
       const q = new URLSearchParams();
       if (route.view.epic) q.set("epic", route.view.epic);
       if (route.view.selected) q.set("sel", route.view.selected);
+      if (route.view.mark) q.set("mark", route.view.mark);
       if (!route.view.showCross) q.set("cross", "0");
       const s = q.toString();
-      return `#/p/${encodeURIComponent(route.slug)}${s ? `?${s}` : ""}`;
+      return `${base}/graph${s ? `?${s}` : ""}`;
     }
   }
 }
 
-export const projectHref = (slug: string) => formatRoute({ name: "project", slug, view: { epic: null, selected: null, showCross: true } });
+/** The graph at a place: a story selected in its epic, an epic opened, or a milestone's changes marked. */
+export function graphHref(slug: string, place: { epic?: string | null; selected?: string | null; mark?: string | null } = {}): string {
+  return formatRoute({ name: "project", slug, page: "graph", view: { ...emptyView(), ...place } });
+}
+
+export const homeHref = (slug: string) => formatRoute({ name: "project", slug, page: "home", view: emptyView() });
+
+export const projectHref = homeHref;
 
 /** A slug suggested from a project name, as the backend derives one. */
 export function suggestSlug(name: string): string {

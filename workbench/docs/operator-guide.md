@@ -133,6 +133,7 @@ uv run workbench hash-password > ~/.config/plan-workbench-password-hash   # type
 | `WORKBENCH_AGENT_MODEL` | No | Model a planning session starts with, default `anthropic/claude-opus-5-5`. It is selected through the agent's ACP `model` config option. When the agent does not offer the model, the session ends and the chat shows why. Set it empty to keep the agent's own default. The person can change the model and the thinking level below the message box; the last choice is kept in `preferences.json` in the runtime directory and wins over this setting while the agent offers it. Without a chosen thinking level, the model's own default applies. |
 | `WORKBENCH_PROMPT_FILE` | No | Planning prompt, default `prompts/planning-session.md`. |
 | `WORKBENCH_COOKIE_SECURE` | No | `1` behind HTTPS. |
+| `WORKBENCH_SYNC` | No | `0` makes the workbench read-only toward the tracker: no automatic sync, no pull-back of an edited story, and pull-back, cancel and supersede are refused. For a second workbench beside the one that owns a project, for example to check a build against live data. Default `1`. |
 | `WORKBENCH_RUNTIME_DIR` | No | The parent of each project's session runtime directory, `<dir>/<slug>`, which holds the running session's state, broker token, and logs. Default: `$XDG_RUNTIME_DIR/plan-workbench`, else `~/.cache/plan-workbench`. |
 
 ```sh
@@ -165,6 +166,16 @@ Open `http://127.0.0.1:8790` and sign in. The first page lists the projects.
 5. **Approve.** Only a person with the `approver` role approves; the agent never does. Approvals live in the workbench database, with who approved and when, and never in the breakdown files. Approve a story's exact content: a later edit to it returns it to draft. Open an epic, or select it, and choose **Approve the epic** to approve every story of a change that has none approved yet. After that, approve story by story: select a story and choose **Approve**, or choose **Approve N draft stories** in the epic's view.
 6. **Sync.** There is no sync step. About a second after an approval, a pull-back, a cancel, a supersede, or an edit that changes the approved part of the plan, the workbench syncs the project through Sortie's preview and apply, and asks Sortie to poll at once when a story was released. One sync runs at a time per project; changes during a sync cause one more. The sync status in the top bar says syncing, synced with its time, or failed with the reason; open it to see what the last sync created, updated, released, and orphaned. A failed sync is retried with backoff of at most 60 seconds, and at the next change; **Retry now** retries it at once. An invalid plan, or a tracker that lacks a needed capability, waits for a fix instead.
 7. **Run.** A synced story waits in Sortie's `backlog_state` until it is released. A sync releases it, by moving it to `release_state`, once it and every story it directly depends on are approved; Sortie then dispatches it when its blockers are done, and its running badge appears on the graph within a few seconds. Release is one way: the workbench never moves a released story back on its own, except to pull back a story whose content changed after release. Sortie runs agents only for its configured project (`tracker.project`); other projects are planned and synced, and their top bar says "agents not dispatched".
+
+### The project home
+
+A project opens on its home; the **Graph** tab beside it opens the graph. Everyone signed in sees the same home. From the top:
+
+- **The timeline**: the milestones from `openspec/milestones.yaml` (format: `openspec/schemas/planning/milestones.schema.json`), the goal's tick drawn double, "we are here" at the share of the work that is done, and a red cross for each upcoming blocker that needs a person. Without the file the whole plan is one milestone. Each milestone counts its stories (done when their tracker issue is Done), and the `tasks.md` items its `tasks` setting selects; a line ending in `[metal]` is hardware work and `[operator]` is attended work or a decision, and any other line is agent work. A milestone may set `done: true` when it was finished outside the tracker.
+- **Execution health**: whether the agents will stay busy (stuck, done, idle now, will idle, healthy) and why, the agent slots (Sortie's `agent.max_concurrent_agents`), and the runway of released stories not yet started. Their history covers the hours since the workbench started.
+- **The critical path** to the next milestone's gate.
+- **Needs a person**: every unit of planned work that cannot run yet and needs someone, in three columns (Approve, Write a spec, Operator tasks), ranked by how soon it holds agents up. **Approve** keeps the approver role check; every other action opens the graph at the item, selected and attached to the planning chat.
+- **Milestones**: each one's stories, agent tasks and person tasks, counted apart.
 
 ### Story status
 

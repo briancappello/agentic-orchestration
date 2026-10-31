@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Spec store milestones",
+  "description": "The outcomes a spec store's plan works toward. Lives at openspec/milestones.yaml, beside plan.yaml. Optional: without it, the project is one milestone that holds every planned change.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "milestones"],
+  "properties": {
+    "schema_version": {
+      "description": "Version of this format. Readers refuse versions they do not support.",
+      "const": 1
+    },
+    "milestones": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/milestone" }
+    }
+  },
+  "$defs": {
+    "kebab": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "story_ref": {
+      "description": "<change-name>/<deliverable id>: one story of a change's breakdown.",
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*/[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "milestone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "depends_on", "includes"],
+      "properties": {
+        "id": {
+          "description": "Unique in the file.",
+          "$ref": "#/$defs/kebab"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "depends_on": {
+          "description": "Milestones that come before this one.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/kebab" }
+        },
+        "includes": {
+          "description": "Whole changes or single stories. A change brings its stories and the tasks.md items its tasks setting selects.",
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "$ref": "#/$defs/include_change" },
+              { "$ref": "#/$defs/include_story" }
+            ]
+          }
+        },
+        "gate": {
+          "description": "The story whose completion proves the milestone done. Without one, the milestone is done when all it includes is done.",
+          "$ref": "#/$defs/story_ref"
+        },
+        "goal": {
+          "description": "The milestone the project works toward. At most one milestone sets it.",
+          "type": "boolean"
+        },
+        "done": {
+          "description": "Declared done: the milestone was finished outside the tracker, by hand. Its progress still shows what the tracker and the checklists record.",
+          "type": "boolean"
+        }
+      }
+    },
+    "include_change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["change"],
+      "properties": {
+        "change": {
+          "description": "A change that plan.yaml lists.",
+          "$ref": "#/$defs/kebab"
+        },
+        "tasks": {
+          "description": "Which of the change's tasks.md items count here: agent (untagged), metal, operator, or all. Default all. Its stories count with agent and all.",
+          "enum": ["agent", "metal", "operator", "all"]
+        }
+      }
+    },
+    "include_story": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["story"],
+      "properties": {
+        "story": { "$ref": "#/$defs/story_ref" }
+      }
+    }
+  }
+}

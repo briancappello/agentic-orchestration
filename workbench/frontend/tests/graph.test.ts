@@ -120,3 +120,28 @@ describe("graph pane: live redraw", () => {
     expect(card("billing")!.getAttribute("aria-pressed")).toBe("true");
   });
 });
+
+describe("graph pane: from the home", () => {
+  const withMilestone = () => {
+    const doc = planDoc();
+    doc.home = { milestones: [{ id: "m1", title: "M1: accounts", short: "M1", changes: ["billing"] }] } as never;
+    return doc;
+  };
+
+  it("marks a milestone's changes at the project level, until cleared", () => {
+    app = mount(Harness, { target: document.body, props: { initial: withMilestone(), initialView: { epic: null, selected: null, showCross: true, mark: "m1" } } }) as typeof app;
+    flushSync();
+    expect(card("billing")!.classList.contains("marked")).toBe(true);
+    expect(card("billing")!.getAttribute("aria-label")).toContain("in M1");
+    expect(card("accounts-api")!.classList.contains("marked")).toBe(false);
+    expect(document.querySelector("[data-mark='m1']")!.textContent).toContain("M1: accounts");
+    click(document.querySelector(".unmark"));
+    expect(card("billing")!.classList.contains("marked")).toBe(false);
+  });
+
+  it("offers the home one link away", () => {
+    render();
+    const tabs = [...document.querySelectorAll<HTMLAnchorElement>(".tabs a")];
+    expect(tabs.map((t) => [t.textContent, t.getAttribute("aria-current")])).toEqual([["Home", null], ["Graph", "page"]]);
+  });
+});

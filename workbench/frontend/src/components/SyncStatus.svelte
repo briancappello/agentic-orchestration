@@ -13,6 +13,7 @@
     phase === "syncing" ? "Syncing…"
       : phase === "synced" ? `Synced ${clock(status?.synced_at)}`
       : phase === "failed" ? "Sync failed"
+      : phase === "disabled" ? "Sync off"
       : "Not synced yet",
   );
 
@@ -43,8 +44,8 @@
 
 <div class="sync-status">
   <button type="button" class="pill {phase}" data-sync={phase} aria-expanded={open} onclick={() => (open = !open)}
-    title={phase === "failed" ? status?.reason?.message : "The approved plan syncs to the tracker on its own"}>
-    <span class="dot" aria-hidden="true"></span>{label}
+    title={phase === "failed" ? status?.reason?.message : phase === "disabled" ? "This workbench is read-only: it never writes to the tracker" : "The approved plan syncs to the tracker on its own"}>
+    <span class="dot" aria-hidden="true"></span><span class="label">{label}</span>
   </button>
   {#if open}
     <div class="panel" role="dialog" aria-label="Last sync" data-sync-result>
@@ -88,6 +89,11 @@
   .pill { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: var(--r-pill);
     background: var(--ink-raised); border: 1px solid var(--ink-edge); color: #fff; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
   .pill:hover { border-color: var(--ink-mute); }
+  /* In a narrow top bar the pill keeps its dot; the words stay in its accessible name. */
+  @container (max-width: 480px) {
+    .pill { padding: 0 10px; }
+    .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--slate); flex: none; }
   .synced .dot { background: #5fb48a; }
   .syncing .dot { background: var(--amber); animation: pulse 1s ease-in-out infinite; }

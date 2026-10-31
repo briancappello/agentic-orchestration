@@ -1,0 +1,17 @@
+schema_version: 1
+milestones:
+  - id: accounts-live
+    title: "M1: accounts live"
+    depends_on: []
+    includes:
+      - change: accounts-api
+        tasks: agent
+    gate: accounts-api/accounts-close
+  - id: billing-live
+    title: "M2: billing live"
+    depends_on: [accounts-live]
+    goal: true
+    includes:
+      - change: billing
+      - change: accounts-api
+        tasks: operator

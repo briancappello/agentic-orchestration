@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from tests.workbench.fake_sortie import FakeSortie
 from tests.workbench.test_approvals import app_for, billing, status
-from tests.workbench.conftest import settle, sign_in
+from tests.workbench.conftest import project, settle, sign_in
 
 
 def running(fake, key, **rt):
@@ -57,14 +57,31 @@ def test_a_failed_state_read_keeps_the_runtime(store):
         assert ("GET", "/api/v1/state", None) in fake.requests
 
 
-def test_no_state_read_without_a_runtime(store):
+def test_no_worker_fields_without_a_runtime(store):
+    # The home reads the agent slots from Sortie's state at every poll; a
+    # story with no runtime still gets no worker fields.
     billing(store)
     fake = FakeSortie()
     fake.issue("billing/b1")
+    fake.run("T-9", "s9", broker="http://broker-9.test")
     app = app_for(store, fake)
     with TestClient(app) as client:
         sign_in(client)
+        settle(client)
         assert status(app, "billing/b1")["runtime"] is None
+        assert ("GET", "/api/v1/state", None) in fake.requests
+        assert project(app).hub.workers == {}
+
+
+def test_no_state_read_for_a_project_sortie_does_not_dispatch(store):
+    billing(store)
+    fake = FakeSortie()
+    fake.DEFAULT = "OTHER"
+    fake.projects["OTHER"] = {"name": "Other", "problems": []}
+    app = app_for(store, fake)
+    with TestClient(app) as client:
+        sign_in(client)
+        settle(client)
         assert not any(path == "/api/v1/state" for _, path, _ in fake.requests)
 
 

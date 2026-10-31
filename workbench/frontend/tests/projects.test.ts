@@ -31,12 +31,21 @@ function summary(slug: string, extra: Partial<ProjectSummary> = {}): ProjectSumm
 
 describe("router", () => {
   it("round-trips every place", () => {
-    for (const hash of ["#/", "#/new", "#/p/billing", "#/p/billing?epic=billing&sel=billing%2Ftax&cross=0"]) {
+    for (const hash of ["#/", "#/new", "#/p/billing", "#/p/billing/graph", "#/p/billing/graph?epic=billing&sel=billing%2Ftax&cross=0",
+      "#/p/billing/graph?mark=m1"]) {
       expect(formatRoute(parseRoute(hash))).toBe(hash);
     }
     expect(parseRoute("")).toEqual({ name: "projects" });
     expect(parseRoute("#/nonsense/here")).toEqual({ name: "projects" });
-    expect(parseRoute("#/p/billing?epic=billing")).toMatchObject({ slug: "billing", view: { epic: "billing", selected: null, showCross: true } });
+    expect(parseRoute("#/p/billing/graph?epic=billing")).toMatchObject({ slug: "billing", page: "graph", view: { epic: "billing", selected: null, showCross: true } });
+  });
+
+  it("opens a project on its home, and keeps the graph one link away", () => {
+    expect(parseRoute("#/p/billing")).toMatchObject({ name: "project", page: "home" });
+    expect(parseRoute("#/p/billing/graph")).toMatchObject({ name: "project", page: "graph" });
+    // A link from before the home existed still lands in the graph, where it pointed.
+    expect(parseRoute("#/p/billing?epic=billing&sel=billing%2Ftax")).toMatchObject({ page: "graph", view: { epic: "billing", selected: "billing/tax" } });
+    expect(formatRoute(parseRoute("#/p/billing?epic=billing"))).toBe("#/p/billing/graph?epic=billing");
   });
 
   it("suggests a slug and a Huly key from a name", () => {

@@ -81,6 +81,15 @@ milestones:
   optional: without one, a milestone is done when all it includes is done.
 - At most one milestone is the `goal`: the line the home measures against.
   Without one, the last milestone in dependency order is the goal.
+- A change entry brings the change's stories with `tasks: agent` or `all`
+  (stories are agent work); with `metal` or `operator` it brings only those
+  tasks, so a change's hardware tasks can count in a later milestone without
+  its stories.
+- `done: true` declares a milestone finished outside the tracker. Work done
+  by hand before the tracker knew of it (the homelab plan's M0, whose stories
+  were never synced) can otherwise never read as done, and the home would ask
+  for its stories to be approved, which would let agents redo them. Its
+  counts still show what the tracker and the checklists record.
 - The file is optional. Without it, the home shows the project as one
   implicit milestone holding every planned change.
 

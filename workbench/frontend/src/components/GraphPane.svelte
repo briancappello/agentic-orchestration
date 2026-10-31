@@ -5,11 +5,11 @@
   import type { MergedGraph, ViewState } from "../lib/types";
   import Card from "./Card.svelte";
   import Icon from "./Icon.svelte";
-  import TopBar, { type Crumb } from "./TopBar.svelte";
+  import TopBar, { type Crumb, type Tab } from "./TopBar.svelte";
   import ValidationPanel from "./ValidationPanel.svelte";
 
   let {
-    doc, view, onselect, onopen, onback, ontogglecross, actions, notice, projectName = "",
+    doc, view, onselect, onopen, onback, ontogglecross, actions, notice, projectName = "", tabs = [], onunmark,
   }: {
     doc: MergedGraph;
     /** The project's name, shown in the breadcrumb under "Projects". */
@@ -22,6 +22,10 @@
     actions?: Snippet;
     /** A band under the strip for facts about the project as a whole. */
     notice?: Snippet;
+    /** The project's pages, for the top bar. */
+    tabs?: Tab[];
+    /** Stop marking the milestone's changes. */
+    onunmark?: () => void;
   } = $props();
 
   const g = GEOMETRY;
@@ -37,7 +41,17 @@
       showExternal: !!epic && view.showCross,
     }),
   );
+  const milestone = $derived(view.mark ? doc.home?.milestones?.find((m) => m.id === view.mark) : undefined);
+  const marked = $derived(new Set(!epic && milestone ? milestone.changes : []));
   const selected = $derived(view.selected && layout.pos.has(view.selected) ? view.selected : null);
+  // A selected card out of sight, as after a deep link from the home, scrolls into view.
+  let canvas: HTMLElement | undefined = $state();
+  $effect(() => {
+    const key = selected;
+    if (!key || !canvas) return;
+    const card = canvas.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"]`);
+    card?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  });
   const near = $derived(
     new Set(selected ? layout.edges.filter((e) => e.from === selected || e.to === selected).flatMap((e) => [e.from, e.to]) : []),
   );
@@ -87,7 +101,7 @@
 
 <svelte:window {onkeydown} />
 
-<TopBar {crumbs}>
+<TopBar {crumbs} {tabs}>
   <span class="live" class:down={!doc.sortie.reachable} class:idle={doc.sortie.reachable && !dispatched}
     title={doc.sortie.reachable && !dispatched ? `${liveText}: Sortie plans and syncs this project but runs agents only for its configured project` : liveText}>
     <span class="pulse" aria-hidden="true"></span>
@@ -123,9 +137,15 @@
 </div>
 
 {#if notice}{@render notice()}{/if}
+{#if milestone && !epic}
+  <div class="mark-band" role="status" data-mark={milestone.id}>
+    <span><b>{milestone.title}</b> · its {marked.size} {marked.size === 1 ? "change is" : "changes are"} marked</span>
+    {#if onunmark}<button type="button" class="unmark" onclick={onunmark}>Clear</button>{/if}
+  </div>
+{/if}
 <ValidationPanel errors={doc.validation.errors} has={(k) => model.byKey.has(k)} onselect={selectStub} />
 
-<section class="canvas" aria-label="Dependency graph" data-level={view.epic ?? "project"}>
+<section class="canvas" bind:this={canvas} aria-label="Dependency graph" data-level={view.epic ?? "project"}>
   {#if nodes.length === 0}
     <div class="empty">
       <b>{epic ? "No stories yet" : "No plan yet"}</b>
@@ -208,6 +228,7 @@
           y={p.y}
           selected={selected === n.plan_key}
           near={near.has(n.plan_key)}
+          marked={marked.has(n.plan_key) ? milestone?.short : undefined}
           onselect={(k) => onselect(selected === k ? null : k)}
           {onopen}
         />
@@ -277,6 +298,10 @@
   .ext.done { border-color: var(--done); }
   .open-tab { position: absolute; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border-radius: 0 0 var(--r-card) var(--r-card); background: var(--ink); color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap; }
   .open-tab:hover { background: #000; }
+  .mark-band { flex: none; display: flex; align-items: center; gap: 12px; padding: 8px var(--s-gutter); border-bottom: 1px solid var(--line); background: var(--panel); font-size: 12.5px; color: var(--mute); }
+  .mark-band b { color: var(--ink); font-weight: 600; }
+  .unmark { padding: 2px 8px; border: 1px solid var(--line); border-radius: var(--r-tag); font-size: 12px; font-weight: 600; }
+  .unmark:hover { background: var(--strip); }
   .empty { position: absolute; left: 40px; top: 120px; max-width: 40ch; color: var(--mute); }
   .empty b { display: block; margin-bottom: 4px; font: italic 400 20px var(--font-serif); color: var(--ink); }
 </style>

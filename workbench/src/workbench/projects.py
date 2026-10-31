@@ -46,7 +46,11 @@ class ProjectRuntime:
                              first_backoff=config.sync_backoff_first, max_backoff=config.sync_backoff_max)
         self.sync.on_status(self.hub.publish_sync)
         self.hub.sync_status = self.sync.status()
-        self.hub.on_approved_change = lambda: self.sync.trigger("graph")
+        if config.sync_enabled:
+            self.hub.on_approved_change = lambda: self.sync.trigger("graph")
+        else:
+            self.hub.read_only = True
+            self.hub.sync_status = {**self.hub.sync_status, "state": "disabled"}
         self._stop = asyncio.Event()
         self._tasks: list[asyncio.Task] = []
 
@@ -105,7 +109,8 @@ class ProjectRuntime:
         else:
             log.warning("project %s: store %s has no openspec/ directory; not watching it", self.slug, self.store)
         self._tasks.append(asyncio.create_task(self.hub.poll_loop(self.config.poll_seconds, self._stop)))
-        self._tasks.append(asyncio.create_task(self.sync.run(self._stop)))
+        if self.config.sync_enabled:
+            self._tasks.append(asyncio.create_task(self.sync.run(self._stop)))
 
     async def stop(self) -> None:
         self._stop.set()

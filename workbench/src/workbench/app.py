@@ -89,6 +89,10 @@ def create_app(config: Config, **services) -> FastAPI:
     def graph(slug: str) -> dict:
         return projects.get(slug).hub.doc
 
+    @app.get("/api/projects/{slug}/home", dependencies=[Depends(require_operator)])
+    def home(slug: str) -> dict:
+        return projects.get(slug).hub.home
+
     @app.get("/api/projects/{slug}/changes/{change}/requirements", dependencies=[Depends(require_operator)])
     def requirements(slug: str, change: str) -> dict:
         rt = projects.get(slug)
