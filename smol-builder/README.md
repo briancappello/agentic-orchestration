@@ -133,18 +133,32 @@ The exec prints the Go version, `Status: install ok installed`, `base+go`, and `
 
 ### What a build does
 
-1. Reads and validates `<repo>/smol-builder.toml`.
+1. Reads and validates `<repo>/smol-builder.toml`, and removes the temporary directories an earlier, interrupted build left (see below).
 2. Resolves the chain and tags each step `localhost/smol-builder/chain:<hash>`. The hash covers the previous step's hash, the layer's name, and every file in its build context: relative paths, contents, and the executable bit.
 3. Builds each step whose tag the engine does not have yet. A step that exists is reused, so a pack with `["go", "node"]` built after one with `["go"]` builds only `node`.
 4. Saves the last image as an archive and reads its `Env` and `WorkingDir`.
-5. Creates a builder machine from the archive, with that `Env` and `WorkingDir` passed as `-e` and `-w`, then starts and stops it.
-6. Runs `smolvm pack create --from-vm` into a temporary name in the output's directory.
+5. Deletes the builder machines earlier builds left behind (see below), then creates a builder machine from the archive, with that `Env` and `WorkingDir` passed as `-e` and `-w`, then starts and stops it.
+6. Runs `smolvm pack create --from-vm` into a temporary directory in the output's directory, `.<output name>.<random>.tmp`.
 7. Deletes the builder machine.
 8. Renames the pack onto the output path.
 
 The output is replaced atomically. When a build fails, the file at the output path is left unchanged, and the temporary files are removed.
 
 The builder machine is named `smol-builder-<hash>-<random>` and labelled `smol-builder=1`. It is deleted on every path, including a failed build and an interrupt (SIGINT or SIGTERM). If deleting it fails, the build fails and the error names the machine.
+
+### Leftovers of an interrupted build
+
+A build that is killed (SIGKILL, a crash) or that the host's restart stops cannot clean up, so the next build does it. Each builder machine also carries labels naming its build: `smol-builder.pid` (the process ID), `smol-builder.start` (the process's start time, so a reused process ID is not taken for the build), and `smol-builder.boot` (the host's boot ID from `/proc/sys/kernel/random/boot_id`). Before it creates its own machine, a build deletes every `smol-builder=1` machine whose boot ID is not the current one, or whose process no longer runs. It fails, naming the machine, when such a delete fails.
+
+It never deletes:
+
+- a machine whose build still runs, such as a second build running at the same time;
+- a machine without the `smol-builder=1` label;
+- a `smol-builder=1` machine without `smol-builder.pid`. Only a smol-builder older than this one makes those, and its build may still run. The build logs each one it keeps; delete it with `smolvm machine delete --name <name> -f` once no older build runs.
+
+The temporary directories work the same way. The work directory (`$TMPDIR/smol-builder-*`, which holds the image archive) and the pack directory beside the output each hold a `.smol-builder-owner` file with the same three values. A build removes those its predecessors left, and leaves alone a directory without that file.
+
+On Linux every check is available. On macOS smol-builder reads neither a boot ID nor a start time, so a machine or directory is left behind only when no process has its process ID; a reused ID keeps it, never the other way round. On Windows smol-builder cannot tell, and deletes none.
 
 ### The report
 
@@ -207,6 +221,6 @@ make check-latest   # compare every pin and Go module with its latest stable rel
 SMOL_BUILDER_SMOLVM_TEST=1 go test -count=1 -run TestIntegration -v ./internal/build/
 ```
 
-The integration test needs podman and smolvm. It builds `layers = ["go"]`, creates a machine from the pack, and checks that `go` resolves through `PATH` and the working directory is `/workspace`. It then forces two failures and checks that the previous pack is unchanged and no builder machine remains. Without `SMOL_BUILDER_SMOLVM_TEST=1` it is skipped.
+The integration test needs podman and smolvm. It builds `layers = ["go"]`, creates a machine from the pack, and checks that `go` resolves through `PATH` and the working directory is `/workspace`. It then forces two failures and checks that the previous pack is unchanged and no builder machine remains. A second test kills a build with SIGKILL once its builder machine exists, and checks that the next build deletes that machine and the killed build's work and pack directories. Without `SMOL_BUILDER_SMOLVM_TEST=1` both are skipped.
 
 `make check-latest` sets `SMOL_BUILDER_LATEST_TEST=1` and runs the version tests. They read every pin from the layer Dockerfiles and fetch each dependency's latest stable release from its project: the Debian tag's current linux/amd64 digest from Docker Hub, opencode and uv from their GitHub releases (skipping prereleases and drafts), Go from `go.dev/dl`, Node's newest LTS from `nodejs.org/dist/index.json`, CPython's newest final release from python.org, rustup and Rust from their stable channels on `static.rust-lang.org`, and the Go modules from `go list -m -u all`. A test fails, naming the dependency, our version, and the latest one, when a pin is behind, and names the source when it cannot fetch or parse it. They need the network and use `GH_TOKEN` for GitHub when it is set; the target takes it from `gh auth token` otherwise. Without `SMOL_BUILDER_LATEST_TEST=1` they are skipped.
